@@ -4,7 +4,7 @@ A 2+1D boost-invariant CGC/Glasma code for simulating the earliest stages
 of heavy-ion collisions.
 
 This code is a Numba-based version of the original code
-at [curraun](https://gitlab.com/dmueller/curraun)
+at [curraun_cy](https://gitlab.com/dmueller/curraun_cy)
 which was based on Cython and NumPy with OpenMP support.
 
 Features:
