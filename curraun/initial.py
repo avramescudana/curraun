@@ -299,7 +299,7 @@ def init_kernel_2_TEST2(xi, u0, u1, ua, ub):
 
 # debug = True # use_python
 
-GRADIENT_ITERATION_MAX = 2500 # 50 # 2500000 # 30  # 25000 # 30 # 250
+GRADIENT_ITERATION_MAX = 250 # 2500 # 50 # 2500000 # 30  # 25000 # 30 # 250
 GRADIENT_ITERATION_BOUND = 1e-8 #20 #su.EXP_ACCURACY_SQUARED
 
 # Gradient descent on algebra element
@@ -400,8 +400,23 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
 
         m1 = zero_algebra # real values
 
+        # # Test get_algebra_factors_from_group_element_approximate
+        # f1 = (1, 0, 0, 0, .1, 0, 0, 0)
+        # print(f1)
+        # g = su.get_algebra_element(f1)
+        # print(g)
+        # g2 = su.mexp(g)
+        # print(g2)
+        # f2 = get_algebra_factors_from_group_element_approximate(g2)
+        # print(f2)
+
+        # Better starting value:
+        m1a = get_algebra_factors_from_group_element_approximate(ua[xi, d])
+        m1b = get_algebra_factors_from_group_element_approximate(ub[xi, d])
+        m1 = add_algebra(m1a, m1b)
+
         # Make solution consistently unitary
-        epsilon2 = 0.0001 # 0.125
+        epsilon2 = 0.125 # 0.0001 # 0.125
         for i in range(GRADIENT_ITERATION_MAX):
             # Calculate Loss:
             b3 = su.mexp(su.get_algebra_element(m1))
@@ -560,6 +575,18 @@ unit_algebra = ((1,0,0,0,0,0,0,0),
                 (0,0,0,0,0,1,0,0),
                 (0,0,0,0,0,0,1,0),
                 (0,0,0,0,0,0,0,1))
+
+@myjit
+def get_algebra_factors_from_group_element_approximate(g):
+    r1 = su.tr(su.mul(su.s1, g)).imag
+    r2 = su.tr(su.mul(su.s2, g)).imag
+    r3 = su.tr(su.mul(su.s3, g)).imag
+    r4 = su.tr(su.mul(su.s4, g)).imag
+    r5 = su.tr(su.mul(su.s5, g)).imag
+    r6 = su.tr(su.mul(su.s6, g)).imag
+    r7 = su.tr(su.mul(su.s7, g)).imag
+    r8 = su.tr(su.mul(su.s8, g)).imag
+    return r1, r2, r3, r4, r5, r6, r7, r8
 
 zero_algebra = (0,0,0,0,0,0,0,0)
 
