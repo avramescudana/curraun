@@ -429,6 +429,7 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
             m2new3 = m1
 
             epsilon1 = epsilon2 # * 0.125 # smaller
+            epsilon1 = 1.e-8
             for a in range(8):
                 mdelta = unit_algebra[a]
                 m2 = add_algebra(m1, mul_algebra(mdelta, epsilon1))
@@ -552,6 +553,15 @@ def gradient(b1, m1, a):
     b3 = su.mexp(su.get_algebra_element(m1)) # B = exp(m1)
 
     e1 = su.mul(b1, su.dagger(su.add(unit, b3))) # X = A (1 + B)^dagger
+
+    # # test
+    # e1 = b3
+    # e1 = su.add(unit, b3)
+    # e1 = su.dagger(su.add(unit, b3))
+    # e1 = su.mul(b1, su.dagger(su.add(unit, b3)))
+    # e1 = su.mul(b1, b3)
+    # # test
+
     e2 = su.add(e1, su.mul_s(su.dagger(e1), -1)) # X - X^dagger
     e3 = su.mul_s(unit, -su.tr(e2) / su.N_C) # - tr(e2) / N_C * 1
     e4 = su.add(e2, e3) # Y = [X]_ah
@@ -559,7 +569,21 @@ def gradient(b1, m1, a):
     mdelta = unit_algebra[a]
     m3 = su.get_algebra_element(mdelta)
 
-    f1 = su.mul(b1, su.mul(m3, su.dagger(b3))) # A (-i t_a/2) B^dagger
+    # f1 = su.mul(b1, su.mul(m3, su.dagger(b3))) # A (-i t_a/2) B^dagger
+
+    db3 = su.dmexp(su.get_algebra_element(m1), su.mul_s(m3, -1)) # derivative of b3
+    f1 = su.mul(b1, su.dagger(db3))  # A dB^dagger
+
+    # # test
+    # f1 = su.mul(su.mul_s(m3, -1), b3)
+    # f1 = su.mul(m3, su.dagger(b3))
+    # f1 = su.mul(b1, su.mul(m3, su.dagger(b3)))
+    # f1 = su.mul(b1, su.mul(su.mul_s(m3, -1), b3))
+    # #f1 = su.mul(b1, su.mul(b3, su.mul_s(m3, -1)))
+    # db3 = su.dmexp(su.get_algebra_element(m1), su.mul_s(m3, -1))
+    # f1 = su.mul(b1, db3)
+    # # test
+
     f2 = su.add(f1, su.mul_s(su.dagger(f1), -1)) # f1 - f1^dagger
     f3 = su.mul_s(unit, -su.tr(f2) / su.N_C) # - tr(f2) / N_C * 1
     f4 = su.add(f2, f3) # d/da Y = d/da [X]_ah
@@ -658,6 +682,12 @@ def loss(b1, b3):
     #res1 = su.sq(t1)
 
     #res = su.tr(t1)
+    # res = su.sq(su.ah(b3))
+    # res = su.sq(su.ah(su.add(unit, b3)))
+    # res = su.sq(su.ah(su.dagger(su.add(unit, b3))))
+    # res = su.sq(su.ah(su.mul(b1, su.dagger(su.add(unit, b3)))))
+    # res = su.sq(su.ah(su.mul(b1, b3)))
+
     return res, check1, check2, check3
 
 @myjit

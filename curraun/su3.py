@@ -140,7 +140,7 @@ def mul(a, b):
 def mexp(a):
     """ Calculate exponential using Taylor series
 
-    mexp(m) = 1 + m + m^2 / 2 + ...
+    mexp(a) = 1 + a + a^2 / 2 + a^3 / 6 + ...
 
     >>> a = id0
     >>> mexp(a)
@@ -159,6 +159,42 @@ def mexp(a):
     else:
         # print("Exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
         print("Exponential did not reach desired accuracy")  # TODO: remove debugging code
+    return res
+
+
+# derivative of exponential map
+@myjit
+def dmexp(a, da):
+    """ Calculate derivative of exponential using Taylor series
+
+    dmexp(a, da) = 0 + da + (da a + a da) / 2 + (da a a + a da a + a a da) / 6 + ...
+
+    >>> a = id0
+    >>> da = s1
+    >>> dmexp(a, da)
+    (0j, (2.7182818284590455+0j), 0j, (2.7182818284590455+0j), 0j, 0j, 0j, 0j, 0j)
+
+    """
+    res = zero()
+    t = zero()
+    r = da
+    s = add(t, r)
+    f = 1
+    res = add(res, s)   # da
+    for i in range(2, EXP_MAX_TERMS):
+        t = mul(s, a) # (da a a + a da a + a a da) -> (da a a a + a da a a + a a da a)
+        r = mul(a, r) # (a a da) -> (a a a da)
+        s = add(t, r) # -> (da a a a + a da a a + a a da a + a a a da)
+
+        f = f / i
+        s2 = mul_s(s, f)
+        res = add(res, s2)
+        n = sq(s2)  # TODO: Is it possible to improve performance by checking this not so often?
+        if math.fabs(n.real) < EXP_ACCURACY_SQUARED:
+            break
+    else:
+        # print("Derivative of exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
+        print("Derivative of exponential did not reach desired accuracy")  # TODO: remove debugging code
     return res
 
 # inverse
