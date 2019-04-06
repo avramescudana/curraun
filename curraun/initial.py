@@ -393,6 +393,8 @@ HEAVY_BALL_BETA = 0.9
 # Calculate gradient analytically
 @myjit
 def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
+    #if xi < 750:
+    #    return
     # initialize transverse gauge links (longitudinal magnetic field)
     # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
     for d in range(2):
@@ -415,6 +417,10 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
         m1a = get_algebra_factors_from_group_element_approximate(ua[xi, d])
         m1b = get_algebra_factors_from_group_element_approximate(ub[xi, d])
         m1 = add_algebra(m1a, m1b)
+        # m1 = mul_algebra(m1, 2)
+        #m1 = add_algebra(mul_algebra(m1a, -1), mul_algebra(m1b, -1)) # ++
+        #m1 = add_algebra(mul_algebra(m1a, 0), mul_algebra(m1b, 0)) # --
+        #m1 = add_algebra(mul_algebra(m1a, 2), mul_algebra(m1b, 2)) # ++
         m1_prev = m1
 
         # Make solution consistently unitary
