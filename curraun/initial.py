@@ -387,6 +387,7 @@ def init_kernel_2_TEST3(xi, u0, u1, ua, ub):
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
 
+HEAVY_BALL_BETA = 0.9
 
 # Gradient descent on algebra element
 # Calculate gradient analytically
@@ -414,9 +415,10 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
         m1a = get_algebra_factors_from_group_element_approximate(ua[xi, d])
         m1b = get_algebra_factors_from_group_element_approximate(ub[xi, d])
         m1 = add_algebra(m1a, m1b)
+        m1_prev = m1
 
         # Make solution consistently unitary
-        epsilon2 = 0.125 # 0.0001 # 0.125
+        epsilon2 = 0.5 # 0.125 # 0.0001 # 0.125
         for i in range(GRADIENT_ITERATION_MAX):
             # Calculate Loss:
             b3 = su.mexp(su.get_algebra_element(m1))
@@ -452,38 +454,80 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
                 dloss = dloss_analytic
 
                 m2new = add_algebra(m2new, mul_algebra(mdelta, -dloss * epsilon2))
-                b3new = su.mexp(su.get_algebra_element(m2new))
-
                 m2new2 = add_algebra(m2new2, mul_algebra(mdelta, -dloss * epsilon2 * 0.5))
-                b3new2 = su.mexp(su.get_algebra_element(m2new2))
-
                 m2new3 = add_algebra(m2new3, mul_algebra(mdelta, -dloss * epsilon2 * 0.25))
-                b3new3 = su.mexp(su.get_algebra_element(m2new3))
 
-            # Calculate gradient analytically
+            b3new = su.mexp(su.get_algebra_element(m2new))
+            b3new2 = su.mexp(su.get_algebra_element(m2new2))
+            b3new3 = su.mexp(su.get_algebra_element(m2new3))
 
+            # Heavy ball method
+            # dball = + beta * (m1 - m1_prev)
+            dball = add_algebra(m1, mul_algebra(m1_prev, -1))
+            dball = mul_algebra(dball, epsilon2)
+
+            m2new21 = add_algebra(m2new, dball)
+            m2new22 = add_algebra(m2new2, dball)
+            m2new23 = add_algebra(m2new3, dball)
+
+            b3new21 = su.mexp(su.get_algebra_element(m2new21))
+            b3new22 = su.mexp(su.get_algebra_element(m2new22))
+            b3new23 = su.mexp(su.get_algebra_element(m2new23))
 
 
             loss3, check4, check5, check6 = loss(b1, b3new)
             loss4 = loss(b1, b3new2)[0]
             loss5 = loss(b1, b3new3)[0]
+            loss21 = loss(b1, b3new21)[0]
+            loss22 = loss(b1, b3new22)[0]
+            loss23 = loss(b1, b3new23)[0]
 
-            onesmaller = False
-            if loss5 < loss1:
+            m1_prev = m1
+
+            # Find step with smallest value of loss
+            smallestloss = loss1
+            smallestitem = -1
+            if loss5 < smallestloss:
                 m1 = m2new3
-                # onesmaller = True # Step size maybe too big
-            if loss4 < loss5:
+                smallestloss = loss5
+                smallestitem = 3
+            if loss4 < smallestloss:
                 m1 = m2new2
-                onesmaller = True
-            if loss3 < loss4:
+                smallestloss = loss4
+                smallestitem = 4
+            if loss3 < smallestloss:
                 m1 = m2new
-                onesmaller = True
-                if i % 8 == 0:
-                    epsilon2 = epsilon2 * 2
-            if not onesmaller:
+                smallestloss = loss3
+                smallestitem = 5
+            if loss21 < smallestloss:
+                m1 = m2new21
+                smallestloss = loss21
+                smallestitem = 21
+            if loss22 < smallestloss:
+                m1 = m2new22
+                smallestloss = loss22
+                smallestitem = 22
+            if loss23 < smallestloss:
+                m1 = m2new23
+                smallestloss = loss23
+                smallestitem = 23
+
+            if (smallestitem == 5 or smallestitem == 23) and i % 8 == 0 and epsilon2 < 1:
+                epsilon2 = epsilon2 * 2
+            if (smallestitem == 3 or smallestitem == 21):
                 epsilon2 = epsilon2 * 0.5
 
-            if loss3 < GRADIENT_ITERATION_BOUND:
+            if smallestitem == -1:
+                pass
+
+
+            # Force heavyball:
+            m1 = m2new22
+            epsilon2 = .125
+
+            print("  Loss: ", loss1, (loss3, loss4, loss5), (loss21, loss22, loss23))
+
+            if smallestloss < GRADIENT_ITERATION_BOUND:
             #    if debug: # TODO: Remove debugging code
             #        print("Kernel 2: {} iterations: {}".format(i, loss3))
                 print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3)

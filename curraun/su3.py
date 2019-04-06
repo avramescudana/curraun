@@ -31,7 +31,7 @@ else:
     print("Unsupported precision: " + su_precision)
 
 EXP_MAX_TERMS = 50 # maximum number of terms in Taylor series
-EXP_ACCURACY_SQUARED = 1.e-32 # accuracy
+EXP_ACCURACY_SQUARED = 1.e-40 # 1.e-32 # accuracy
 
 def complex_tuple(*t):
     return tuple(map(GROUP_TYPE, t))
