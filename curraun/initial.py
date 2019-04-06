@@ -299,7 +299,7 @@ def init_kernel_2_TEST2(xi, u0, u1, ua, ub):
 
 # debug = True # use_python
 
-GRADIENT_ITERATION_MAX = 250 # 2500 # 50 # 2500000 # 30  # 25000 # 30 # 250
+GRADIENT_ITERATION_MAX = 25000 # 2500 # 250 # 2500 # 50 # 2500000 # 30  # 25000 # 30 # 250
 GRADIENT_ITERATION_BOUND = 1e-8 #20 #su.EXP_ACCURACY_SQUARED
 
 # Gradient descent on algebra element
@@ -419,6 +419,14 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
 
         # Make solution consistently unitary
         epsilon2 = 0.5 # 0.125 # 0.0001 # 0.125
+
+        si1 = 0
+        si2 = 0
+        si3 = 0
+        si4 = 0
+        si5 = 0
+        si6 = 0
+
         for i in range(GRADIENT_ITERATION_MAX):
             # Calculate Loss:
             b3 = su.mexp(su.get_algebra_element(m1))
@@ -465,7 +473,7 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
             # Heavy ball method
             # dball = + beta * (m1 - m1_prev)
             dball = add_algebra(m1, mul_algebra(m1_prev, -1))
-            dball = mul_algebra(dball, epsilon2)
+            dball = mul_algebra(dball, 1) # 0.6) # epsilon2)
 
             m2new21 = add_algebra(m2new, dball)
             m2new22 = add_algebra(m2new2, dball)
@@ -513,30 +521,45 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
                 smallestloss = loss23
                 smallestitem = 23
 
-            if (smallestitem == 5 or smallestitem == 23) and i % 8 == 0 and epsilon2 < 1:
-                epsilon2 = epsilon2 * 2
-            if (smallestitem == 3 or smallestitem == 21):
-                epsilon2 = epsilon2 * 0.5
+            if smallestitem == 3:
+                si1 +=1
+            if smallestitem == 4:
+                si2 +=1
+            if smallestitem == 5:
+                si3 +=1
+            if smallestitem == 21:
+                si4 +=1
+            if smallestitem == 22:
+                si5 +=1
+            if smallestitem == 23:
+                si6 +=1
+
+        #    if (smallestitem == 5 or smallestitem == 23) and i % 8 == 0 and epsilon2 < 1:
+        #        epsilon2 = epsilon2 * 2
+        #    if (smallestitem == 3 or smallestitem == 21) and epsilon2 > 0.5:
+        #        epsilon2 = epsilon2 * 0.5
 
             if smallestitem == -1:
                 pass
 
 
             # Force heavyball:
-            m1 = m2new22
-            epsilon2 = .125
+        #    m1 = m2new21
+        #    epsilon2 = .6 # .125
 
-            print("  Loss: ", loss1, (loss3, loss4, loss5), (loss21, loss22, loss23))
+            # print("  Loss: ", loss1, (loss3, loss4, loss5), (loss21, loss22, loss23))
 
             if smallestloss < GRADIENT_ITERATION_BOUND:
             #    if debug: # TODO: Remove debugging code
             #        print("Kernel 2: {} iterations: {}".format(i, loss3))
-                print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3)
+            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3)
+            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si1, si2, si3, si4, si5, si6))
                 break
         else: # no break
             # pass
         #    if debug:
-            print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3)
+        #    print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3)
+            print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si1, si2, si3, si4, si5, si6))
         #    print("Kernel 2: max iterations reached. bounds: {}".format(loss3))
         #        print("xi: {}, d: {}".format(xi, d))
 
