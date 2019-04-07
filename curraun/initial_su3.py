@@ -2,8 +2,9 @@ from curraun.numba_target import myjit
 import curraun.su as su
 
 ACCURACY_GOAL = 1e-16 # 1e-8
-ITERATION_MAX_ROUND_1 = 250 # 100
-ITERATION_MAX_ROUND_2 = 100000 # 10000
+ITERATION_MAX_ROUND_1 = 100 # Exploration of initial conditions
+ITERATION_MAX_ROUND_2 = 2000 # Mention cases that took very long
+ITERATION_MAX_ROUND_3 = 10000 # Ultimate limit
 HEAVY_BALL_BETA = 1
 TRY_FACTORS = [1, 2, 0, -1, -0.5]
 
@@ -40,11 +41,12 @@ def solve_initial_condition_complete(u_a, u_b, xi, d):
 
     # Start from that initial condition and dig really deep
     # TODO: One could remember state and continue from where we ended, instead of starting all over
-    b3, loss, accuracy_reached, iterations = solve_initial_condition(u_a, u_b, xi, d, best_factor, ITERATION_MAX_ROUND_2)
+    b3, loss, accuracy_reached, iterations = solve_initial_condition(u_a, u_b, xi, d, best_factor, ITERATION_MAX_ROUND_3)
 
     if accuracy_reached:
-        print("Kernel 2: xi:", xi, ", d:", d, ": digging deep successful:", iterations,
-              ", factor: ", best_factor, ". Loss:", loss)
+        if iterations > ITERATION_MAX_ROUND_2:
+            print("Kernel 2: xi:", xi, ", d:", d, ": digging deep successful:", iterations,
+                  ", factor: ", best_factor, ". Loss:", loss)
         return b3
 
     print("=========================================================================")
