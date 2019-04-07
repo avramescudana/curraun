@@ -34,7 +34,7 @@ def init(s, w1, w2):
         print("WARNING: initial.py: proper SU(3) code not implemented")
         # TODO: Implement SU(3) initialization code.
         # So far, this only works with TEST_SU2_SUBGROUP = True in mv.py
-        my_parallel_loop(init_kernel_2_TEST4, n ** 2, u0, u1, ua, ub)
+        my_parallel_loop(init_kernel_2_TEST5, n ** 2, u0, u1, ua, ub)
     else:
         print("initial.py: SU(N) code not implemented")
     my_parallel_loop(init_kernel_3, n ** 2, u0, peta1, n, ua, ub)
@@ -470,7 +470,7 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
                 dloss_second_order = (loss2 - loss3) / (2 * epsilon1)
 
                 # Calculate analytic derivative:
-                dloss_analytic = gradient(b1, m1, a)
+                dloss_analytic = gradient_old(b1, m1, a)
 
                 # print("loss: a: ", a , ", loss1: ", dloss_first_order, ", loss2: ", dloss, " loss3: ", dloss_analytic)
 
@@ -593,8 +593,235 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
 
+# Gradient descent on algebra element
+# Calculate gradient analytically
 @myjit
-def gradient(b1, m1, a):
+def init_kernel_2_TEST5(xi, u0, u1, ua, ub):
+    #if xi < 750:
+    #    return
+    # if xi != 594 and xi != 750 and xi != 814:
+    #     return
+    # if xi == 10:
+    #     exit()
+    # initialize transverse gauge links (longitudinal magnetic field)
+    # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
+    for d in range(2):
+        b1 = su.load(ua[xi, d])
+        b1 = su.add(b1, ub[xi, d])  # A
+
+        m1 = su.zero_algebra  # real values
+
+        # Better starting value:
+        m1a = su.get_algebra_factors_from_group_element_approximate(ua[xi, d])
+        m1b = su.get_algebra_factors_from_group_element_approximate(ub[xi, d])
+        m1 = su.add_algebra(m1a, m1b)
+        # m1 = su.mul_algebra(m1, 2)
+        #m1 = su.add_algebra(mul_algebra(m1a, -1), mul_algebra(m1b, -1)) # ++
+        #m1 = su.add_algebra(mul_algebra(m1a, 0), mul_algebra(m1b, 0)) # --
+        #m1 = su.add_algebra(mul_algebra(m1a, 2), mul_algebra(m1b, 2)) # ++
+        m1_prev = m1
+
+        # Make solution consistently unitary
+        epsilon2 = 0.5 # 0.125 # 0.0001 # 0.125
+
+        si1 = 0
+        si2 = 0
+        si3 = 0
+        si4 = 0
+        si5 = 0
+        si6 = 0
+
+        smallestloss = 1
+        improvementcount = 0
+
+        for i in range(GRADIENT_ITERATION_MAX):
+            # Calculate Loss:
+            b3 = su.mexp(su.get_algebra_element(m1))
+            loss1, check1, check2, check3 = loss(b1, b3)
+
+            m2new = m1
+            m2new2 = m1
+            m2new3 = m1
+
+            epsilon1 = epsilon2 # * 0.125 # smaller
+            epsilon1 = 1.e-8
+            # for a in range(8):
+            #     mdelta = su.unit_algebra[a]
+            #
+            #     # Calculate analytic derivative:
+            #     dloss_analytic = gradient_old(b1, m1, a)
+            #
+            #     # print("loss: a: ", a , ", loss1: ", dloss_first_order, ", loss2: ", dloss, " loss3: ", dloss_analytic)
+            #
+            #     dloss = dloss_analytic
+            #
+            #     m2new = su.add_algebra(m2new, su.mul_algebra(mdelta, -dloss * epsilon2))
+            #     m2new2 = su.add_algebra(m2new2, su.mul_algebra(mdelta, -dloss * epsilon2 * 0.5))
+            #     m2new3 = su.add_algebra(m2new3, su.mul_algebra(mdelta, -dloss * epsilon2 * 0.25))
+
+
+            # Calculate analytic derivative:
+            grad = gradient(b1, m1)
+
+            m2new = su.add_algebra(m2new, su.mul_algebra(grad, -epsilon2))
+            m2new2 = su.add_algebra(m2new2, su.mul_algebra(grad, -epsilon2 * 0.5))
+            m2new3 = su.add_algebra(m2new3, su.mul_algebra(grad, -epsilon2 * 0.25))
+
+            b3new = su.mexp(su.get_algebra_element(m2new))
+            b3new2 = su.mexp(su.get_algebra_element(m2new2))
+            b3new3 = su.mexp(su.get_algebra_element(m2new3))
+
+            # Heavy ball method
+            # dball = + beta * (m1 - m1_prev)
+            dball = su.add_algebra(m1, su.mul_algebra(m1_prev, -1))
+            dball = su.mul_algebra(dball, 1) # 0.6) # epsilon2)
+
+            m2new21 = su.add_algebra(m2new, dball)
+            m2new22 = su.add_algebra(m2new2, dball)
+            m2new23 = su.add_algebra(m2new3, dball)
+
+            b3new21 = su.mexp(su.get_algebra_element(m2new21))
+            b3new22 = su.mexp(su.get_algebra_element(m2new22))
+            b3new23 = su.mexp(su.get_algebra_element(m2new23))
+
+
+            loss3, check4, check5, check6 = loss(b1, b3new)
+            loss4 = loss(b1, b3new2)[0]
+            loss5 = loss(b1, b3new3)[0]
+            loss21 = loss(b1, b3new21)[0]
+            loss22 = loss(b1, b3new22)[0]
+            loss23 = loss(b1, b3new23)[0]
+
+            m1_prev = m1
+
+            # Find step with smallest value of loss
+            smallestloss_prev = smallestloss
+            smallestloss = loss1
+            smallestitem = -1
+            if loss5 < smallestloss:
+                m1 = m2new3
+                smallestloss = loss5
+                smallestitem = 3
+            if loss4 < smallestloss:
+                m1 = m2new2
+                smallestloss = loss4
+                smallestitem = 4
+            if loss3 < smallestloss:
+                m1 = m2new
+                smallestloss = loss3
+                smallestitem = 5
+            if loss21 < smallestloss:
+                m1 = m2new21
+                smallestloss = loss21
+                smallestitem = 21
+            if loss22 < smallestloss:
+                m1 = m2new22
+                smallestloss = loss22
+                smallestitem = 22
+            if loss23 < smallestloss:
+                m1 = m2new23
+                smallestloss = loss23
+                smallestitem = 23
+
+            if smallestitem == 3:
+                si1 +=1
+            if smallestitem == 4:
+                si2 +=1
+            if smallestitem == 5:
+                si3 +=1
+            if smallestitem == 21:
+                si4 +=1
+            if smallestitem == 22:
+                si5 +=1
+            if smallestitem == 23:
+                si6 +=1
+
+        #    if (smallestitem == 5 or smallestitem == 23) and i % 8 == 0 and epsilon2 < 1:
+        #        epsilon2 = epsilon2 * 2
+        #    if (smallestitem == 3 or smallestitem == 21) and epsilon2 > 0.5:
+        #        epsilon2 = epsilon2 * 0.5
+
+            if smallestitem == -1:
+                pass
+
+
+            # Force heavyball:
+        #    m1 = m2new21
+        #    epsilon2 = .6 # .125
+
+            # print("  Loss: ", loss1, (loss3, loss4, loss5), (loss21, loss22, loss23))
+
+            # improvementfactor = smallestloss_prev / smallestloss
+            # if improvementfactor < 1.001: # 1.01:
+            #     improvementcount += 1
+            #     if improvementcount > 10:
+            #         # print("Converging slowly", improvementfactor)
+            #         print("Kernel 2: xi:", xi, ", d:", d, ": converging slowly:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si1, si2, si3, si4, si5, si6))
+            #         break
+            # else:
+            #     improvementcount = 0
+
+            if smallestloss < GRADIENT_ITERATION_BOUND:
+            #    if debug: # TODO: Remove debugging code
+            #        print("Kernel 2: {} iterations: {}".format(i, loss3))
+            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3)
+            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si1, si2, si3, si4, si5, si6))
+                break
+        else: # no break
+            # pass
+        #    if debug:
+        #    print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3)
+            print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si1, si2, si3, si4, si5, si6))
+        #    print("Kernel 2: max iterations reached. bounds: {}".format(loss3))
+        #        print("xi: {}, d: {}".format(xi, d))
+
+        check = su.det(b3)
+
+        su.store(u0[xi, d], b3)
+        su.store(u1[xi, d], b3)
+
+@myjit
+def gradient(b1, m1):
+    grad = su.zero_algebra
+    for a in range(8):
+        mdelta = su.unit_algebra[a]
+
+        # Calculate analytic derivative in direction mdelta
+        grad_a = gradient_component(b1, m1, mdelta)
+        grad = su.add_algebra(grad, su.mul_algebra(mdelta, grad_a))
+    return grad
+
+@myjit
+def gradient_component(b1, m1, mdelta):
+
+    # b1 # A
+    unit = su.unit()
+    b3 = su.mexp(su.get_algebra_element(m1)) # B = exp(m1)
+
+    e1 = su.mul(b1, su.dagger(su.add(unit, b3))) # X = A (1 + B)^dagger
+
+    e2 = su.add(e1, su.mul_s(su.dagger(e1), -1)) # X - X^dagger
+    e3 = su.mul_s(unit, -su.tr(e2) / su.N_C) # - tr(e2) / N_C * 1
+    e4 = su.add(e2, e3) # Y = [X]_ah
+
+    m3 = su.get_algebra_element(mdelta)
+
+    db3 = su.dmexp(su.get_algebra_element(m1), su.mul_s(m3, -1)) # derivative of b3
+    f1 = su.mul(b1, su.dagger(db3))  # A dB^dagger
+
+    f2 = su.add(f1, su.mul_s(su.dagger(f1), -1)) # f1 - f1^dagger
+    f3 = su.mul_s(unit, -su.tr(f2) / su.N_C) # - tr(f2) / N_C * 1
+    f4 = su.add(f2, f3) # d/da Y = d/da [X]_ah
+
+    g1 = su.mul(f4, su.dagger(e4)) # (d/da Y) . Y^dagger
+    g2 = su.mul(e4, su.dagger(f4)) # Y . d/da Y^dagger
+    g3 = su.tr(su.add(g1, g2)) # d/da tr(Y . Y^dagger) = tr(g1 + g2)
+
+    res = -g3.real * 0.25 # Result should be real
+    return res
+
+@myjit
+def gradient_old(b1, m1, a):
 
     # b1 # A
     unit = su.unit()
