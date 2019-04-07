@@ -299,7 +299,7 @@ def init_kernel_2_TEST2(xi, u0, u1, ua, ub):
 
 # debug = True # use_python
 
-GRADIENT_ITERATION_MAX = 25000 # 2500 # 250 # 2500 # 50 # 2500000 # 30  # 25000 # 30 # 250
+GRADIENT_ITERATION_MAX = 1000 # 30 # 25000 # 2500 # 250 # 2500 # 50 # 2500000 # 30  # 25000 # 30 # 250
 GRADIENT_ITERATION_BOUND = 1e-8 #20 #su.EXP_ACCURACY_SQUARED
 
 # Gradient descent on algebra element
@@ -395,6 +395,10 @@ HEAVY_BALL_BETA = 0.9
 def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
     #if xi < 750:
     #    return
+    # if xi != 594 and xi != 750 and xi != 814:
+    #     return
+    # if xi == 10:
+    #     exit()
     # initialize transverse gauge links (longitudinal magnetic field)
     # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
     for d in range(2):
@@ -432,6 +436,9 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
         si4 = 0
         si5 = 0
         si6 = 0
+
+        smallestloss = 1
+        improvementcount = 0
 
         for i in range(GRADIENT_ITERATION_MAX):
             # Calculate Loss:
@@ -500,6 +507,7 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
             m1_prev = m1
 
             # Find step with smallest value of loss
+            smallestloss_prev = smallestloss
             smallestloss = loss1
             smallestitem = -1
             if loss5 < smallestloss:
@@ -554,6 +562,16 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
         #    epsilon2 = .6 # .125
 
             # print("  Loss: ", loss1, (loss3, loss4, loss5), (loss21, loss22, loss23))
+
+            # improvementfactor = smallestloss_prev / smallestloss
+            # if improvementfactor < 1.001: # 1.01:
+            #     improvementcount += 1
+            #     if improvementcount > 10:
+            #         # print("Converging slowly", improvementfactor)
+            #         print("Kernel 2: xi:", xi, ", d:", d, ": converging slowly:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si1, si2, si3, si4, si5, si6))
+            #         break
+            # else:
+            #     improvementcount = 0
 
             if smallestloss < GRADIENT_ITERATION_BOUND:
             #    if debug: # TODO: Remove debugging code
