@@ -624,15 +624,10 @@ def init_kernel_2_TEST5(xi, u0, u1, ua, ub):
         # Make solution consistently unitary
         epsilon2 = 0.5 # 0.125 # 0.0001 # 0.125
 
-        si1 = 0
-        si2 = 0
         si3 = 0
         si4 = 0
-        si5 = 0
-        si6 = 0
 
         smallestloss = 1
-        improvementcount = 0
 
         for i in range(GRADIENT_ITERATION_MAX):
             # Calculate Loss:
@@ -640,36 +635,16 @@ def init_kernel_2_TEST5(xi, u0, u1, ua, ub):
             loss1, check1, check2, check3 = loss(b1, b3)
 
             m2new = m1
-            m2new2 = m1
-            m2new3 = m1
 
             epsilon1 = epsilon2 # * 0.125 # smaller
             epsilon1 = 1.e-8
-            # for a in range(8):
-            #     mdelta = su.unit_algebra[a]
-            #
-            #     # Calculate analytic derivative:
-            #     dloss_analytic = gradient_old(b1, m1, a)
-            #
-            #     # print("loss: a: ", a , ", loss1: ", dloss_first_order, ", loss2: ", dloss, " loss3: ", dloss_analytic)
-            #
-            #     dloss = dloss_analytic
-            #
-            #     m2new = su.add_algebra(m2new, su.mul_algebra(mdelta, -dloss * epsilon2))
-            #     m2new2 = su.add_algebra(m2new2, su.mul_algebra(mdelta, -dloss * epsilon2 * 0.5))
-            #     m2new3 = su.add_algebra(m2new3, su.mul_algebra(mdelta, -dloss * epsilon2 * 0.25))
-
 
             # Calculate analytic derivative:
             grad = gradient(b1, m1)
 
             m2new = su.add_algebra(m2new, su.mul_algebra(grad, -epsilon2))
-            m2new2 = su.add_algebra(m2new2, su.mul_algebra(grad, -epsilon2 * 0.5))
-            m2new3 = su.add_algebra(m2new3, su.mul_algebra(grad, -epsilon2 * 0.25))
 
             b3new = su.mexp(su.get_algebra_element(m2new))
-            b3new2 = su.mexp(su.get_algebra_element(m2new2))
-            b3new3 = su.mexp(su.get_algebra_element(m2new3))
 
             # Heavy ball method
             # dball = + beta * (m1 - m1_prev)
@@ -677,20 +652,12 @@ def init_kernel_2_TEST5(xi, u0, u1, ua, ub):
             dball = su.mul_algebra(dball, 1) # 0.6) # epsilon2)
 
             m2new21 = su.add_algebra(m2new, dball)
-            m2new22 = su.add_algebra(m2new2, dball)
-            m2new23 = su.add_algebra(m2new3, dball)
 
             b3new21 = su.mexp(su.get_algebra_element(m2new21))
-            b3new22 = su.mexp(su.get_algebra_element(m2new22))
-            b3new23 = su.mexp(su.get_algebra_element(m2new23))
 
 
             loss3, check4, check5, check6 = loss(b1, b3new)
-            loss4 = loss(b1, b3new2)[0]
-            loss5 = loss(b1, b3new3)[0]
             loss21 = loss(b1, b3new21)[0]
-            loss22 = loss(b1, b3new22)[0]
-            loss23 = loss(b1, b3new23)[0]
 
             m1_prev = m1
 
@@ -698,14 +665,6 @@ def init_kernel_2_TEST5(xi, u0, u1, ua, ub):
             smallestloss_prev = smallestloss
             smallestloss = loss1
             smallestitem = -1
-            if loss5 < smallestloss:
-                m1 = m2new3
-                smallestloss = loss5
-                smallestitem = 3
-            if loss4 < smallestloss:
-                m1 = m2new2
-                smallestloss = loss4
-                smallestitem = 4
             if loss3 < smallestloss:
                 m1 = m2new
                 smallestloss = loss3
@@ -714,68 +673,29 @@ def init_kernel_2_TEST5(xi, u0, u1, ua, ub):
                 m1 = m2new21
                 smallestloss = loss21
                 smallestitem = 21
-            if loss22 < smallestloss:
-                m1 = m2new22
-                smallestloss = loss22
-                smallestitem = 22
-            if loss23 < smallestloss:
-                m1 = m2new23
-                smallestloss = loss23
-                smallestitem = 23
 
-            if smallestitem == 3:
-                si1 +=1
-            if smallestitem == 4:
-                si2 +=1
             if smallestitem == 5:
                 si3 +=1
             if smallestitem == 21:
                 si4 +=1
-            if smallestitem == 22:
-                si5 +=1
-            if smallestitem == 23:
-                si6 +=1
-
-        #    if (smallestitem == 5 or smallestitem == 23) and i % 8 == 0 and epsilon2 < 1:
-        #        epsilon2 = epsilon2 * 2
-        #    if (smallestitem == 3 or smallestitem == 21) and epsilon2 > 0.5:
-        #        epsilon2 = epsilon2 * 0.5
 
             if smallestitem == -1:
                 pass
 
 
-            # Force heavyball:
-        #    m1 = m2new21
-        #    epsilon2 = .6 # .125
-
-            # print("  Loss: ", loss1, (loss3, loss4, loss5), (loss21, loss22, loss23))
-
-            # improvementfactor = smallestloss_prev / smallestloss
-            # if improvementfactor < 1.001: # 1.01:
-            #     improvementcount += 1
-            #     if improvementcount > 10:
-            #         # print("Converging slowly", improvementfactor)
-            #         print("Kernel 2: xi:", xi, ", d:", d, ": converging slowly:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si1, si2, si3, si4, si5, si6))
-            #         break
-            # else:
-            #     improvementcount = 0
-
             if smallestloss < GRADIENT_ITERATION_BOUND:
             #    if debug: # TODO: Remove debugging code
             #        print("Kernel 2: {} iterations: {}".format(i, loss3))
             #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3)
-            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si1, si2, si3, si4, si5, si6))
+            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si3, si4))
                 break
         else: # no break
             # pass
         #    if debug:
         #    print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3)
-            print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si1, si2, si3, si4, si5, si6))
+            print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si3, si4))
         #    print("Kernel 2: max iterations reached. bounds: {}".format(loss3))
         #        print("xi: {}, d: {}".format(xi, d))
-
-        check = su.det(b3)
 
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
