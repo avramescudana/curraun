@@ -5,14 +5,12 @@ ACCURACY_GOAL = 1e-16 # 1e-8
 ITERATION_MAX_ROUND_1 = 250 # 100
 ITERATION_MAX_ROUND_2 = 100000 # 10000
 HEAVY_BALL_BETA = 1
-TRY_FACTORS = [1, 2, 0, -1]
+TRY_FACTORS = [1, 2, 0, -1, -0.5]
 
 # Gradient descent on algebra element
 # Calculate gradient analytically
 @myjit
 def init_kernel_2_su3(xi, u0, u1, ua, ub):
-    # if xi != 594 and xi != 750 and xi != 814:
-    #     return
     # initialize transverse gauge links (longitudinal magnetic field)
     # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
     for d in range(2):
@@ -24,7 +22,8 @@ def init_kernel_2_su3(xi, u0, u1, ua, ub):
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
 
-# Try different
+# Try different initial guesses.
+# If desired accuracy has not been reached yet, dig deep with given initial guess
 @myjit
 def solve_initial_condition_complete(u_a, u_b, xi, d):
     # Try starting from various initial conditions and see which gets closest to the result.
@@ -40,11 +39,12 @@ def solve_initial_condition_complete(u_a, u_b, xi, d):
             best_factor = factor
 
     # Start from that initial condition and dig really deep
+    # TODO: One could remember state and continue from where we ended, instead of starting all over
     b3, loss, accuracy_reached, iterations = solve_initial_condition(u_a, u_b, xi, d, best_factor, ITERATION_MAX_ROUND_2)
 
     if accuracy_reached:
         print("Kernel 2: xi:", xi, ", d:", d, ": digging deep successful:", iterations,
-              ", factor: ", factor, ". Loss:", loss)
+              ", factor: ", best_factor, ". Loss:", loss)
         return b3
 
     print("=========================================================================")
