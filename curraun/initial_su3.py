@@ -1,118 +1,144 @@
 from curraun.numba_target import myjit
 import curraun.su as su
 
-GRADIENT_ITERATION_MAX = 1000 # 30 # 25000 # 2500 # 250 # 2500 # 50 # 2500000 # 30  # 25000 # 30 # 250
-GRADIENT_ITERATION_BOUND = 1e-8 #20 #su.EXP_ACCURACY_SQUARED
-
-HEAVY_BALL_BETA = 0.9
+ACCURACY_GOAL = 1e-16 # 1e-8
+ITERATION_MAX_ROUND_1 = 250 # 100
+ITERATION_MAX_ROUND_2 = 100000 # 10000
+HEAVY_BALL_BETA = 1
+TRY_FACTORS = [1, 2, 0, -1]
 
 # Gradient descent on algebra element
 # Calculate gradient analytically
 @myjit
 def init_kernel_2_su3(xi, u0, u1, ua, ub):
-    #if xi < 750:
-    #    return
     # if xi != 594 and xi != 750 and xi != 814:
     #     return
-    # if xi == 10:
-    #     exit()
     # initialize transverse gauge links (longitudinal magnetic field)
     # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
     for d in range(2):
-        b1 = su.load(ua[xi, d])
-        b1 = su.add(b1, ub[xi, d])  # A
+        u_a = su.load(ua[xi, d])
+        u_b = su.load(ub[xi, d])
 
-        m1 = su.zero_algebra  # real values
-
-        # Better starting value:
-        m1a = su.get_algebra_factors_from_group_element_approximate(ua[xi, d])
-        m1b = su.get_algebra_factors_from_group_element_approximate(ub[xi, d])
-        m1 = su.add_algebra(m1a, m1b)
-        # m1 = su.mul_algebra(m1, 2)
-        #m1 = su.add_algebra(mul_algebra(m1a, -1), mul_algebra(m1b, -1)) # ++
-        #m1 = su.add_algebra(mul_algebra(m1a, 0), mul_algebra(m1b, 0)) # --
-        #m1 = su.add_algebra(mul_algebra(m1a, 2), mul_algebra(m1b, 2)) # ++
-        m1_prev = m1
-
-        # Make solution consistently unitary
-        epsilon2 = 0.5 # 0.125 # 0.0001 # 0.125
-
-        si3 = 0
-        si4 = 0
-
-        smallestloss = 1
-
-        for i in range(GRADIENT_ITERATION_MAX):
-            # Calculate Loss:
-            b3 = su.mexp(su.get_algebra_element(m1))
-            loss1, check1, check2, check3 = loss(b1, b3)
-
-            m2new = m1
-
-            epsilon1 = epsilon2 # * 0.125 # smaller
-            epsilon1 = 1.e-8
-
-            # Calculate analytic derivative:
-            grad = gradient(b1, m1)
-
-            m2new = su.add_algebra(m2new, su.mul_algebra(grad, -epsilon2))
-
-            b3new = su.mexp(su.get_algebra_element(m2new))
-
-            # Heavy ball method
-            # dball = + beta * (m1 - m1_prev)
-            dball = su.add_algebra(m1, su.mul_algebra(m1_prev, -1))
-            dball = su.mul_algebra(dball, 1) # 0.6) # epsilon2)
-
-            m2new21 = su.add_algebra(m2new, dball)
-
-            b3new21 = su.mexp(su.get_algebra_element(m2new21))
-
-
-            loss3, check4, check5, check6 = loss(b1, b3new)
-            loss21 = loss(b1, b3new21)[0]
-
-            m1_prev = m1
-
-            # Find step with smallest value of loss
-            smallestloss_prev = smallestloss
-            smallestloss = loss1
-            smallestitem = -1
-            if loss3 < smallestloss:
-                m1 = m2new
-                smallestloss = loss3
-                smallestitem = 5
-            if loss21 < smallestloss:
-                m1 = m2new21
-                smallestloss = loss21
-                smallestitem = 21
-
-            if smallestitem == 5:
-                si3 +=1
-            if smallestitem == 21:
-                si4 +=1
-
-            if smallestitem == -1:
-                pass
-
-
-            if smallestloss < GRADIENT_ITERATION_BOUND:
-            #    if debug: # TODO: Remove debugging code
-            #        print("Kernel 2: {} iterations: {}".format(i, loss3))
-            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3)
-            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si3, si4))
-                break
-        else: # no break
-            # pass
-        #    if debug:
-        #    print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3)
-            print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si3, si4))
-        #    print("Kernel 2: max iterations reached. bounds: {}".format(loss3))
-        #        print("xi: {}, d: {}".format(xi, d))
+        b3 = solve_initial_condition_complete(u_a, u_b, xi, d)
 
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
 
+# Try different
+@myjit
+def solve_initial_condition_complete(u_a, u_b, xi, d):
+    # Try starting from various initial conditions and see which gets closest to the result.
+    best_loss = 1000
+    best_factor = 0
+    for factor in TRY_FACTORS:
+        b3, loss, accuracy_reached, iterations = solve_initial_condition(u_a, u_b, xi, d, factor, ITERATION_MAX_ROUND_1)
+        if accuracy_reached:
+            # We are done :)
+            return b3
+        if loss < best_loss:
+            best_loss = loss
+            best_factor = factor
+
+    # Start from that initial condition and dig really deep
+    b3, loss, accuracy_reached, iterations = solve_initial_condition(u_a, u_b, xi, d, best_factor, ITERATION_MAX_ROUND_2)
+
+    if accuracy_reached:
+        print("Kernel 2: xi:", xi, ", d:", d, ": digging deep successful:", iterations,
+              ", factor: ", factor, ". Loss:", loss)
+        return b3
+
+    print("=========================================================================")
+    print("WARNING")
+    print("Kernel 2: xi:", xi, ", d:", d, ": digging deep unsuccessful. ", iterations,
+              ", factor: ", factor, "Loss:", loss)
+    print("=========================================================================")
+    return b3
+
+@myjit
+def solve_initial_condition(u_a, u_b, xi, d, initial_factor, iter_max):
+    b1 = su.add(u_a, u_b)  # A
+    # Better starting value:
+    m1a = su.get_algebra_factors_from_group_element_approximate(u_a)
+    m1b = su.get_algebra_factors_from_group_element_approximate(u_b)
+    m1 = su.add_algebra(m1a, m1b)
+    m1 = su.mul_algebra(m1, initial_factor)
+    m1_prev = m1
+
+    epsilon2 = 0.5  # 0.125 # 0.0001 # 0.125
+    si3 = 0
+    si4 = 0
+    smallestloss = 1
+    accuracy_reached = False
+    for i in range(iter_max):
+        # Calculate Loss:
+        loss1 = loss(b1, m1)
+
+        m2new = m1
+
+        # Calculate analytic derivative:
+        grad = gradient(b1, m1)
+
+        m2new = su.add_algebra(m2new, su.mul_algebra(grad, -epsilon2))
+
+        # Heavy ball method
+        # dball = + beta * (m1 - m1_prev)
+        dball = su.add_algebra(m1, su.mul_algebra(m1_prev, -1))
+        dball = su.mul_algebra(dball, HEAVY_BALL_BETA)
+
+        m2new21 = su.add_algebra(m2new, dball)
+
+        loss3 = loss(b1, m2new)
+        loss21 = loss(b1, m2new21)
+
+        m1_prev = m1
+
+        # Find step with smallest value of loss
+        smallestloss_prev = smallestloss
+        smallestloss = loss1
+        smallestitem = -1
+        if loss3 < smallestloss:
+            m1 = m2new
+            smallestloss = loss3
+            smallestitem = 5
+        if loss21 < smallestloss:
+            m1 = m2new21
+            smallestloss = loss21
+            smallestitem = 21
+
+        if smallestitem == 5:
+            si3 += 1
+        if smallestitem == 21:
+            si4 += 1
+
+        if smallestitem == -1:
+            pass
+
+        if smallestloss < ACCURACY_GOAL:
+            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si3, si4))
+            accuracy_reached = True
+            break
+    else:  # no break
+        # print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3, ", factor: ", initial_factor,
+        #       (si3, si4))
+        pass
+
+    b3 = su.mexp(su.get_algebra_element(m1))
+    final_loss = loss(b1, m1)
+    return b3, final_loss, accuracy_reached, i
+
+@myjit
+def loss(b1, m1):
+    unit = su.unit()
+
+    # Check result
+    b3 = su.mexp(su.get_algebra_element(m1))
+    e1 = su.mul(b1, su.dagger(su.add(unit, b3)))
+    e2 = su.ah(e1)
+    res = su.sq(e2)
+
+    return res
+
+# calculate gradient for loss
 @myjit
 def gradient(b1, m1):
     grad = su.zero_algebra
@@ -152,24 +178,3 @@ def gradient_component(b1, m1, mdelta):
 
     res = -g3.real * 0.25 # Result should be real
     return res
-
-@myjit
-def loss(b1, b3):
-    unit = su.unit()
-
-    # Check result
-    e1 = su.mul(b1, su.dagger(su.add(unit, b3)))
-    e2 = su.ah(e1)
-    check1 = su.sq(e2)
-
-    # Check unitarity:
-    check2 = su.check_unitary(b3)
-
-    # Check determinant
-    f1 = su.det(b3) - 1
-    check3 = f1.real * f1.real + f1.imag * f1.imag
-
-    #res = check1 + check2 + check3
-    res = check1
-
-    return res, check1, check2, check3
