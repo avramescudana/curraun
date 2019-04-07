@@ -1,7 +1,8 @@
-from curraun.numba_target import myjit, my_parallel_loop, prange, use_python
+from curraun.numba_target import myjit, my_parallel_loop
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
+
 
 def init(s, w1, w2):
     u0 = s.u0
@@ -311,7 +312,7 @@ def init_kernel_2_TEST3(xi, u0, u1, ua, ub):
         b1 = su.load(ua[xi, d])
         b1 = su.add(b1, ub[xi, d])  # A
 
-        m1 = zero_algebra # real values
+        m1 = su.zero_algebra  # real values
 
         # Make solution consistently unitary
         epsilon2 = 0.125
@@ -326,8 +327,8 @@ def init_kernel_2_TEST3(xi, u0, u1, ua, ub):
 
             epsilon1 = epsilon2 # * 0.125 # smaller
             for a in range(8):
-                mdelta = unit_algebra[a]
-                m2 = add_algebra(m1, mul_algebra(mdelta, epsilon1))
+                mdelta = su.unit_algebra[a]
+                m2 = su.add_algebra(m1, su.mul_algebra(mdelta, epsilon1))
                 m3 = su.get_algebra_element(m2)
                 b3test = su.mexp(m3)
 
@@ -335,20 +336,20 @@ def init_kernel_2_TEST3(xi, u0, u1, ua, ub):
                 dloss_first_order = (loss2 - loss1) / epsilon1
 
                 # Calculate derivative to second order accuracy:
-                m2 = add_algebra(m1, mul_algebra(mdelta, -epsilon1))
+                m2 = su.add_algebra(m1, su.mul_algebra(mdelta, -epsilon1))
                 m3 = su.get_algebra_element(m2)
                 b3test = su.mexp(m3)
 
                 loss3 = loss(b1, b3test)[0]
                 dloss = (loss2 - loss3) / (2 * epsilon1)
 
-                m2new = add_algebra(m2new, mul_algebra(mdelta, -dloss * epsilon2))
+                m2new = su.add_algebra(m2new, su.mul_algebra(mdelta, -dloss * epsilon2))
                 b3new = su.mexp(su.get_algebra_element(m2new))
 
-                m2new2 = add_algebra(m2new2, mul_algebra(mdelta, -dloss * epsilon2 * 0.5))
+                m2new2 = su.add_algebra(m2new2, su.mul_algebra(mdelta, -dloss * epsilon2 * 0.5))
                 b3new2 = su.mexp(su.get_algebra_element(m2new2))
 
-                m2new3 = add_algebra(m2new3, mul_algebra(mdelta, -dloss * epsilon2 * 0.25))
+                m2new3 = su.add_algebra(m2new3, su.mul_algebra(mdelta, -dloss * epsilon2 * 0.25))
                 b3new3 = su.mexp(su.get_algebra_element(m2new3))
 
             loss3, check4, check5, check6 = loss(b1, b3new)
@@ -405,7 +406,7 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
         b1 = su.load(ua[xi, d])
         b1 = su.add(b1, ub[xi, d])  # A
 
-        m1 = zero_algebra # real values
+        m1 = su.zero_algebra  # real values
 
         # # Test get_algebra_factors_from_group_element_approximate
         # f1 = (1, 0, 0, 0, .1, 0, 0, 0)
@@ -418,13 +419,13 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
         # print(f2)
 
         # Better starting value:
-        m1a = get_algebra_factors_from_group_element_approximate(ua[xi, d])
-        m1b = get_algebra_factors_from_group_element_approximate(ub[xi, d])
-        m1 = add_algebra(m1a, m1b)
-        # m1 = mul_algebra(m1, 2)
-        #m1 = add_algebra(mul_algebra(m1a, -1), mul_algebra(m1b, -1)) # ++
-        #m1 = add_algebra(mul_algebra(m1a, 0), mul_algebra(m1b, 0)) # --
-        #m1 = add_algebra(mul_algebra(m1a, 2), mul_algebra(m1b, 2)) # ++
+        m1a = su.get_algebra_factors_from_group_element_approximate(ua[xi, d])
+        m1b = su.get_algebra_factors_from_group_element_approximate(ub[xi, d])
+        m1 = su.add_algebra(m1a, m1b)
+        # m1 = su.mul_algebra(m1, 2)
+        #m1 = su.add_algebra(mul_algebra(m1a, -1), mul_algebra(m1b, -1)) # ++
+        #m1 = su.add_algebra(mul_algebra(m1a, 0), mul_algebra(m1b, 0)) # --
+        #m1 = su.add_algebra(mul_algebra(m1a, 2), mul_algebra(m1b, 2)) # ++
         m1_prev = m1
 
         # Make solution consistently unitary
@@ -452,8 +453,8 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
             epsilon1 = epsilon2 # * 0.125 # smaller
             epsilon1 = 1.e-8
             for a in range(8):
-                mdelta = unit_algebra[a]
-                m2 = add_algebra(m1, mul_algebra(mdelta, epsilon1))
+                mdelta = su.unit_algebra[a]
+                m2 = su.add_algebra(m1, su.mul_algebra(mdelta, epsilon1))
                 m3 = su.get_algebra_element(m2)
                 b3test = su.mexp(m3)
 
@@ -461,7 +462,7 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
                 dloss_first_order = (loss2 - loss1) / epsilon1
 
                 # Calculate derivative to second order accuracy:
-                m2 = add_algebra(m1, mul_algebra(mdelta, -epsilon1))
+                m2 = su.add_algebra(m1, su.mul_algebra(mdelta, -epsilon1))
                 m3 = su.get_algebra_element(m2)
                 b3test = su.mexp(m3)
 
@@ -475,9 +476,9 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
 
                 dloss = dloss_analytic
 
-                m2new = add_algebra(m2new, mul_algebra(mdelta, -dloss * epsilon2))
-                m2new2 = add_algebra(m2new2, mul_algebra(mdelta, -dloss * epsilon2 * 0.5))
-                m2new3 = add_algebra(m2new3, mul_algebra(mdelta, -dloss * epsilon2 * 0.25))
+                m2new = su.add_algebra(m2new, su.mul_algebra(mdelta, -dloss * epsilon2))
+                m2new2 = su.add_algebra(m2new2, su.mul_algebra(mdelta, -dloss * epsilon2 * 0.5))
+                m2new3 = su.add_algebra(m2new3, su.mul_algebra(mdelta, -dloss * epsilon2 * 0.25))
 
             b3new = su.mexp(su.get_algebra_element(m2new))
             b3new2 = su.mexp(su.get_algebra_element(m2new2))
@@ -485,12 +486,12 @@ def init_kernel_2_TEST4(xi, u0, u1, ua, ub):
 
             # Heavy ball method
             # dball = + beta * (m1 - m1_prev)
-            dball = add_algebra(m1, mul_algebra(m1_prev, -1))
-            dball = mul_algebra(dball, 1) # 0.6) # epsilon2)
+            dball = su.add_algebra(m1, su.mul_algebra(m1_prev, -1))
+            dball = su.mul_algebra(dball, 1) # 0.6) # epsilon2)
 
-            m2new21 = add_algebra(m2new, dball)
-            m2new22 = add_algebra(m2new2, dball)
-            m2new23 = add_algebra(m2new3, dball)
+            m2new21 = su.add_algebra(m2new, dball)
+            m2new22 = su.add_algebra(m2new2, dball)
+            m2new23 = su.add_algebra(m2new3, dball)
 
             b3new21 = su.mexp(su.get_algebra_element(m2new21))
             b3new22 = su.mexp(su.get_algebra_element(m2new22))
@@ -613,7 +614,7 @@ def gradient(b1, m1, a):
     e3 = su.mul_s(unit, -su.tr(e2) / su.N_C) # - tr(e2) / N_C * 1
     e4 = su.add(e2, e3) # Y = [X]_ah
 
-    mdelta = unit_algebra[a]
+    mdelta = su.unit_algebra[a]
     m3 = su.get_algebra_element(mdelta)
 
     # f1 = su.mul(b1, su.mul(m3, su.dagger(b3))) # A (-i t_a/2) B^dagger
@@ -658,52 +659,6 @@ def gradient(b1, m1, a):
     res = -g3.real * 0.25 # Result should be real
     return res
 
-@myjit
-def add_algebra(a, b):
-    r0 = a[0] + b[0]
-    r1 = a[1] + b[1]
-    r2 = a[2] + b[2]
-    r3 = a[3] + b[3]
-    r4 = a[4] + b[4]
-    r5 = a[5] + b[5]
-    r6 = a[6] + b[6]
-    r7 = a[7] + b[7]
-    return r0, r1, r2, r3, r4, r5, r6, r7
-
-@myjit
-def mul_algebra(a, f):
-    r0 = a[0] * f
-    r1 = a[1] * f
-    r2 = a[2] * f
-    r3 = a[3] * f
-    r4 = a[4] * f
-    r5 = a[5] * f
-    r6 = a[6] * f
-    r7 = a[7] * f
-    return r0, r1, r2, r3, r4, r5, r6, r7
-
-unit_algebra = ((1,0,0,0,0,0,0,0),
-                (0,1,0,0,0,0,0,0),
-                (0,0,1,0,0,0,0,0),
-                (0,0,0,1,0,0,0,0),
-                (0,0,0,0,1,0,0,0),
-                (0,0,0,0,0,1,0,0),
-                (0,0,0,0,0,0,1,0),
-                (0,0,0,0,0,0,0,1))
-
-@myjit
-def get_algebra_factors_from_group_element_approximate(g):
-    r1 = su.tr(su.mul(su.s1, g)).imag
-    r2 = su.tr(su.mul(su.s2, g)).imag
-    r3 = su.tr(su.mul(su.s3, g)).imag
-    r4 = su.tr(su.mul(su.s4, g)).imag
-    r5 = su.tr(su.mul(su.s5, g)).imag
-    r6 = su.tr(su.mul(su.s6, g)).imag
-    r7 = su.tr(su.mul(su.s7, g)).imag
-    r8 = su.tr(su.mul(su.s8, g)).imag
-    return r1, r2, r3, r4, r5, r6, r7, r8
-
-zero_algebra = (0,0,0,0,0,0,0,0)
 
 @myjit
 def loss(b1, b3):
