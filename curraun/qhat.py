@@ -10,6 +10,7 @@ if use_cuda:
     A module for various calculations related to momentum broadening and the \hat{q} parameter.
 """
 
+
 class TransportedForce:
     def __init__(self, s):
         self.s = s
@@ -101,10 +102,13 @@ class TransportedForce:
 def reset_wilsonfield(x, wilsonfield):
     su.store(wilsonfield[x], su.unit())
 
+
 """
     "Update" the light-like Wilson line.
     Adds a single link to the Wilson line.
 """
+
+
 def update_v(s, v, t, stream):
     u = s.d_u0
     n = s.n
@@ -119,10 +123,13 @@ def update_v_kernel(xi, u, v, t, n):
     su.store(v[xi], b1)
     #l.normalize(v[xi])
 
+
 """
-    Computes the correctly alingend (in the sense of lattice
+    Computes the correctly aligned (in the sense of lattice
     sites) force acting on a light-like trajectory particle.
 """
+
+
 def compute_f(s, f, t, stream):
     u0 = s.d_u0
     u1 = s.d_u1
@@ -139,11 +146,11 @@ def compute_f(s, f, t, stream):
     tau = s.t # TODO: use tau_inverse = 1/s.t to avoid division in kernel? (measurable effect?)
     sign = +1.0 # TODO: can this constant be removed?
 
-    my_parallel_loop(compute_f_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, dth, sign,
+    my_parallel_loop(compute_f_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau,
                      stream=stream)
 
 @myjit
-def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, dth, sign):
+def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
 
     # f_1 = E_1 (index 0)
 
@@ -170,31 +177,30 @@ def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau,
     bf1 = su.zero()
 
     # quadratically accurate +Ey
-    bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / (tau + dth))  # TODO: change to tau
-    bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / (tau - dth))  # TODO: change to tau
-
+    bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / tau)
+    bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / tau)
     xs3 = l.shift(xs, 1, -1, n)
     b1 = l.act(su.dagger(u0[xs3, 1]), pt1[xs2, 1])
     bf1 = l.add_mul(bf1, b1, 0.25 / tau)
     b1 = l.act(su.dagger(u0[xs3, 1]), pt0[xs2, 1])
     bf1 = l.add_mul(bf1, b1, 0.25 / tau)
 
-    # quadratically accurate -Bz?
+    # quadratically accurate -Bz
     b1 = l.plaq(u0, xs, 0, 1, 1, 1, n)
     b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, +0.25 * sign)
+    bf1 = l.add_mul(bf1, b2, +0.25)
 
     b1 = l.plaq(u0, xs, 0, 1, 1, -1, n)
     b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, -0.25 * sign)
+    bf1 = l.add_mul(bf1, b2, -0.25)
 
     b1 = l.plaq(u0, xs, 1, 0, 1, -1, n)
     b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, +0.25 * sign)
+    bf1 = l.add_mul(bf1, b2, +0.25)
 
     b1 = l.plaq(u0, xs, 1, 0, -1, -1, n)
     b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, -0.25 * sign)
+    bf1 = l.add_mul(bf1, b2, -0.25)
 
     su.store(f[xi, 1], bf1)
 
@@ -205,21 +211,24 @@ def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau,
     bf2 = l.add_mul(bf2, peta1[xs], 0.5)
     bf2 = l.add_mul(bf2, peta0[xs], 0.5)
 
-    # Quadratically accurate +B_y?
-    if tau > 0.0:
-        b1 = l.transport(aeta0, u0, xs, 0, +1, n)
-        b2 = l.transport(aeta0, u0, xs, 0, -1, n)
-        b1 = l.add_mul(b1, b2, -1.0)
-        bf2 = l.add_mul(bf2, b1, 0.5 / tau)
+    # Quadratically accurate +B_y
+    b1 = l.transport(aeta0, u0, xs, 0, +1, n)
+    b2 = l.transport(aeta0, u0, xs, 0, -1, n)
+    b1 = l.add_mul(b1, b2, -1.0)
+    bf2 = l.add_mul(bf2, b1, 0.5 / tau)
 
     su.store(f[xi, 2], bf2)
+
 
 """
     Applies the Wilson line to the untransported force.
     This is important for gauge covariance.
 """
+
+
 def apply_v(f, v, n, stream):
     my_parallel_loop(apply_v_kernel, n * n, f, v, n, stream=stream)
+
 
 @myjit
 def apply_v_kernel(xi, f, v, n):
@@ -232,17 +241,22 @@ def apply_v_kernel(xi, f, v, n):
 """
     Simple integration of forces to obtain 'color momenta'.
 """
+
+
 def integrate_f(f, fi, n, dt, stream):
     kappa.integrate_f(f, fi, n, dt, stream)
 
 
 """
     Computes perpendicular momentum broadening as the trace
-    of the sqaure of the integrated color force (i.e. color
+    of the square of the integrated color force (i.e. color
     momenta).
 """
+
+
 def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream):
     kappa.compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream)
+
 
 def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream):
     kappa.compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream)

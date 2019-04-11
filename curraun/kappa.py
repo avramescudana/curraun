@@ -129,11 +129,11 @@ def compute_f_kernel(xi, n, u0, peta1, peta0, pt1, pt0, f, tau):
     bf = su.zero()
 
     # Accurate +E_z
-    xs = l.shift(xi, 2, -1, n)    ### TODO: Is this correct?
-    bf = su.add(bf, peta1[xs])
-    bf = su.add(bf, peta0[xs])
+    bf = su.add(bf, peta1[xi])
+    bf = su.add(bf, peta0[xi])
     bf = su.mul_s(bf, 0.5)
     su.store(f[xi, 2], bf)
+
 
 def integrate_f(f, fi, n, dt, stream):
     my_parallel_loop(integrate_f_kernel, n * n, f, fi, dt, stream=stream)
@@ -144,8 +144,10 @@ def integrate_f_kernel(xi, f, fi, dt):
         bfi = l.add_mul(fi[xi, d], f[xi, d], dt)
         su.store(fi[xi, d], bfi)
 
+
 def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream):
     my_parallel_loop(compute_p_perp_kernel, n * n, fi, p_perp_x, p_perp_y, p_perp_z, stream=stream)
+
 
 @myjit
 def compute_p_perp_kernel(xi, fi, p_perp_x, p_perp_y, p_perp_z):
@@ -153,6 +155,7 @@ def compute_p_perp_kernel(xi, fi, p_perp_x, p_perp_y, p_perp_z):
     p_perp_x[xi] = su.sq(fi[xi, 0])
     p_perp_y[xi] = su.sq(fi[xi, 1])
     p_perp_z[xi] = su.sq(fi[xi, 2])
+
 
 def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream):
     if use_cuda:
@@ -180,6 +183,7 @@ def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream):
 # @cuda.reduce
 # def sum_reduce(a, b):
 #    return a + b
+
 
 @mycudajit  # @cuda.jit
 def collect_results(p_perp_mean, p_perp_x, p_perp_y, p_perp_z):
