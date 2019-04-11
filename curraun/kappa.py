@@ -31,6 +31,7 @@ class TransportedForce:
         if use_cuda:
             # use pinned memory for asynchronous data transfer
             self.p_perp_mean = cuda.pinned_array(3, dtype=np.double)
+            self.p_perp_mean[0:3] = 0.0
 
         # time counter
         self.t = 0
