@@ -105,8 +105,5 @@ class Simulation:
 def evolve_leapfrog(s, stream=None):
     s.swap()
     s.t += s.dt
-    if False: # use_cuda:
-        leapfrog_cuda.evolve(s, stream)
-    else:
-        leapfrog.evolve(s, stream)
+    leapfrog.evolve(s, stream)
     # leapfrog.normalize_all(s)
