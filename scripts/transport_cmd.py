@@ -179,7 +179,6 @@ for e in range(p['NE']):
     for t in range(maxt):
         if t % p['DTS'] == 0:
             if use_cuda:
-
                 # Copy data from device to host
                 kappa_tforce.copy_mean_to_host()
                 qhat_tforce.copy_mean_to_host()
@@ -211,22 +210,9 @@ for e in range(p['NE']):
             f = 2 * s.g ** 2 / (2 * Nc)
 
             # p_perp components for kappa
-            k_p_perp_x = kappa_tforce.p_perp_mean[0] * units * f
-            k_p_perp_y = kappa_tforce.p_perp_mean[1] * units * f
-            k_p_perp_z = kappa_tforce.p_perp_mean[2] * units * f
-
-            results_kappa[3 * e + 1, int(t / p['DTS'])] = k_p_perp_x
-            results_kappa[3 * e + 2, int(t / p['DTS'])] = k_p_perp_y
-            results_kappa[3 * e + 3, int(t / p['DTS'])] = k_p_perp_z
-
-            # p_perp components for qhat
-            q_p_perp_x = qhat_tforce.p_perp_mean[0] * units * f
-            q_p_perp_y = qhat_tforce.p_perp_mean[1] * units * f
-            q_p_perp_z = qhat_tforce.p_perp_mean[2] * units * f
-
-            results_qhat[3 * e + 1, int(t / p['DTS'])] = q_p_perp_x
-            results_qhat[3 * e + 2, int(t / p['DTS'])] = q_p_perp_y
-            results_qhat[3 * e + 3, int(t / p['DTS'])] = q_p_perp_z
+            for d in range(3):
+                results_kappa[3 * e + d + 1, int(t / p['DTS'])] = kappa_tforce.p_perp_mean[d] * units * f
+                results_qhat[3 * e + d + 1, int(t / p['DTS'])] = qhat_tforce.p_perp_mean[d] * units * f
 
             if use_cuda:
                 # Copy data back to device
