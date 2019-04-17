@@ -2,6 +2,7 @@ import os
 import time
 import datetime
 import importlib
+import platform
 
 from curraun.numba_target import use_cuda, use_numba
 if use_cuda:
@@ -13,6 +14,7 @@ import curraun.su3
 import numpy as np
 import numba
 
+FILENAME = "benchmark.dat"
 MAX_TIMEOUT = 10
 
 """
@@ -39,7 +41,9 @@ a = p['L'] / p['N']
 DT = 1.0 / p['DTS']
 maxt = int(p['TMAX'] / a) * p['DTS']
 
-def time_simulation():
+speedup_base = -1
+
+def time_simulation(target_string, spec_string):
     # Reload libraries
     importlib.reload(curraun.numba_target)
     importlib.reload(curraun)
@@ -91,45 +95,79 @@ def time_simulation():
     estimated_total_time = seconds_per_step * maxt * p['NE']
     estimated_total_time_formatted = str(datetime.timedelta(seconds=estimated_total_time))
 
+    global speedup_base
+    if speedup_base == -1:
+        speedup_base = seconds_per_step
+    speedup = speedup_base / seconds_per_step
+    print("Target: {}".format(target_string))
+    print("Specification: {}".format(spec_string))
     print("Number of steps calculated: {}".format(number_of_steps))
-    print("Total time: {}".format(total_time))
-    print("Seconds per simulation step: {}".format(seconds_per_step))
+    print("Total time: {:12.6f}".format(total_time))
+    print("Seconds per simulation step: {:12.6f}".format(seconds_per_step))
+    print("Speedup: {:8.3f}".format(speedup))
     print("Estimated total time: {}".format(estimated_total_time_formatted))
     print("---------------------------------------")
 
-def time_python_numba_cuda():
+    with open(FILENAME, "a") as myfile:
+        myfile.write("{0: <14},".format(target_string))
+        myfile.write("{},".format(spec_string))
+        myfile.write("{:12.6f},".format(seconds_per_step))
+        myfile.write("{:8.3f},".format(speedup))
+        myfile.write('"{}"\n'.format(estimated_total_time_formatted))
+
+def time_python_numba_cuda(spec_string):
     #os.environ["MY_NUMBA_TARGET"] = "python"
-    #time_simulation()
+    #time_simulation("Python")
 
     print("Number of threads: 1")
     os.environ["NUMBA_NUM_THREADS"] = "1"
     os.environ["MY_NUMBA_TARGET"] = "numba"
-    time_simulation()
+    time_simulation("Numba 1 CPU", spec_string)
 
     del os.environ["NUMBA_NUM_THREADS"]
     print("Number of threads: {}".format(numba.config.NUMBA_DEFAULT_NUM_THREADS))
     os.environ["MY_NUMBA_TARGET"] = "numba"
-    time_simulation()
+    time_simulation("Numba {} CPUs".format(numba.config.NUMBA_DEFAULT_NUM_THREADS), spec_string)
 
     os.environ["MY_NUMBA_TARGET"] = "cuda"
-    time_simulation()
+    time_simulation("CUDA", spec_string)
+
+current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+hostname = platform.node()
+import numba.cuda as cuda
+gpu_name = cuda.get_current_device().name.decode('UTF-8')
+compute_capability = cuda.get_current_device().compute_capability
+compute_capability_string = str(compute_capability[0]) + "." + str(compute_capability[1])
 
 print("---------------------------------------")
+print("Date: {}".format(current_date))
+print("Hostname: {}".format(hostname))
+print("GPU Name: {}".format(gpu_name))
+print("Compute capability: {}".format(compute_capability_string))
+print("---------------------------------------")
+
+with open(FILENAME, "a") as myfile:
+    myfile.write("---------------------------------------\n")
+    myfile.write("Date: {}\n".format(current_date))
+    myfile.write("Hostname: {}\n".format(hostname))
+    myfile.write("GPU Name: {}\n".format(gpu_name))
+    myfile.write("Compute capability: {}\n".format(compute_capability_string))
+    myfile.write("---------------------------------------\n")
 
 # SU(2) Double
 os.environ["GAUGE_GROUP"] = "su2"
 os.environ["PRECISION"] = "double"
-time_python_numba_cuda()
+time_python_numba_cuda("su2-double")
 
 # SU(2) Single
 os.environ["PRECISION"] = "single"
-time_python_numba_cuda()
+time_python_numba_cuda("su2-single")
 
 # SU(3) Double
 os.environ["GAUGE_GROUP"] = "su3"
 os.environ["PRECISION"] = "double"
-time_python_numba_cuda()
+time_python_numba_cuda("su3-single")
 
 # SU(3) Single
 os.environ["PRECISION"] = "single"
-time_python_numba_cuda()
+time_python_numba_cuda("su3-single")
