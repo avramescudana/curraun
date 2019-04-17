@@ -6,7 +6,7 @@ ITERATION_MAX_ROUND_1 = 100 # Exploration of initial conditions
 ITERATION_MAX_ROUND_2 = 2000 # Mention cases that took very long
 ITERATION_MAX_ROUND_3 = 10000 # Ultimate limit
 HEAVY_BALL_BETA = 1
-TRY_FACTORS = [1, 2, 0, -1, -0.5]
+TRY_FACTORS = (1., 2., 0., -1., -0.5)
 
 # Gradient descent on algebra element
 # Calculate gradient analytically
