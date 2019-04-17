@@ -114,6 +114,7 @@ def solve_initial_condition(u_a, u_b, xi, d, initial_factor, iter_max):
 
         if smallestitem == -1:
             pass
+            # TODO: rewrite logic above so that either case 5 or case 21 happens
 
         if smallestloss < ACCURACY_GOAL:
             #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si3, si4))
