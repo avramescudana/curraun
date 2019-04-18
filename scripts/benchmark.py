@@ -129,29 +129,42 @@ def time_python_numba_cuda(spec_string):
     os.environ["MY_NUMBA_TARGET"] = "numba"
     time_simulation("Numba {} CPUs".format(numba.config.NUMBA_DEFAULT_NUM_THREADS), spec_string)
 
-    os.environ["MY_NUMBA_TARGET"] = "cuda"
-    time_simulation("CUDA", spec_string)
+    global cuda_supported
+    if cuda_supported:
+        os.environ["MY_NUMBA_TARGET"] = "cuda"
+        time_simulation("CUDA", spec_string)
 
 current_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 hostname = platform.node()
 import numba.cuda as cuda
-gpu_name = cuda.get_current_device().name.decode('UTF-8')
-compute_capability = cuda.get_current_device().compute_capability
-compute_capability_string = str(compute_capability[0]) + "." + str(compute_capability[1])
+cuda_supported = True
+try:
+    gpu_name = cuda.get_current_device().name.decode('UTF-8')
+    compute_capability = cuda.get_current_device().compute_capability
+    compute_capability_string = str(compute_capability[0]) + "." + str(compute_capability[1])
+except:
+    cuda_supported = False
+
 
 print("---------------------------------------")
 print("Date: {}".format(current_date))
 print("Hostname: {}".format(hostname))
-print("GPU Name: {}".format(gpu_name))
-print("Compute capability: {}".format(compute_capability_string))
+if cuda_supported:
+    print("GPU Name: {}".format(gpu_name))
+    print("Compute capability: {}".format(compute_capability_string))
+else:
+    print("No CUDA capable graphics card found")
 print("---------------------------------------")
 
 with open(FILENAME, "a") as myfile:
     myfile.write("---------------------------------------\n")
     myfile.write("Date: {}\n".format(current_date))
     myfile.write("Hostname: {}\n".format(hostname))
-    myfile.write("GPU Name: {}\n".format(gpu_name))
-    myfile.write("Compute capability: {}\n".format(compute_capability_string))
+    if cuda_supported:
+        myfile.write("GPU Name: {}\n".format(gpu_name))
+        myfile.write("Compute capability: {}\n".format(compute_capability_string))
+    else:
+        myfile.write("No CUDA capable graphics card found\n")
     myfile.write("---------------------------------------\n")
 
 # SU(2) Double
