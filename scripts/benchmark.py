@@ -187,3 +187,21 @@ time_python_numba_cuda("su3-double")
 # SU(3) Single
 os.environ["PRECISION"] = "single"
 time_python_numba_cuda("su3-single")
+
+# # For debugging types:
+# # Numba SU(3) Single
+# os.environ["MY_NUMBA_TARGET"] = "numba"
+# os.environ["GAUGE_GROUP"] = "su3"
+# os.environ["PRECISION"] = "single"
+# time_simulation("NUMBA","su3-single")
+#
+# # For debugging types:
+# import curraun.su as su
+# if use_numba and (su.GROUP_TYPE == np.float32 or su.GROUP_TYPE == np.complex64):  # TODO: Remove debugging code
+#     print("Debugging single precision types:")
+#     su.store.inspect_types()
+#     su.mexp.inspect_types()
+#     su.get_algebra_element.inspect_types()
+#     su.mul.inspect_types()
+#     su.ah.inspect_types()
+#     su.sq.inspect_types()
