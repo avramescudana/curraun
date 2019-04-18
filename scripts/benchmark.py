@@ -16,6 +16,7 @@ import numba
 
 FILENAME = "benchmark.dat"
 MAX_TIMEOUT = 10
+SU3_EXP_MIN_TERMS = 20   # Simulate more work (since our simulation only contains zero)
 
 """
     Standard parameters (can be overwritten via passing arguments)
@@ -57,6 +58,8 @@ def time_simulation(target_string, spec_string):
     from curraun.numba_target import use_cuda, use_numba
     if use_cuda:
         from numba import cuda
+
+    curraun.su3.EXP_MIN_TERMS = SU3_EXP_MIN_TERMS
 
     np.random.seed(1)
 
@@ -166,7 +169,7 @@ time_python_numba_cuda("su2-single")
 # SU(3) Double
 os.environ["GAUGE_GROUP"] = "su3"
 os.environ["PRECISION"] = "double"
-time_python_numba_cuda("su3-single")
+time_python_numba_cuda("su3-double")
 
 # SU(3) Single
 os.environ["PRECISION"] = "single"

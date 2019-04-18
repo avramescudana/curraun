@@ -30,6 +30,7 @@ elif su_precision == 'double':
 else:
     print("Unsupported precision: " + su_precision)
 
+EXP_MIN_TERMS = -1 # minimum number of terms in Taylor series
 EXP_MAX_TERMS = 100 # maximum number of terms in Taylor series
 EXP_ACCURACY_SQUARED = 1.e-40 # 1.e-32 # accuracy
 
@@ -154,7 +155,7 @@ def mexp(a):
         t = mul_s(t, 1/i)
         res = add(res, t)
         n = sq(t)  # TODO: Is it possible to improve performance by checking this not so often?
-        if math.fabs(n.real) < EXP_ACCURACY_SQUARED:
+        if (i > EXP_MIN_TERMS) and (math.fabs(n.real) < EXP_ACCURACY_SQUARED):
             break
     else:
         # print("Exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
@@ -190,7 +191,7 @@ def dmexp(a, da):
         s2 = mul_s(s, f)
         res = add(res, s2)
         n = sq(s2)  # TODO: Is it possible to improve performance by checking this not so often?
-        if math.fabs(n.real) < EXP_ACCURACY_SQUARED:
+        if (i > EXP_MIN_TERMS) and (math.fabs(n.real) < EXP_ACCURACY_SQUARED):
             break
     else:
         # print("Derivative of exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
