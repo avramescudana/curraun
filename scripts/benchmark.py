@@ -74,7 +74,7 @@ def time_simulation(target_string, spec_string):
         meminfo = cuda.current_context().get_memory_info()
         print("CUDA free memory: {:.2f} GB of {:.2f} GB.".format(meminfo[0] / 1024 ** 3, meminfo[1] / 1024 ** 3))
 
-    if not use_numba:
+    if True: # not use_numba:
         # Evolve once for Just-In-Time compilation
         curraun.core.evolve_leapfrog(s)
 
@@ -120,7 +120,7 @@ def time_simulation(target_string, spec_string):
 
 def time_python_numba_cuda(spec_string):
     #os.environ["MY_NUMBA_TARGET"] = "python"
-    #time_simulation("Python")
+    #time_simulation("Python", spec_string)
 
     print("Number of threads: 1")
     os.environ["NUMBA_NUM_THREADS"] = "1"
