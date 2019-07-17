@@ -1,7 +1,8 @@
-from curraun.numba_target import myjit, my_parallel_loop, prange, use_python
+from curraun.numba_target import myjit, my_parallel_loop
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
+from curraun.initial_su3 import init_kernel_2_su3
 
 def init(s, w1, w2):
     u0 = s.u0
@@ -30,10 +31,7 @@ def init(s, w1, w2):
     if su.N_C == 2:
         my_parallel_loop(init_kernel_2, n ** 2, u0, u1, ua, ub)
     elif su.N_C == 3:
-        print("WARNING: initial.py: proper SU(3) code not implemented")
-        # TODO: Implement SU(3) initialization code.
-        # So far, this only works with TEST_SU2_SUBGROUP = True in mv.py
-        my_parallel_loop(init_kernel_2, n ** 2, u0, u1, ua, ub)
+        my_parallel_loop(init_kernel_2_su3, n ** 2, u0, u1, ua, ub)
     else:
         print("initial.py: SU(N) code not implemented")
     my_parallel_loop(init_kernel_3, n ** 2, u0, peta1, n, ua, ub)
@@ -66,6 +64,7 @@ def init_kernel_1(xi, v1, v2, n, ua, ub):
 def init_kernel_2(xi, u0, u1, ua, ub):
     # initialize transverse gauge links (longitudinal magnetic field)
     # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
+    # This only works for SU(2).
     for d in range(2):
         b1 = su.load(ua[xi, d])
         b1 = su.add(b1, ub[xi, d])

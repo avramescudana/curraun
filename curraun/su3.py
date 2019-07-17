@@ -3,7 +3,7 @@
 """
 import os
 # os.environ["MY_NUMBA_TARGET"] = "python"  # Pure Python version    # TODO: remove debug code
-
+from curraun import su as su
 from curraun.numba_target import myjit
 
 import math
@@ -30,8 +30,9 @@ elif su_precision == 'double':
 else:
     print("Unsupported precision: " + su_precision)
 
-EXP_MAX_TERMS = 50 # maximum number of terms in Taylor series
-EXP_ACCURACY_SQUARED = 1.e-32 # accuracy
+EXP_MIN_TERMS = -1 # minimum number of terms in Taylor series
+EXP_MAX_TERMS = 100 # maximum number of terms in Taylor series
+EXP_ACCURACY_SQUARED = 1.e-40 # 1.e-32 # accuracy
 
 def complex_tuple(*t):
     return tuple(map(GROUP_TYPE, t))
@@ -140,7 +141,7 @@ def mul(a, b):
 def mexp(a):
     """ Calculate exponential using Taylor series
 
-    mexp(m) = 1 + m + m^2 / 2 + ...
+    mexp(a) = 1 + a + a^2 / 2 + a^3 / 6 + ...
 
     >>> a = id0
     >>> mexp(a)
@@ -154,11 +155,47 @@ def mexp(a):
         t = mul_s(t, 1/i)
         res = add(res, t)
         n = sq(t)  # TODO: Is it possible to improve performance by checking this not so often?
-        if math.fabs(n.real) < EXP_ACCURACY_SQUARED:
+        if (i > EXP_MIN_TERMS) and (math.fabs(n.real) < EXP_ACCURACY_SQUARED):
             break
     else:
         # print("Exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
         print("Exponential did not reach desired accuracy")  # TODO: remove debugging code
+    return res
+
+
+# derivative of exponential map
+@myjit
+def dmexp(a, da):
+    """ Calculate derivative of exponential using Taylor series
+
+    dmexp(a, da) = 0 + da + (da a + a da) / 2 + (da a a + a da a + a a da) / 6 + ...
+
+    >>> a = id0
+    >>> da = s1
+    >>> dmexp(a, da)
+    (0j, (2.7182818284590455+0j), 0j, (2.7182818284590455+0j), 0j, 0j, 0j, 0j, 0j)
+
+    """
+    res = zero()
+    t = zero()
+    r = da
+    s = add(t, r)
+    f = 1
+    res = add(res, s)   # da
+    for i in range(2, EXP_MAX_TERMS):
+        t = mul(s, a) # (da a a + a da a + a a da) -> (da a a a + a da a a + a a da a)
+        r = mul(a, r) # (a a da) -> (a a a da)
+        s = add(t, r) # -> (da a a a + a da a a + a a da a + a a a da)
+
+        f = f / i
+        s2 = mul_s(s, f)
+        res = add(res, s2)
+        n = sq(s2)  # TODO: Is it possible to improve performance by checking this not so often?
+        if (i > EXP_MIN_TERMS) and (math.fabs(n.real) < EXP_ACCURACY_SQUARED):
+            break
+    else:
+        # print("Derivative of exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
+        print("Derivative of exponential did not reach desired accuracy")  # TODO: remove debugging code
     return res
 
 # inverse
@@ -371,6 +408,61 @@ def check_unitary(u):  # TODO: remove debugging code
     # if s > 1e-8:
     #    print("Unitarity violated")  # TODO: remove debugging code
     return s
+
+"""
+    Functions for algebra elements
+"""
+
+zero_algebra = (0,0,0,0,0,0,0,0)
+
+unit_algebra = ((1,0,0,0,0,0,0,0),
+                (0,1,0,0,0,0,0,0),
+                (0,0,1,0,0,0,0,0),
+                (0,0,0,1,0,0,0,0),
+                (0,0,0,0,1,0,0,0),
+                (0,0,0,0,0,1,0,0),
+                (0,0,0,0,0,0,1,0),
+                (0,0,0,0,0,0,0,1))
+
+@myjit
+def add_algebra(a, b):
+    r0 = a[0] + b[0]
+    r1 = a[1] + b[1]
+    r2 = a[2] + b[2]
+    r3 = a[3] + b[3]
+    r4 = a[4] + b[4]
+    r5 = a[5] + b[5]
+    r6 = a[6] + b[6]
+    r7 = a[7] + b[7]
+    return r0, r1, r2, r3, r4, r5, r6, r7
+
+@myjit
+def mul_algebra(a, f):
+    r0 = a[0] * f
+    r1 = a[1] * f
+    r2 = a[2] * f
+    r3 = a[3] * f
+    r4 = a[4] * f
+    r5 = a[5] * f
+    r6 = a[6] * f
+    r7 = a[7] * f
+    return r0, r1, r2, r3, r4, r5, r6, r7
+
+@myjit
+def get_algebra_factors_from_group_element_approximate(g):
+    r1 = su.tr(su.mul(su.s1, g)).imag
+    r2 = su.tr(su.mul(su.s2, g)).imag
+    r3 = su.tr(su.mul(su.s3, g)).imag
+    r4 = su.tr(su.mul(su.s4, g)).imag
+    r5 = su.tr(su.mul(su.s5, g)).imag
+    r6 = su.tr(su.mul(su.s6, g)).imag
+    r7 = su.tr(su.mul(su.s7, g)).imag
+    r8 = su.tr(su.mul(su.s8, g)).imag
+    return r1, r2, r3, r4, r5, r6, r7, r8
+
+"""
+    DocTest
+"""
 
 if __name__ == "__main__":
     import doctest

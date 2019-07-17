@@ -8,7 +8,7 @@ import math
 
 PI = np.pi
 
-TEST_SU2_SUBGROUP = True # False  # TODO: Initial conditions for true SU(3) calculations in initial.py are not implemented yet.
+TEST_SU2_SUBGROUP = False  # TODO: Initial conditions for true SU(3) calculations in initial.py are not implemented yet.
 
 def wilson(s, mu, m, uv, num_sheets, subgroup=None):
     n = s.n
