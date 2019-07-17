@@ -16,6 +16,11 @@ import os
 # os.environ["CURRAUN_TARGET"] = "python"  # Pure Python version
 ########################################
 
+# environment
+os.environ["MY_NUMBA_TARGET"] = "cuda"
+os.environ["GAUGE_GROUP"] = "su3"
+os.environ["PRECISION"] = "double"
+
 #import matplotlib
 #import curraun
 import time
@@ -28,12 +33,13 @@ import numpy as np
 import curraun.core as core
 import curraun.initial as initial
 
+
 # simulation parameters
 L = 6.0
 M = 0.0
 MU = 0.5
 G = 2.0
-N = 256 # 64 # 32 # 256
+N = 32 # 64 # 32 # 256
 DT = 0.5
 UV = 10.0
 NUMS = 1

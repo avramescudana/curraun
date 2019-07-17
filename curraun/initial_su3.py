@@ -1,5 +1,6 @@
 from curraun.numba_target import myjit
 import curraun.su as su
+import curraun.su3 as su3
 
 ACCURACY_GOAL = 1e-16 # 1e-8
 ITERATION_MAX_ROUND_1 = 100 # Exploration of initial conditions
@@ -144,9 +145,9 @@ def loss(b1, m1):
 # calculate gradient for loss
 @myjit
 def gradient(b1, m1):
-    grad = su.zero_algebra
+    grad = su3.get_zero_algebra()
     for a in range(8):
-        mdelta = su.unit_algebra[a]
+        mdelta = su3.get_unit_algebra()[a]
 
         # Calculate analytic derivative in direction mdelta
         grad_a = gradient_component(b1, m1, mdelta)

@@ -3,7 +3,7 @@
 """
 import os
 # os.environ["MY_NUMBA_TARGET"] = "python"  # Pure Python version    # TODO: remove debug code
-from curraun import su as su
+# from curraun import su as su
 from curraun.numba_target import myjit
 
 import math
@@ -14,6 +14,34 @@ import numpy as np
 N_C = 3  # Number of colors
 ALGEBRA_ELEMENTS = 8
 GROUP_ELEMENTS = 9
+
+
+zero_algebra = (0,0,0,0,0,0,0,0)
+
+unit_algebra = ((1,0,0,0,0,0,0,0),
+                (0,1,0,0,0,0,0,0),
+                (0,0,1,0,0,0,0,0),
+                (0,0,0,1,0,0,0,0),
+                (0,0,0,0,1,0,0,0),
+                (0,0,0,0,0,1,0,0),
+                (0,0,0,0,0,0,1,0),
+                (0,0,0,0,0,0,0,1))
+
+
+def get_zero_algebra():
+    return (0,0,0,0,0,0,0,0)
+
+
+def get_unit_algebra():
+    return ((1,0,0,0,0,0,0,0),
+            (0,1,0,0,0,0,0,0),
+            (0,0,1,0,0,0,0,0),
+            (0,0,0,1,0,0,0,0),
+            (0,0,0,0,1,0,0,0),
+            (0,0,0,0,0,1,0,0),
+            (0,0,0,0,0,0,1,0),
+            (0,0,0,0,0,0,0,1))
+
 
 su_precision = os.environ.get('PRECISION', 'double')
 
@@ -413,17 +441,6 @@ def check_unitary(u):  # TODO: remove debugging code
     Functions for algebra elements
 """
 
-zero_algebra = (0,0,0,0,0,0,0,0)
-
-unit_algebra = ((1,0,0,0,0,0,0,0),
-                (0,1,0,0,0,0,0,0),
-                (0,0,1,0,0,0,0,0),
-                (0,0,0,1,0,0,0,0),
-                (0,0,0,0,1,0,0,0),
-                (0,0,0,0,0,1,0,0),
-                (0,0,0,0,0,0,1,0),
-                (0,0,0,0,0,0,0,1))
-
 @myjit
 def add_algebra(a, b):
     r0 = a[0] + b[0]
@@ -450,14 +467,14 @@ def mul_algebra(a, f):
 
 @myjit
 def get_algebra_factors_from_group_element_approximate(g):
-    r1 = su.tr(su.mul(su.s1, g)).imag
-    r2 = su.tr(su.mul(su.s2, g)).imag
-    r3 = su.tr(su.mul(su.s3, g)).imag
-    r4 = su.tr(su.mul(su.s4, g)).imag
-    r5 = su.tr(su.mul(su.s5, g)).imag
-    r6 = su.tr(su.mul(su.s6, g)).imag
-    r7 = su.tr(su.mul(su.s7, g)).imag
-    r8 = su.tr(su.mul(su.s8, g)).imag
+    r1 = tr(mul(s1, g)).imag
+    r2 = tr(mul(s2, g)).imag
+    r3 = tr(mul(s3, g)).imag
+    r4 = tr(mul(s4, g)).imag
+    r5 = tr(mul(s5, g)).imag
+    r6 = tr(mul(s6, g)).imag
+    r7 = tr(mul(s7, g)).imag
+    r8 = tr(mul(s8, g)).imag
     return r1, r2, r3, r4, r5, r6, r7, r8
 
 """

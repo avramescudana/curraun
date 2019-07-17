@@ -189,10 +189,10 @@ def fields2d(s):
 @myjit
 def fields2d_numba(xi, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth, t, g, n, el, bl, et, bt):
 
-    el[xi] = l.sq(peta1[xi]) * (t + dth)
+    el[xi] = su.sq(peta1[xi]) * (t + dth)
 
     for d in range(2):
-        et[xi] += l.sq(pt1[xi, d]) / (t + dth)
+        et[xi] += su.sq(pt1[xi, d]) / (t + dth)
 
     buffer1 = l.plaq_pos(u0, xi, 0, 1, n)
     #bl[xi] += 2.0 * l.sq(buffer1) * (t - dth) / 4
@@ -204,8 +204,8 @@ def fields2d_numba(xi, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth, t, g, n, el, b
     for d in range(2):
         buffer1 = l.transport(aeta0, u0, xi, d, 1, n)
         buffer1 = l.add_mul(buffer1, aeta0[xi], -1)
-        bt[xi] += l.sq(buffer1) / 2 / t
+        bt[xi] += su.sq(buffer1) / 2 / t
 
         buffer1 = l.transport(aeta1, u1, xi, d, 1, n)
         buffer1 = l.add_mul(buffer1, aeta1[xi], -1)
-        bt[xi] += l.sq(buffer1) / 2 / (t + dt)
+        bt[xi] += su.sq(buffer1) / 2 / (t + dt)
