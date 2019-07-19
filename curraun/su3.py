@@ -76,7 +76,7 @@ s6 = complex_tuple(0, 0, 0, 0, 0, 1, 0, 1, 0)
 s7 = complex_tuple(0, 0, 0, 0, 0, -1j, 0, 1j, 0)
 s8 = complex_tuple(1 / math.sqrt(3), 0, 0, 0, 1 / math.sqrt(3), 0, 0, 0, -2 / math.sqrt(3))
 
-slist = [id0, s1, s2, s3, s4, s5, s6, s7, s8]
+slist = (id0, s1, s2, s3, s4, s5, s6, s7, s8)
 
 @myjit
 def get_algebra_element(algebra_factors):
@@ -476,6 +476,18 @@ def get_algebra_factors_from_group_element_approximate(g):
     r7 = tr(mul(s7, g)).imag
     r8 = tr(mul(s8, g)).imag
     return r1, r2, r3, r4, r5, r6, r7, r8
+
+@myjit
+def proj(g, i, j):
+    """
+    A helper function for initial_su3_new.py that only seems to work if I put it here.
+
+    Computes the 'matrix components' of g in the sense of
+    proj(g, i, j) = 0.5 * Re(tr( s_i g s_j))
+    """
+    b = mul(slist[i], mul(g, slist[j]))
+    return GROUP_TYPE_REAL(0.5 * tr(b).real)
+
 
 """
     DocTest

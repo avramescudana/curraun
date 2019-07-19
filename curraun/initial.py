@@ -2,7 +2,8 @@ from curraun.numba_target import myjit, my_parallel_loop
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
-from curraun.initial_su3 import init_kernel_2_su3
+from curraun.initial_su3_new import init_kernel_2_su3
+
 
 def init(s, w1, w2):
     u0 = s.u0
