@@ -56,7 +56,7 @@ def wilson(s, mu, m, uv, num_sheets, subgroup=None):
         my_parallel_loop(wilson_exponentiation_kernel, n ** 2, field, wilsonfield)
 
         #print("Exponentiation: {0}".format(time() - t_start))
-        print("Wilson line {0}/{1}.".format(sheet+1, num_sheets))
+        #print("Wilson line {0}/{1}.".format(sheet+1, num_sheets))
 
     return wilsonfield
 
