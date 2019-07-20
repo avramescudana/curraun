@@ -32,6 +32,7 @@ def init_kernel_2_su3(xi, u0, u1, ua, ub):
 
         if check > ACCURACY_GOAL:
             print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
+            pass
 
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
@@ -42,7 +43,7 @@ def init_kernel_2_su3(xi, u0, u1, ua, ub):
 """
 @myjit
 def solve_initial(u_a, u_b):
-    w = u_a + u_b
+    w = su.add(u_a, u_b)
 
     # initial condition
     u = su.mul(u_a, u_b)
