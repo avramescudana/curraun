@@ -28,21 +28,6 @@ unit_algebra = ((1,0,0,0,0,0,0,0),
                 (0,0,0,0,0,0,0,1))
 
 
-def get_zero_algebra():
-    return (0,0,0,0,0,0,0,0)
-
-
-def get_unit_algebra():
-    return ((1,0,0,0,0,0,0,0),
-            (0,1,0,0,0,0,0,0),
-            (0,0,1,0,0,0,0,0),
-            (0,0,0,1,0,0,0,0),
-            (0,0,0,0,1,0,0,0),
-            (0,0,0,0,0,1,0,0),
-            (0,0,0,0,0,0,1,0),
-            (0,0,0,0,0,0,0,1))
-
-
 su_precision = os.environ.get('PRECISION', 'double')
 
 if su_precision == 'single':
