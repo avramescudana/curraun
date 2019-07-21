@@ -68,52 +68,6 @@ def evolve_kernel(xi, u0, u1, pt1, pt0, aeta0, aeta1, peta1, peta0, dt, dth, t, 
     b2 = l.add_mul(aeta0[xi], peta1[xi], (t + dth) * dt)
     su.store(aeta1[xi], b2)
 
-
-@myjit
-def energy_components(s):
-    u0 = s.u0
-    u1 = s.u1
-    pt1 = s.pt1
-    aeta0 = s.aeta0
-    aeta1 = s.aeta1
-    peta1 = s.peta1
-
-    dt = s.dt
-    dth = s.dt / 2.0
-    t = s.t
-    g = s.g
-    n = s.n
-
-    el, et, bl, bt = 0.0, 0.0, 0.0, 0.0
-
-    for xi in prange(n * n):
-        # electric
-        # longitudinal
-        el += l.sq(peta1[xi]) * (t + dth)
-
-        # transverse
-        for d in range(2):
-            et += l.sq(pt1[xi, d]) / (t + dth)
-
-        # magnetic
-        # longitudinal
-        buffer1 = l.plaq_pos(u0, xi, 0, 1, n)
-        bl += 2.0 * (1.0 - buffer1[0]) * t
-        buffer1 = l.plaq_pos(u1, xi, 0, 1, n)
-        bl += 2.0 * (1.0 - buffer1[0]) * (t + dt)
-
-        # transverse
-        for d in range(2):
-            buffer1 = l.transport(aeta0, u0, xi, d, 1, n)
-            buffer1 = l.add_mul(buffer1, aeta0[xi], -1)
-            bt += l.sq(buffer1) / 2 / t
-
-            buffer1 = l.transport(aeta1, u1, xi, d, 1, n)
-            buffer1 = l.add_mul(buffer1, aeta1[xi], -1)
-            bt += l.sq(buffer1) / 2 / (t + dt)
-
-    return el / g ** 2, et / g ** 2, bl / g ** 2, bt / g ** 2
-
 @myjit
 def gauss(s):
     u0 = s.u0
@@ -141,6 +95,7 @@ def gauss(s):
 
     return result
 
+
 def normalize_all(s):
     n = s.n
     u0 = s.d_u0
@@ -161,51 +116,3 @@ def normalize_all_kernel(xi, u0, u1, pt1, aeta0, aeta1, peta1):
     aeta0[xi, 0] = 0.0
     aeta1[xi, 0] = 0.0
     peta1[xi,0] = 0.0
-
-def fields2d(s):
-    u0 = s.u0
-    u1 = s.u1
-    pt1 = s.pt1
-    aeta0 = s.aeta0
-    aeta1 = s.aeta1
-    peta1 = s.peta1
-
-    dt = s.dt
-    dth = s.dt / 2.0
-    t = s.t
-    g = s.g
-    n = s.n
-
-    el = np.zeros(n ** 2, dtype=np.double)
-    bl = np.zeros(n ** 2, dtype=np.double)
-    et = np.zeros(n ** 2, dtype=np.double)
-    bt = np.zeros(n ** 2, dtype=np.double)
-
-    my_parallel_loop(fields2d_numba, n * n, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth, t, g, n, el, bl, et, bt)
-
-    return el.reshape(n, n) / g ** 2, bl.reshape(n, n) / g ** 2, et.reshape(n, n) / g ** 2, bt.reshape(n, n) / g ** 2
-
-
-@myjit
-def fields2d_numba(xi, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth, t, g, n, el, bl, et, bt):
-
-    el[xi] = su.sq(peta1[xi]) * (t + dth)
-
-    for d in range(2):
-        et[xi] += su.sq(pt1[xi, d]) / (t + dth)
-
-    buffer1 = l.plaq_pos(u0, xi, 0, 1, n)
-    #bl[xi] += 2.0 * l.sq(buffer1) * (t - dth) / 4
-    bl[xi] += 2.0 * (1.0 - buffer1[0]) * t
-    buffer1 = l.plaq_pos(u1, xi, 0, 1, n)
-    #bl[xi] += 2.0 * l.sq(buffer1) * (t + dth) / 4
-    bl[xi] += 2.0 * (1.0 - buffer1[0]) * (t + dt)
-
-    for d in range(2):
-        buffer1 = l.transport(aeta0, u0, xi, d, 1, n)
-        buffer1 = l.add_mul(buffer1, aeta0[xi], -1)
-        bt[xi] += su.sq(buffer1) / 2 / t
-
-        buffer1 = l.transport(aeta1, u1, xi, d, 1, n)
-        buffer1 = l.add_mul(buffer1, aeta1[xi], -1)
-        bt[xi] += su.sq(buffer1) / 2 / (t + dt)
