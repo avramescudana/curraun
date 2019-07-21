@@ -7,9 +7,13 @@ import os
 #os.environ["NUMBA_DEBUG_ARRAY_OPT_STATS"] = "1"
 #os.environ["NUMBA_OPT"] = "0"  # LLVM optimziation level. Default = 3
 #os.environ["NUMBA_DUMP_OPTIMIZED"] = "1"
+os.environ["MY_NUMBA_TARGET"] = "cuda"
+os.environ["GAUGE_GROUP"] = "su2"
+os.environ["PRECISION"] = "double"
+#os.environ["NUMBA_NUM_THREADS"] = "8"
 #######################################
 
-#import curraun
+
 import time
 
 import matplotlib.pyplot as plt
@@ -19,6 +23,7 @@ import curraun.core as core
 import curraun.initial as initial
 import curraun.leapfrog as leapfrog
 import curraun.mv as mv
+from curraun.energy import Energy
 
 # simulation parameters
 L = 6.0
@@ -32,7 +37,8 @@ NUMS = 1
 
 # initialization
 E0 = N / L * 0.197326
-s = core.Simulation(N, DT, G, leapfrog)
+s = core.Simulation(N, DT, G)
+initial.DEBUG = True
 va = mv.wilson(s, mu=MU / E0, m=M / E0, uv=UV / E0, num_sheets=NUMS)
 vb = mv.wilson(s, mu=MU / E0, m=M / E0, uv=UV / E0, num_sheets=NUMS)
 initial.init(s, va, vb)
@@ -40,9 +46,12 @@ initial.init(s, va, vb)
 # evolution and visualization
 plt.ion()
 
+energy = Energy(s)
+
 # first step to initialize view
 core.evolve_leapfrog(s)
-el, bl, et, bt = leapfrog.fields2d(s)
+energy.compute()
+el, bl, et, bt = energy.EL.reshape(N, N), energy.BL.reshape(N, N), energy.ET.reshape(N, N), energy.BT.reshape(N, N)
 E = np.max(el + bl + et + bt)
 fig, axes = plt.subplots(ncols=3, nrows=2)
 el_v = axes[0, 0].imshow(el / E, vmin=0.0, vmax=0.5, interpolation='none', cmap=plt.get_cmap('inferno'))
@@ -64,7 +73,9 @@ for t in range(1000):
     last_time = time.time()
     print("count: {}, average: {}, current: {}".format(count_time, average_time, diff_time))
 
-    el, bl, et, bt = leapfrog.fields2d(s)
+    energy.compute()
+    el, bl, et, bt = energy.EL.reshape(N, N), energy.BL.reshape(N, N), energy.ET.reshape(N, N), energy.BT.reshape(N, N)
+
     E = np.max(el + bl + et + bt) / 2.0
 
     el_v.set_data(el / E)
@@ -90,5 +101,5 @@ for t in range(1000):
     f = 1.0 / (L ** 2 * tau)
     axes[1, 2].scatter(tau, e_s * f, c='r')
     # axes[1, 2].scatter(tau, e_s, c='r')
-
+    #plt.show()
     plt.pause(0.001)
