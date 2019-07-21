@@ -1,8 +1,8 @@
-from curraun.numba_target import myjit, my_parallel_loop
+from curraun.numba_target import myjit, my_parallel_loop, use_cuda
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
-from curraun.initial_su3_new import init_kernel_2_su3
+from curraun.initial_su3_new import init_kernel_2_su3_cuda, init_kernel_2_su3_numba
 from time import time
 
 DEBUG = False
@@ -38,7 +38,10 @@ def init(s, w1, w2):
     if su.N_C == 2:
         my_parallel_loop(init_kernel_2, n ** 2, u0, u1, ua, ub)
     elif su.N_C == 3:
-        my_parallel_loop(init_kernel_2_su3, n ** 2, u0, u1, ua, ub)
+        if use_cuda:
+            my_parallel_loop(init_kernel_2_su3_cuda, n ** 2, u0, u1, ua, ub)
+        else:
+            my_parallel_loop(init_kernel_2_su3_numba, n ** 2, u0, u1, ua, ub)
     else:
         print("initial.py: SU(N) code not implemented")
     debug_print("Init: transverse gauge links ({:3.2f}s)".format(time() - t))
