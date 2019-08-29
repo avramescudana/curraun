@@ -15,15 +15,15 @@ class Simulation:
         nn = self.n ** 2
 
         # fields (times after evolve())
-        self.u0 = np.empty((nn, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # U_{x,i}(tau_n)
-        self.u1 = np.empty((nn, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # U_{x,i}(tau_(n+1))
-        self.pt1 = np.empty((nn, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # P^i(tau_(n+1/2))
-        self.pt0 = np.empty((nn, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # P^i(tau_(n-1/2))
+        self.u0 = np.zeros((nn, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # U_{x,i}(tau_n)
+        self.u1 = np.zeros((nn, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # U_{x,i}(tau_(n+1))
+        self.pt1 = np.zeros((nn, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # P^i(tau_(n+1/2))
+        self.pt0 = np.zeros((nn, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # P^i(tau_(n-1/2))
 
-        self.aeta0 = np.empty((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # A_eta(tau_n)
-        self.aeta1 = np.empty((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # A_eta(tau_(n+1))
-        self.peta1 = np.empty((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # P^{eta}(tau_(n+1/2))
-        self.peta0 = np.empty((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # P^{eta}(tau_(n-1/2))
+        self.aeta0 = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # A_eta(tau_n)
+        self.aeta1 = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # A_eta(tau_(n+1))
+        self.peta1 = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # P^{eta}(tau_(n+1/2))
+        self.peta0 = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE) # P^{eta}(tau_(n-1/2))
 
         self.data = [self.u0, self.u1, self.pt1, self.pt0, self.aeta0, self.aeta1, self.peta1, self.peta0]
 
@@ -105,8 +105,5 @@ class Simulation:
 def evolve_leapfrog(s, stream=None):
     s.swap()
     s.t += s.dt
-    if False: # use_cuda:
-        leapfrog_cuda.evolve(s, stream)
-    else:
-        leapfrog.evolve(s, stream)
+    leapfrog.evolve(s, stream)
     # leapfrog.normalize_all(s)

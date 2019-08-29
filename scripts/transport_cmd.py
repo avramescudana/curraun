@@ -48,7 +48,7 @@ p = {
     'L':    10.0,           # transverse size [fm]
     'N':    64,            # lattice size
     'DTS':  2,              # time steps per transverse spacing
-    'TMAX': 1.0,            # max. proper time (tau) [fm/c]
+    'TMAX': 10.0,            # max. proper time (tau) [fm/c]
 
     'G':    2.0,            # YM coupling constant
     'MU':   0.5,            # MV model parameter [GeV]
@@ -142,38 +142,16 @@ repeat for kappa
 
 """
 
-np.random.seed(1)
-
 results_kappa = np.zeros((3 * p['NE'] + 1, int(maxt / p['DTS'])))
 results_kappa[0, :] = np.linspace(0.0, int(maxt / p['DTS']) * a, num=int(maxt / p['DTS']))
 
 results_qhat = np.zeros((3 * p['NE'] + 1, int(maxt / p['DTS'])))
 results_qhat[0, :] = np.linspace(0.0, int(maxt / p['DTS']) * a, num=int(maxt / p['DTS']))
 
-
 progress_list = deque([[0.0, 0.0]])
 eta_output = 0
 
 init_time = time.time()
-
-if use_cuda:
-    # Output CUDA device info:
-    cuda.detect()
-
-    # TODO: Remove stream and event handling in the simplified version:
-
-    # Create stream for non-blocking copying of data
-    # calculation_stream = cuda.stream()  # CUDA stream for performing calculations
-    # data_stream = cuda.stream()  # CUDA stream for transfering data between host and device
-    calculation_stream = None
-    data_stream = None
-
-    # Event to synchronize the streams
-    my_cuda_event = cuda.event()
-
-else:
-    calculation_stream = None
-    data_stream = None
 
 
 # event loop
@@ -199,35 +177,14 @@ for e in range(p['NE']):
         print("CUDA free memory: {:.2f} GB of {:.2f} GB.".format(meminfo[0] / 1024 ** 3, meminfo[1] / 1024 ** 3))
 
     for t in range(maxt):
-
-        # TODO: Find proper place to perform calculations for evolve, kappa and qhat:
-
-        # kappa_tforce.compute(stream=calculation_stream)
-        # qhat_tforce.compute(stream=calculation_stream)
-        # curraun.core.evolve_leapfrog(s, calculation_stream)
-
         if t % p['DTS'] == 0:
             if use_cuda:
-                # Wait with copying until calculation is done:
-                my_cuda_event.record(calculation_stream)
-                my_cuda_event.wait(data_stream)
-
                 # Copy data from device to host
-                kappa_tforce.copy_mean_to_host(stream=data_stream)
-                qhat_tforce.copy_mean_to_host(stream=data_stream)
+                kappa_tforce.copy_mean_to_host()
+                qhat_tforce.copy_mean_to_host()
 
             # tau in fm/c
             tau = s.t * a
-
-        # TODO: Remove if streaming is not used in this version
-
-        # if ((use_cuda and (t + 1) % p['DTS'] == 0) # write data later
-        #         or (not use_cuda and t % p['DTS'] == 0) # write data immediately
-        #         or ((t + p['DTS'] > maxt) and t % p['DTS'] == 0)): # no later write possible, write immediately
-        #     if use_cuda:
-        #         # Wait until data have been copied to host
-        #         data_stream.synchronize()
-
             progress = (tau/p['TMAX'] + float(e)) / p['NE']
             cur_time = time.time() - init_time
             progress_list.append([progress, cur_time])
@@ -249,40 +206,22 @@ for e in range(p['NE']):
             units = E0 ** 2 / (s.g ** 2)
 
             # color factors (for quarks)
-            Nc = 2
+            Nc = curraun.core.su.NC
             f = 2 * s.g ** 2 / (2 * Nc)
 
             # p_perp components for kappa
-            k_p_perp_x = kappa_tforce.p_perp_mean[0] * units * f
-            k_p_perp_y = kappa_tforce.p_perp_mean[1] * units * f
-            k_p_perp_z = kappa_tforce.p_perp_mean[2] * units * f
-
-            results_kappa[3 * e + 1, int(t / p['DTS'])] = k_p_perp_x
-            results_kappa[3 * e + 2, int(t / p['DTS'])] = k_p_perp_y
-            results_kappa[3 * e + 3, int(t / p['DTS'])] = k_p_perp_z
-
-            # p_perp components for qhat
-            q_p_perp_x = qhat_tforce.p_perp_mean[0] * units * f
-            q_p_perp_y = qhat_tforce.p_perp_mean[1] * units * f
-            q_p_perp_z = qhat_tforce.p_perp_mean[2] * units * f
-
-            results_qhat[3 * e + 1, int(t / p['DTS'])] = q_p_perp_x
-            results_qhat[3 * e + 2, int(t / p['DTS'])] = q_p_perp_y
-            results_qhat[3 * e + 3, int(t / p['DTS'])] = q_p_perp_z
+            for d in range(3):
+                results_kappa[3 * e + d + 1, int(t / p['DTS'])] = kappa_tforce.p_perp_mean[d] * units * f
+                results_qhat[3 * e + d + 1, int(t / p['DTS'])] = qhat_tforce.p_perp_mean[d] * units * f
 
             if use_cuda:
                 # Copy data back to device
-                # (not necessary, but gives nice event in NVVP timeline - is anyway asynchronous)
-                kappa_tforce.copy_mean_to_device(stream=data_stream)
-                qhat_tforce.copy_mean_to_device(stream=data_stream)
+                kappa_tforce.copy_mean_to_device()
+                qhat_tforce.copy_mean_to_device()
 
-                # Wait with further calculation until CPU is done:
-                my_cuda_event.record(data_stream)
-                my_cuda_event.wait(calculation_stream)
-
-        kappa_tforce.compute(stream=calculation_stream)
-        qhat_tforce.compute(stream=calculation_stream)
-        curraun.core.evolve_leapfrog(s, stream=calculation_stream)
+        kappa_tforce.compute()
+        qhat_tforce.compute()
+        curraun.core.evolve_leapfrog(s)
 
     np.savetxt(fname=fn_kappa, X=results_kappa)
     np.savetxt(fname=fn_qhat, X=results_qhat)
@@ -328,14 +267,3 @@ if p['NE'] > 1:
     np.savetxt(fname=fn_mean, X=results)
 else:
     print("Skipping statistical averages because only a single event was computed.")
-
-# # For debugging types:
-# import curraun.su as su
-# if use_numba and (su.GROUP_TYPE == np.float32 or su.GROUP_TYPE == np.complex64):  # TODO: Remove debugging code
-#     print("Debugging single precision types:")
-#     su.store.inspect_types()
-#     su.mexp.inspect_types()
-#     su.get_algebra_element.inspect_types()
-#     su.mul.inspect_types()
-#     su.ah.inspect_types()
-#     su.sq.inspect_types()

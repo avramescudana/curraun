@@ -8,12 +8,15 @@ su_group = os.environ.get('GAUGE_GROUP', 'su2').lower()
 if su_group == 'su2':
     print("Using SU(2)")
     from curraun.su2 import *
+    NC = 2
 elif su_group == 'su3':
     print("Using SU(3)")
     from curraun.su3 import *
+    NC = 3
 else:
     print("Unsupported gauge group: " + su_group)
     exit()
+
 
 def _doctests():
     """
@@ -71,6 +74,7 @@ def _doctests():
 
     """
     return
+
 
 if __name__ == "__main__":
     import doctest

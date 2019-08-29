@@ -1,7 +1,12 @@
-from curraun.numba_target import myjit, my_parallel_loop, prange, use_python
+from curraun.numba_target import myjit, my_parallel_loop, use_cuda
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
+from curraun.initial_su3_new import init_kernel_2_su3_cuda, init_kernel_2_su3_numba
+from time import time
+
+DEBUG = False
+
 
 def init(s, w1, w2):
     u0 = s.u0
@@ -26,20 +31,32 @@ def init(s, w1, w2):
     en_BL = np.zeros(n ** 2, dtype=np.double)
 
     # TODO: keep arrays on GPU device during execution of these kernels
+    t = time()
     my_parallel_loop(init_kernel_1, n ** 2, v1, v2, n, ua, ub)
+    debug_print("Init: temporary transverse gauge links ({:3.2f}s)".format(time() - t))
+    t = time()
     if su.N_C == 2:
         my_parallel_loop(init_kernel_2, n ** 2, u0, u1, ua, ub)
     elif su.N_C == 3:
-        print("WARNING: initial.py: proper SU(3) code not implemented")
-        # TODO: Implement SU(3) initialization code.
-        # So far, this only works with TEST_SU2_SUBGROUP = True in mv.py
-        my_parallel_loop(init_kernel_2, n ** 2, u0, u1, ua, ub)
+        if use_cuda:
+            my_parallel_loop(init_kernel_2_su3_cuda, n ** 2, u0, u1, ua, ub)
+        else:
+            my_parallel_loop(init_kernel_2_su3_numba, n ** 2, u0, u1, ua, ub)
     else:
         print("initial.py: SU(N) code not implemented")
+    debug_print("Init: transverse gauge links ({:3.2f}s)".format(time() - t))
+    t = time()
     my_parallel_loop(init_kernel_3, n ** 2, u0, peta1, n, ua, ub)
+    debug_print("Init: long. electric field ({:3.2f}s)".format(time() - t))
+    t = time()
     my_parallel_loop(init_kernel_4, n ** 2, u0, pt1, n, dt)
+    debug_print("Init: trans. electric field corrections ({:3.2f}s)".format(time() - t))
+    t = time()
     my_parallel_loop(init_kernel_5, n ** 2, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth)
+    debug_print("Init: gauge link corrections field ({:3.2f}s)".format(time() - t))
+    t = time()
     my_parallel_loop(init_kernel_6, n ** 2, u0, u1, peta1, n, en_EL, en_BL)
+    debug_print("Init: energy density check ({:3.2f}s)".format(time() - t))
 
     peta0[:,:] = peta1[:,:]
     pt0[:,:] = pt1[:,:]
@@ -47,8 +64,8 @@ def init(s, w1, w2):
     en_EL_sum = np.sum(en_EL)
     en_BL_sum = np.sum(en_BL)
 
-    print("e_EL = {}".format(en_EL_sum))
-    print("e_BL = {}".format(en_BL_sum))
+    debug_print("Init: e_EL = {}".format(en_EL_sum))
+    debug_print("Init: e_BL = {}".format(en_BL_sum))
 
 
 @myjit
@@ -66,6 +83,7 @@ def init_kernel_1(xi, v1, v2, n, ua, ub):
 def init_kernel_2(xi, u0, u1, ua, ub):
     # initialize transverse gauge links (longitudinal magnetic field)
     # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
+    # This only works for SU(2).
     for d in range(2):
         b1 = su.load(ua[xi, d])
         b1 = su.add(b1, ub[xi, d])
@@ -145,3 +163,8 @@ def init_kernel_6(xi, u0, u1, peta1, n, en_EL, en_BL):
     # en_BL[0] += 2*(1.0 - b1[0])
 
     en_EL[xi] += su.sq(peta1[xi])
+
+
+def debug_print(s):
+    if DEBUG:
+        print(s)

@@ -8,7 +8,7 @@ import math
 
 PI = np.pi
 
-TEST_SU2_SUBGROUP = True # False  # TODO: Initial conditions for true SU(3) calculations in initial.py are not implemented yet.
+TEST_SU2_SUBGROUP = False  # TODO: Initial conditions for true SU(3) calculations in initial.py are not implemented yet.
 
 def wilson(s, mu, m, uv, num_sheets, subgroup=None):
     n = s.n
@@ -56,7 +56,7 @@ def wilson(s, mu, m, uv, num_sheets, subgroup=None):
         my_parallel_loop(wilson_exponentiation_kernel, n ** 2, field, wilsonfield)
 
         #print("Exponentiation: {0}".format(time() - t_start))
-        print("Wilson line {0}/{1}.".format(sheet+1, num_sheets))
+        #print("Wilson line {0}/{1}.".format(sheet+1, num_sheets))
 
     return wilsonfield
 
