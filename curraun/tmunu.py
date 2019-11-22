@@ -162,7 +162,7 @@ def dot(a0, a1):
     return su.tr(su.mul(a0, su.dagger(a1))).real
 
 
-def convert_to_matrix(t_munu):
+def convert_to_matrix(t_munu, tau):
     n = int(np.sqrt(t_munu.shape[0]))
     t_munu = t_munu.reshape(n, n, 10)
     t_matrix = np.zeros((n, n, 4, 4))
@@ -185,4 +185,26 @@ def convert_to_matrix(t_munu):
     t_matrix[:, :, 2, 2] = t_munu[:, :, 2]
     t_matrix[:, :, 3, 3] = t_munu[:, :, 3]
 
+    # Pull up first index: T^\mu_\nu
+    t_matrix[:, :, 1, :] *= -1.0
+    t_matrix[:, :, 2, :] *= -1.0
+    t_matrix[:, :, 3, :] *= -1.0 / tau ** 2
+
     return t_matrix
+
+
+"""
+    Landau matching 
+"""
+
+
+def landau(t_matrix):
+    d = 4
+    n = t_matrix.shape[0]
+    t_matrix = t_matrix.reshape((n * n, d, d))
+    w, v = np.linalg.eig(t_matrix)
+
+    w = w.reshape((n, n, d))
+    v = v.reshape((n, n, d, d))
+
+    return w, v
