@@ -168,13 +168,13 @@ def convert_to_matrix(t_munu, tau):
     t_matrix = np.zeros((n, n, 4, 4))
 
     # fill non-diagonal elements
-    t_matrix[:, :, 0, 1] = t_munu[:, :, 4]
-    t_matrix[:, :, 0, 2] = t_munu[:, :, 5]
-    t_matrix[:, :, 0, 3] = t_munu[:, :, 6]
+    t_matrix[:, :, 0, 1] = -t_munu[:, :, 4]
+    t_matrix[:, :, 0, 2] = -t_munu[:, :, 5]
+    t_matrix[:, :, 0, 3] = -t_munu[:, :, 6] / tau ** 2
 
     t_matrix[:, :, 1, 2] = t_munu[:, :, 7]
-    t_matrix[:, :, 1, 3] = t_munu[:, :, 8]
-    t_matrix[:, :, 2, 3] = t_munu[:, :, 9]
+    t_matrix[:, :, 1, 3] = t_munu[:, :, 8] / tau ** 2
+    t_matrix[:, :, 2, 3] = t_munu[:, :, 9] / tau ** 2
 
     # fill the other diagonal
     t_matrix = t_matrix + np.transpose(t_matrix, axes=[0, 1, 3, 2])
@@ -183,18 +183,7 @@ def convert_to_matrix(t_munu, tau):
     t_matrix[:, :, 0, 0] = t_munu[:, :, 0]
     t_matrix[:, :, 1, 1] = t_munu[:, :, 1]
     t_matrix[:, :, 2, 2] = t_munu[:, :, 2]
-    t_matrix[:, :, 3, 3] = t_munu[:, :, 3]
-
-    # Pull up both indices
-    t_matrix[:, :, 0, :] *= +1.0
-    t_matrix[:, :, 1, :] *= -1.0
-    t_matrix[:, :, 2, :] *= -1.0
-    t_matrix[:, :, 3, :] *= -1.0 / tau ** 2
-
-    t_matrix[:, :, :, 0] *= +1.0
-    t_matrix[:, :, :, 1] *= -1.0
-    t_matrix[:, :, :, 2] *= -1.0
-    t_matrix[:, :, :, 3] *= -1.0 / tau ** 2
+    t_matrix[:, :, 3, 3] = t_munu[:, :, 3] / tau ** 4
 
     return t_matrix
 
