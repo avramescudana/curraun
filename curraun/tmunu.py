@@ -186,9 +186,9 @@ def convert_to_matrix(t_munu, tau):
     t_matrix[:, :, 3, 3] = t_munu[:, :, 3]
 
     # Pull up first index: T^\mu_\nu
-    t_matrix[:, :, 1, :] *= -1.0
-    t_matrix[:, :, 2, :] *= -1.0
-    t_matrix[:, :, 3, :] *= -1.0 / tau ** 2
+    #t_matrix[:, :, 1, :] *= -1.0
+    #t_matrix[:, :, 2, :] *= -1.0
+    #t_matrix[:, :, 3, :] *= -1.0 / tau ** 2
 
     return t_matrix
 
