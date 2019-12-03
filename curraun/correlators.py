@@ -1,8 +1,7 @@
-from curraun.numba_target import myjit, prange, my_parallel_loop, use_cuda
+from curraun.numba_target import myjit, my_parallel_loop, use_cuda
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
-import curraun.kappa as kappa
 if use_cuda:
     import numba.cuda as cuda
 
@@ -81,8 +80,8 @@ class Correlators:
         if use_cuda:
             self.copy_to_host()
 
-
-
+        # normalize, 2 * n ** 2 contributions per distance r
+        self.corr /= 2 * s.n ** 2
 
 @myjit
 def compute_correlation_kernel(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0, corr, mode):
