@@ -63,7 +63,7 @@ class Correlators:
 
     def compute(self, mode):
         s = self.s
-        self.corr = np.zeros(s.n,  dtype=np.double)
+        self.corr = np.zeros(s.n // 2,  dtype=np.double)
         if use_cuda:
             self.copy_to_device()
 
@@ -124,71 +124,3 @@ def compute_correlation_kernel(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, pet
         # update Ux, Uy
         Ux = su.mul(Ux, u0[xs_x, 0])
         Uy = su.mul(Uy, u0[xs_y, 1])
-
-
-# very dumb code duplication, no idea how to do this better
-@myjit
-def compute_Ez_kernel(r, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0, corr):
-    for xi in range(n * n):
-        F = compute_Ez(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
-
-        # compute Wilson lines
-        Ux = su.unit()
-        Uy = su.unit()
-
-        for s in range(r):
-            # shift lattice site
-            xs_x = l.shift(xi, 0, s, n)
-            xs_y = l.shift(xi, 1, s, n)
-
-            # update Ux, Uy
-            Ux = su.mul(Ux, u0[xs_x, 0])
-            Uy = su.mul(Uy, u0[xs_y, 1])
-
-        # x shifts
-        xs_x = l.shift(xi, 0, r, n)
-        Fs_x = compute_Ez(xs_x, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
-        Fs_x = l.act(Ux, Fs_x)
-        correlation = su.tr(su.mul(F, su.dagger(Fs_x))).real
-        corr[r] += correlation
-
-        # y shifts
-        xs_y = l.shift(xi, 1, r, n)
-        Fs_y = compute_Ez(xs_y, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
-        Fs_y = l.act(Uy, Fs_y)
-        correlation = su.tr(su.mul(F, su.dagger(Fs_y))).real
-        corr[r] += correlation
-
-
-# very dumb code duplication, no idea how to do this better
-@myjit
-def compute_Bz_kernel(r, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0, corr):
-    for xi in range(n * n):
-        F = compute_Bz(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
-
-        # compute Wilson lines
-        Ux = su.unit()
-        Uy = su.unit()
-
-        for s in range(r):
-            # shift lattice site
-            xs_x = l.shift(xi, 0, s, n)
-            xs_y = l.shift(xi, 1, s, n)
-
-            # update Ux, Uy
-            Ux = su.mul(Ux, u0[xs_x, 0])
-            Uy = su.mul(Uy, u0[xs_y, 1])
-
-        # x shifts
-        xs_x = l.shift(xi, 0, r, n)
-        Fs_x = compute_Bz(xs_x, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
-        Fs_x = l.act(Ux, Fs_x)
-        correlation = su.tr(su.mul(F, su.dagger(Fs_x))).real
-        corr[r] += correlation
-
-        # y shifts
-        xs_y = l.shift(xi, 1, r, n)
-        Fs_y = compute_Bz(xs_y, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
-        Fs_y = l.act(Uy, Fs_y)
-        correlation = su.tr(su.mul(F, su.dagger(Fs_y))).real
-        corr[r] += correlation
