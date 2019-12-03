@@ -49,7 +49,7 @@ class Correlators:
     def __init__(self, s):
         self.s = s
 
-        self.corr = np.zeros(s.n,  dtype=np.double)
+        self.corr = np.zeros(s.n // 2,  dtype=np.double)
         self.d_corr = self.corr
 
         if use_cuda:
@@ -70,11 +70,11 @@ class Correlators:
         if mode == 'Ez':
             my_parallel_loop(compute_correlation_kernel, s.n * s.n, s.n,
                              s.d_u0, s.d_u1, s.d_aeta0, s.d_aeta1, s.d_pt0, s.d_pt1, s.d_peta0, s.d_peta1,
-                             self.d_corr)
+                             self.d_corr, 0)
         elif mode == 'Bz':
             my_parallel_loop(compute_correlation_kernel, s.n * s.n, s.n,
                              s.d_u0, s.d_u1, s.d_aeta0, s.d_aeta1, s.d_pt0, s.d_pt1, s.d_peta0, s.d_peta1,
-                             self.d_corr)
+                             self.d_corr, 1)
         else:
             print("Correlators: mode '{}' is not implemented.".format(mode))
 
@@ -85,22 +85,23 @@ class Correlators:
 
 
 @myjit
-def compute_correlation_kernel(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0, corr):
+def compute_correlation_kernel(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0, corr, mode):
     Ux = su.unit()
     Uy = su.unit()
-    #if mode == 0:
-    F = compute_Ez(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
-    #elif mode == 1:
-    #    F = compute_Bz(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
+
+    if mode == 0:
+        F = compute_Ez(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
+    else:
+        F = compute_Bz(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
 
     for r in range(n // 2):
         # x shifts
         xs_x = l.shift(xi, 0, r, n)
 
-        #if mode == 0:
-        Fs_x = compute_Ez(xs_x, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
-        #elif mode == 1:
-        #    Fs_x = compute_Bz(xs_x, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
+        if mode == 0:
+            Fs_x = compute_Ez(xs_x, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
+        else:
+            Fs_x = compute_Bz(xs_x, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
 
         Fs_x = l.act(Ux, Fs_x)
         correlation = su.tr(su.mul(F, su.dagger(Fs_x))).real
@@ -110,10 +111,10 @@ def compute_correlation_kernel(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, pet
         # y shifts
         xs_y = l.shift(xi, 1, r, n)
 
-        #if mode == 0:
-        Fs_y = compute_Ez(xs_y, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
-        #elif mode == 1:
-        #    Fs_y = compute_Bz(xs_y, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
+        if mode == 0:
+            Fs_y = compute_Ez(xs_y, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
+        else:
+            Fs_y = compute_Bz(xs_y, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
 
         Fs_y = l.act(Uy, Fs_y)
         correlation = su.tr(su.mul(F, su.dagger(Fs_y))).real
