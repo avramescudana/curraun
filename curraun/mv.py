@@ -23,16 +23,24 @@ def wilson(s, mu, m, uv, num_sheets, shape_func=None):
     wilsonfield = np.empty((n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
     my_parallel_loop(reset_wilsonfield, n ** 2, wilsonfield)
 
+    # create shape 'mask' array for charge density
+    if shape_func is not None:
+        shape_mask = np.zeros((n, n))
+
+        for ix in range(n):
+            for iy in range(n):
+                shape_mask[ix, iy] = shape_func(ix - n // 2, iy - n // 2)
+
+
     for sheet in range(num_sheets):
         # solve poisson equation
         field = np.random.normal(loc=0.0, scale=g ** 2 * mu / math.sqrt(num_sheets), size=(n ** 2, su.ALGEBRA_ELEMENTS))
 
         # Apply shape function to charge density
         if shape_func is not None:
-            for ix in range(n):
-                for iy in range(n):
-                    index = n * ix + iy
-                    field[index, :] *= shape_func(ix - n // 2, iy - n // 2)
+            field = field.reshape((n, n, su.ALGEBRA_ELEMENTS))
+            field = field[:, :, :] * shape_mask[:, :, None]
+            field = field.reshape((n * n, su.ALGEBRA_ELEMENTS))
 
         if su.N_C > 3:
             print("mv.py: SU(N) code not implemented")
