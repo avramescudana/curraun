@@ -31,7 +31,7 @@ def wilson(s, mu, m, uv, num_sheets, shape_func=None):
         if shape_func is not None:
             for ix in range(n):
                 for iy in range(n):
-                    index = l.get_index_nm(ix, iy)
+                    index = l.get_index_nm(ix, iy, n)
                     field[index, :] *= shape_func(ix - n // 2, iy - n // 2)
 
         if su.N_C > 3:
