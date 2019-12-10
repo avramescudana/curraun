@@ -138,13 +138,13 @@ def tmunu_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, t_munu):
 
     # 4-6: Energy flux
     # 4: S_x
-    t_munu[xi, 4] = 2*(dot(Ey, Bz) - dot(Ez, By))
+    t_munu[xi, 4] = - 2*(dot(Ey, Bz) - dot(Ez, By))
 
     # 5: S_y
-    t_munu[xi, 5] = 2*(dot(Ez, Bx) - dot(Ex, Bz))
+    t_munu[xi, 5] = - 2*(dot(Ez, Bx) - dot(Ex, Bz))
 
     # 6: S_\eta
-    t_munu[xi, 6] = 2*(dot(Ex, By) - dot(Ey, Bx)) * tau
+    t_munu[xi, 6] = - 2*(dot(Ex, By) - dot(Ey, Bx)) * tau
 
     # 6-10: Shear stress
     # 7: s_xy
@@ -194,7 +194,7 @@ def convert_to_matrix(t_munu, tau):
 
 
 def landau(t_matrix):
-    d = 4
+    d = t_matrix.shape[2]
     n = t_matrix.shape[0]
     t_matrix = t_matrix.reshape((n * n, d, d))
     w, v = np.linalg.eig(t_matrix)
