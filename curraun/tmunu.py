@@ -238,7 +238,7 @@ def landau(s, E0, downsample_step = 0, use_reduced_T=True):
     if downsample_step > 0:
         step = int(downsample_step)
         n = T.shape[0]
-        T2 = np.zeros((n // step, n // step, 3, 3))
+        T2 = np.zeros((n // step, n // step, T.shape[2], T.shape[3]))
 
         for x in range(n // step):
             for y in range(n // step):
