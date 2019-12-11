@@ -165,7 +165,7 @@ def dot(a0, a1):
 def convert_to_matrix(t_munu):
     n = int(np.sqrt(t_munu.shape[0]))
     t_munu = t_munu.reshape(n, n, 10)
-    t_matrix = np.zeros((n, n, 3, 3))
+    t_matrix = np.zeros((n, n, 4, 4))
 
     # fill non-diagonal elements
     t_matrix[:, :, 0, 1] = t_munu[:, :, 4]
