@@ -263,7 +263,7 @@ def landau(s, E0, downsample_step = 0, use_reduced_T=True):
     T[:, :, 2, :] *= -1.0
 
     if use_reduced_T is not True:
-        T[:, :, 3, :] *= - tau ** 2
+        T[:, :, 3, :] *= - 1.0 / tau ** 2
 
     # Now we solve the Eigenvalue problem:
     # W contains all the eigenvalues
