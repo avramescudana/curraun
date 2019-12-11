@@ -8,11 +8,12 @@ at [curraun_cy](https://gitlab.com/dmueller/curraun_cy)
 which was based on Cython and NumPy with OpenMP support.
 
 Features:
-* Standard leapfrog solver in terms of link variables and color-electric fields
+* Standard leapfrog solver in terms of link variables and color-electric fields for SU(2) and SU(3)
 * McLerran-Venugopalan model initial conditions with settings for multiple
-color sheets ("rapidity slices")
+color sheets ("rapidity slices") and transverse shapes (finite radii)
 * Scripts for scanning through parameters, basic real-time visualization and plotting
 * Calculation of kappa and q-hat
+* Landau matching for hydrodynamical simulations
 
 # Installation
 This application requires [Numba](http://numba.pydata.org/). You can install Numba with PIP
@@ -33,6 +34,9 @@ conda install python=3.6 numba=0.43 cudatoolkit=9.0 six
 ```
 
 The CUDA toolkit version should match the graphics card driver version - see nvidia-smi.
+
+# Example Jupyter notebooks
+Jupyter notebooks are provided in the `notebooks` folder.
 
 # Launching the application
 To launch a script module from the command line, go to the root directory
