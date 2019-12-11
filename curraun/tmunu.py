@@ -86,17 +86,16 @@ def tmunu_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, t_munu):
     Ez = su.zero()
     Ez = l.add_mul(Ez, peta1[xi], 0.5)
     Ez = l.add_mul(Ez, peta0[xi], 0.5)
-    # Ez = su.mul_s(Ez, tau)
 
     b1 = l.transport(aeta0, u0, xi, 1, +1, n)
     b2 = l.transport(aeta0, u0, xi, 1, -1, n)
     b2 = l.add_mul(b1, b2, -1.0)
-    Bx = su.mul_s(b2, -0.5 / tau) # check these signs
+    Bx = su.mul_s(b2, -0.5 / tau)
 
     b1 = l.transport(aeta0, u0, xi, 0, +1, n)
     b2 = l.transport(aeta0, u0, xi, 0, -1, n)
     b2 = l.add_mul(b1, b2, -1.0)
-    By = su.mul_s(b2, +0.5 / tau) # check these signs
+    By = su.mul_s(b2, +0.5 / tau)
 
     bf1 = su.zero()
     b1 = l.plaq(u0, xi, 0, 1, 1, 1, n)
