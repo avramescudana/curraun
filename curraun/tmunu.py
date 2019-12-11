@@ -235,7 +235,7 @@ def landau(s, E0, downsample_step = 0, use_reduced_T=True):
     T *= E0 ** 4 / s.g ** 2 / hbarc ** 3
 
     # Downsampling for smaller simulation boxes in hydrodynamics
-    if downsample_step > 0:
+    if downsample_step > 1:
         step = int(downsample_step)
         n = T.shape[0]
         T2 = np.zeros((n // step, n // step, T.shape[2], T.shape[3]))
