@@ -227,7 +227,10 @@ def landau(s, E0, downsample_step = 0, use_reduced_T=True):
     # These lines of code return `T`, which is T_{\mu\nu}
     t_munu = EnergyMomentumTensor(s)
     t_munu.compute()
-    t_munu.copy_to_host()
+
+    if use_cuda:
+        t_munu.copy_to_host()
+
     T = convert_to_matrix(t_munu.t_munu)
 
     # Restore physical units [GeV / fm^3]
