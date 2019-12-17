@@ -16,7 +16,6 @@ color sheets ("rapidity slices") and transverse shapes (finite radii)
 * Landau matching for hydrodynamical simulations
 
 # Installation
-# Installation
 You can install all dependencies with [Anaconda](https://www.anaconda.com/distribution/):
 
 ```
@@ -32,7 +31,7 @@ conda install cudatoolkit=9.0
 The CUDA toolkit version should match the graphics card driver version - see nvidia-smi.
 
 # Example Jupyter notebooks
-Jupyter notebooks are provided in the `notebooks` folder.
+Jupyter notebooks are provided in the [`notebooks`](notebooks) folder.
 
 # Launching the application
 To launch a script module from the command line, go to the root directory
