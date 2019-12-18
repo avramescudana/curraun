@@ -23,9 +23,11 @@ if su_precision == 'single':
     #       (check this using compiled_function.inspect_types())
     print("Using single precision")
     GROUP_TYPE = np.float32
+    GROUP_TYPE_REAL = np.float32
 elif su_precision == 'double':
     print("Using double precision")
     GROUP_TYPE = np.float64
+    GROUP_TYPE_REAL = np.float64
 else:
     print("Unsupported precision: " + su_precision)
 

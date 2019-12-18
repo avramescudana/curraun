@@ -1,16 +1,14 @@
 from curraun.numba_target import myjit, my_parallel_loop
 import curraun.su as su
+import curraun.lattice as l
 import numpy as np
 from numpy.fft import rfft2, irfft2
 from numpy import newaxis as na
-from time import time
 import math
 
 PI = np.pi
 
-TEST_SU2_SUBGROUP = False  # TODO: Initial conditions for true SU(3) calculations in initial.py are not implemented yet.
-
-def wilson(s, mu, m, uv, num_sheets, subgroup=None):
+def wilson(s, mu, m, uv, num_sheets, shape_func=None):
     n = s.n
     g = s.g
 
@@ -25,22 +23,26 @@ def wilson(s, mu, m, uv, num_sheets, subgroup=None):
     wilsonfield = np.empty((n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
     my_parallel_loop(reset_wilsonfield, n ** 2, wilsonfield)
 
+    # create shape 'mask' array for charge density
+    if shape_func is not None:
+        shape_mask = np.zeros((n, n))
+
+        for ix in range(n):
+            for iy in range(n):
+                shape_mask[ix, iy] = shape_func(ix - n // 2, iy - n // 2)
+
+
     for sheet in range(num_sheets):
         # solve poisson equation
-        t_start = time()
-        if su.N_C == 2:
-            field = np.random.normal(loc=0.0, scale=g ** 2 * mu / math.sqrt(num_sheets), size=(n ** 2, 3))
-        elif su.N_C == 3 and TEST_SU2_SUBGROUP:
-            # Initialize SU(2) subgroup in SU(3):
-            print("WARNING: Initializing SU(2) subgroup in SU(3)")
-            field = np.random.normal(loc=0.0, scale=g ** 2 * mu / math.sqrt(num_sheets), size=(n ** 2, 3))
-            field_rest = np.zeros((n ** 2, su.ALGEBRA_ELEMENTS - 3))
-            field = np.concatenate((field, field_rest), axis=1)
-        elif su.N_C == 3:
-            # Real SU(3) initial conditions in SU(3):
-            field = np.random.normal(loc=0.0, scale=g ** 2 * mu / math.sqrt(num_sheets),
-                                     size=(n ** 2, su.ALGEBRA_ELEMENTS))
-        else:
+        field = np.random.normal(loc=0.0, scale=g ** 2 * mu / math.sqrt(num_sheets), size=(n ** 2, su.ALGEBRA_ELEMENTS))
+
+        # Apply shape function to charge density
+        if shape_func is not None:
+            field = field.reshape((n, n, su.ALGEBRA_ELEMENTS))
+            field = field[:, :, :] * shape_mask[:, :, None]
+            field = field.reshape((n * n, su.ALGEBRA_ELEMENTS))
+
+        if su.N_C > 3:
             print("mv.py: SU(N) code not implemented")
             exit()
 
@@ -49,14 +51,8 @@ def wilson(s, mu, m, uv, num_sheets, subgroup=None):
                 rfft2(field.reshape((n, n, su.ALGEBRA_ELEMENTS)), s=(n, n), axes=(0, 1)) * kernel[:, :, na],
                 s=(n, n), axes=(0, 1)
             ).reshape((n ** 2, su.ALGEBRA_ELEMENTS))
-        #print("MV Poisson: {0}".format(time() - t_start))
-
-        t_start = time()
 
         my_parallel_loop(wilson_exponentiation_kernel, n ** 2, field, wilsonfield)
-
-        #print("Exponentiation: {0}".format(time() - t_start))
-        #print("Wilson line {0}/{1}.".format(sheet+1, num_sheets))
 
     return wilsonfield
 
