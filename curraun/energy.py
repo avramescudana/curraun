@@ -105,7 +105,8 @@ def fields_kernel(xi, n, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth, t, EL, BL, E
     ET[xi] = su.sq(pt1[xi, 0]) / (t + dth) + su.sq(pt1[xi, 1]) / (t + dth)
 
     # longitudinal magnetic field at t + dth (averaged)
-    BL[xi] = (NC - su.tr(l.plaq_pos(u0, xi, 0, 1, n)).real) * t + (NC - su.tr(l.plaq_pos(u1, xi, 0, 1, n)).real) * (t + dt)
+    #BL[xi] = (NC - su.tr(l.plaq_pos(u0, xi, 0, 1, n)).real) * t + (NC - su.tr(l.plaq_pos(u1, xi, 0, 1, n)).real) * (t + dt)
+    BL[xi] = 0.5 * (su.sq(su.ah(l.plaq_pos(u0, xi, 0, 1, n))) * t + su.sq(su.ah(l.plaq_pos(u1, xi, 0, 1, n))) * (t+dt))
 
     # transverse magnetic field at t + dth (averaged)
     d = 0
