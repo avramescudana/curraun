@@ -16,6 +16,9 @@ else:
 
 PI = np.pi
 
+if use_cupy:
+    random_cupy = cupy.random.RandomState()
+random_np = np.random.RandomState()
 
 # This function can be used to fix seeds. Note that cupy and numpy give different results
 # with the same seed.
