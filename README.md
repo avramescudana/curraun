@@ -25,7 +25,7 @@ conda install python=3.6 numba=0.43 six jupyter matplotlib tqdm
 For the CUDA version of this application, one additionally requires:
 
 ```
-conda install cudatoolkit=9.0
+conda install cudatoolkit=9.0 cupy
 ```
 
 The CUDA toolkit version should match the graphics card driver version - see nvidia-smi.
