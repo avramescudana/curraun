@@ -145,3 +145,58 @@ def compute_Bz_correlation_kernel(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, 
         # update Ux, Uy
         Ux = su.mul(Ux, u0[xs_x, 0])
         Uy = su.mul(Uy, u0[xs_y, 1])
+
+
+"""
+    Wilson line correlator functions
+"""
+
+
+def wilson_correlator(v, n):
+    v_corr = np.zeros(n ** 2, dtype=su.GROUP_TYPE_REAL)
+
+    d_v_corr = v_corr
+    d_v = v
+    if use_cuda:
+        d_v_corr = cuda.to_device(v_corr)
+        d_v = cuda.to_device(v)
+
+    if use_cuda:
+        my_parallel_loop(wilson_correlator_cuda_kernel, n ** 2, n, d_v, d_v_corr)
+    else:
+        my_parallel_loop(wilson_correlator_kernel, n ** 2, n, d_v, d_v_corr)
+
+    if use_cuda:
+        d_v_corr.copy_to_host(v_corr)
+
+    d_A = su.N_C ** 2 - 1
+    v_corr /= n ** 2 * d_A
+    return v_corr.reshape(n, n)
+
+@myjit
+def wilson_correlator_cuda_kernel(xi, n, v, v_corr):
+    vx = v[xi]
+    x = l.get_point(xi, n)
+
+    for yi in range(n ** 2):
+        vy = su.dagger(v[yi])
+        y = l.get_point(yi, n)
+        rx, ry = x[0] - y[0], x[1] - y[1]
+        ri = l.get_index(rx, ry, n)
+        correlation_fund = su.tr(su.mul(vx, vy))
+        correlation_adj = correlation_fund.real ** 2 + correlation_fund.imag ** 2 - 1.0
+        cuda.atomic.add(v_corr, ri, correlation_adj)
+
+@myjit
+def wilson_correlator_kernel(xi, n, v, v_corr):
+    vx = v[xi]
+    x = l.get_point(xi, n)
+
+    for yi in range(n ** 2):
+        vy = su.dagger(v[yi])
+        y = l.get_point(yi, n)
+        rx, ry = x[0] - y[0], x[1] - y[1]
+        ri = l.get_index(rx, ry, n)
+        correlation_fund = su.tr(su.mul(vx, vy))
+        correlation_adj = correlation_fund.real ** 2 + correlation_fund.imag ** 2 - 1.0
+        v_corr[ri] = v_corr[ri] + correlation_adj
