@@ -36,12 +36,13 @@ def wilson(s, mu, m, uv, num_sheets, shape_func=None):
     g = s.g
 
     # compute poisson kernel
-    kernel = np.zeros((n, n // 2 + 1), dtype=su.GROUP_TYPE_REAL)
+    new_n = (n // 2 + 1) if n % 2 == 0 else (n + 1) // 2
+    kernel = np.zeros((n, new_n), dtype=su.GROUP_TYPE_REAL)
     d_kernel = kernel
     if use_cupy:
         d_kernel = cupy.array(kernel)
 
-    my_parallel_loop(wilson_compute_poisson_kernel, n, m, n, uv, d_kernel)
+    my_parallel_loop(wilson_compute_poisson_kernel, n, m, n, new_n, uv, d_kernel)
 
     # create shape 'mask' array for charge density (this is pretty slow..)
     if shape_func is not None:
@@ -77,14 +78,15 @@ def wilson(s, mu, m, uv, num_sheets, shape_func=None):
             # fourier transform charge density
             d_charge = cupy.reshape(d_charge, (n, n, su.ALGEBRA_ELEMENTS))
             d_field_fft = cupy.fft.rfft2(d_charge, axes=(0, 1))
+
             # apply poisson kernel
-            d_kernel = cupy.reshape(d_kernel, n * (n // 2 + 1))
-            d_field_fft = cupy.reshape(d_field_fft, (n * (n // 2 + 1), su.ALGEBRA_ELEMENTS))
-            my_parallel_loop(modulate_kernel, n * (n // 2 + 1), d_field_fft, su.ALGEBRA_ELEMENTS, d_kernel)
-            d_field_fft = cupy.reshape(d_field_fft, (n, n // 2 + 1, su.ALGEBRA_ELEMENTS))
+            d_kernel = cupy.reshape(d_kernel, n * new_n)
+            d_field_fft = cupy.reshape(d_field_fft, (n * new_n, su.ALGEBRA_ELEMENTS))
+            my_parallel_loop(modulate_kernel, n * new_n, d_field_fft, su.ALGEBRA_ELEMENTS, d_kernel)
+            d_field_fft = cupy.reshape(d_field_fft, (n, new_n, su.ALGEBRA_ELEMENTS))
 
             # fourier transform back
-            d_field = cupy.fft.irfft2(d_field_fft, axes=(0, 1))
+            d_field = cupy.fft.irfft2(d_field_fft, axes=(0, 1), s=(n, n))
             d_field = cupy.reshape(d_field, (n * n, su.ALGEBRA_ELEMENTS))
 
             # exponentiate and multiply with previous sheets
@@ -134,11 +136,11 @@ def reset_wilsonfield(x, wilsonfield):
     su.store(wilsonfield[x], su.unit())
 
 @myjit
-def wilson_compute_poisson_kernel(x, m, n, uv, kernel):
-    for y in range(n // 2 + 1):
+def wilson_compute_poisson_kernel(x, mass, n, new_n, uv, kernel):
+    for y in range(new_n):
         k2 = k2_latt(x, y, n)
         if (x > 0 or y > 0) and k2 <= uv ** 2:
-            kernel[x, y] = 1.0 / (k2 + m ** 2)
+            kernel[x, y] = 1.0 / (k2 + mass ** 2)
 
 @myjit
 def wilson_exponentiation_kernel(x, field, wilsonfield):
