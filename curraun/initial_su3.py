@@ -1,184 +1,332 @@
 from curraun.numba_target import myjit
+import numba
 import curraun.su as su
-import curraun.su3 as su3
+from curraun.su3 import proj
+from math import sqrt
+from numba import cuda
+import numpy as np
 
-ACCURACY_GOAL = 1e-16 # 1e-8
-ITERATION_MAX_ROUND_1 = 100 # Exploration of initial conditions
-ITERATION_MAX_ROUND_2 = 2000 # Mention cases that took very long
-ITERATION_MAX_ROUND_3 = 10000 # Ultimate limit
-HEAVY_BALL_BETA = 1
-TRY_FACTORS = (1., 2., 0., -1., -0.5)
+"""
+    A module that solves the initial conditions for the longitudinal magnetic field for SU(3).
+    
+    This approach could be generalized to SU(N) if we had a way to compute the inverse of a complex
+    n x n matrix in CUDA.
+"""
 
-# Gradient descent on algebra element
-# Calculate gradient analytically
+
+# Parameters for the iterative scheme
+ACCURACY_GOAL = 1e-16
+ITERATION_MAX_ROUND_1 = 100
+
+
 @myjit
-def init_kernel_2_su3(xi, u0, u1, ua, ub):
+def init_kernel_2_su3_numba(xi, u0, u1, ua, ub):
     # initialize transverse gauge links (longitudinal magnetic field)
     # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
     for d in range(2):
         u_a = su.load(ua[xi, d])
         u_b = su.load(ub[xi, d])
 
-        b3 = solve_initial_condition_complete(u_a, u_b, xi, d)
+        b3, check = solve_initial_numba(u_a, u_b)
+
+        if check > ACCURACY_GOAL:
+            print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
 
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
 
-# Try different initial guesses.
-# If desired accuracy has not been reached yet, dig deep with given initial guess
-@myjit
-def solve_initial_condition_complete(u_a, u_b, xi, d):
-    # Try starting from various initial conditions and see which gets closest to the result.
-    best_loss = 1000
-    best_factor = 0
-    for factor in TRY_FACTORS:
-        b3, loss, accuracy_reached, iterations = solve_initial_condition(u_a, u_b, xi, d, factor, ITERATION_MAX_ROUND_1)
-        if accuracy_reached:
-            # We are done :)
-            return b3
-        if loss < best_loss:
-            best_loss = loss
-            best_factor = factor
-
-    # Start from that initial condition and dig really deep
-    # TODO: One could remember state and continue from where we ended, instead of starting all over
-    b3, loss, accuracy_reached, iterations = solve_initial_condition(u_a, u_b, xi, d, best_factor, ITERATION_MAX_ROUND_3)
-
-    if accuracy_reached:
-        if iterations > ITERATION_MAX_ROUND_2:
-            print("Kernel 2: xi:", xi, ", d:", d, ": digging deep successful:", iterations,
-                  ", factor: ", best_factor, ". Loss:", loss)
-        return b3
-
-    print("=========================================================================")
-    print("WARNING")
-    print("Kernel 2: xi:", xi, ", d:", d, ": digging deep unsuccessful. ", iterations,
-              ", factor: ", factor, "Loss:", loss)
-    print("=========================================================================")
-    return b3
 
 @myjit
-def solve_initial_condition(u_a, u_b, xi, d, initial_factor, iter_max):
-    b1 = su.add(u_a, u_b)  # A
-    # Better starting value:
-    m1a = su.get_algebra_factors_from_group_element_approximate(u_a)
-    m1b = su.get_algebra_factors_from_group_element_approximate(u_b)
-    m1 = su.add_algebra(m1a, m1b)
-    m1 = su.mul_algebra(m1, initial_factor)
-    m1_prev = m1
+def init_kernel_2_su3_cuda(xi, u0, u1, ua, ub):
+    # initialize transverse gauge links (longitudinal magnetic field)
+    # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
+    for d in range(2):
+        u_a = su.load(ua[xi, d])
+        u_b = su.load(ub[xi, d])
 
-    epsilon2 = 0.5  # 0.125 # 0.0001 # 0.125
-    si3 = 0
-    si4 = 0
-    smallestloss = 1
-    accuracy_reached = False
-    for i in range(iter_max):
-        # Calculate Loss:
-        loss1 = loss(b1, m1)
+        b3, check = solve_initial_cuda(u_a, u_b)
 
-        m2new = m1
+        if check > ACCURACY_GOAL:
+            print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
 
-        # Calculate analytic derivative:
-        grad = gradient(b1, m1)
+        su.store(u0[xi, d], b3)
+        su.store(u1[xi, d], b3)
 
-        m2new = su.add_algebra(m2new, su.mul_algebra(grad, -epsilon2))
 
-        # Heavy ball method
-        # dball = + beta * (m1 - m1_prev)
-        dball = su.add_algebra(m1, su.mul_algebra(m1_prev, -1))
-        dball = su.mul_algebra(dball, HEAVY_BALL_BETA)
+"""
+    New approach: fixed point iteration
+"""
 
-        m2new21 = su.add_algebra(m2new, dball)
+@myjit
+def solve_initial_cuda(u_a, u_b):
+    w = su.add(u_a, u_b)
 
-        loss3 = loss(b1, m2new)
-        loss21 = loss(b1, m2new21)
+    # initial condition
+    u = su.mul(u_a, u_b)
 
-        m1_prev = m1
+    # temporary arrays
+    Y = cuda.local.array(shape=(8, 8), dtype=numba.float64)
+    Yinv = cuda.local.array(shape=(8, 8), dtype=numba.float64)
 
-        # Find step with smallest value of loss
-        smallestloss_prev = smallestloss
-        smallestloss = loss1
-        smallestitem = -1
-        if loss3 < smallestloss:
-            m1 = m2new
-            smallestloss = loss3
-            smallestitem = 5
-        if loss21 < smallestloss:
-            m1 = m2new21
-            smallestloss = loss21
-            smallestitem = 21
+    # iterative fixed point scheme
+    for i in range(ITERATION_MAX_ROUND_1):
+        b = su.dagger(su.add(su.unit(), u))
+        b = su.mul(w, b)
 
-        if smallestitem == 5:
-            si3 += 1
-        if smallestitem == 21:
-            si4 += 1
-
-        if smallestitem == -1:
-            pass
-            # TODO: rewrite logic above so that either case 5 or case 21 happens
-
-        if smallestloss < ACCURACY_GOAL:
-            #    print("Kernel 2: xi:", xi, ", d:", d, ": Iterations:", i, ". Bounds:", loss3, ", eps: ", epsilon2, (si3, si4))
-            accuracy_reached = True
+        # check if equation has been solved
+        check = su.sq(su.ah(b))
+        if check < ACCURACY_GOAL:
             break
-    else:  # no break
-        # print("Kernel 2: xi:", xi, ", d:", d, ": max iterations reached:", i, ". Bounds:", loss3, ", factor: ", initial_factor,
-        #       (si3, si4))
-        pass
 
-    b3 = su.mexp(su.get_algebra_element(m1))
-    final_loss = loss(b1, m1)
-    return b3, final_loss, accuracy_reached, i
+        # compute Y and Y_inv
+        y = su.mul(w, su.dagger(u))
+        for ia in range(su.ALGEBRA_ELEMENTS):
+            for ib in range(su.ALGEBRA_ELEMENTS):
+                Y[ia, ib] = proj(y, ia, ib)
+
+        invert8x8(Y, Yinv)
+
+        # temporary array for result
+        A = cuda.local.array(shape=8, dtype=numba.float64)
+
+        # extract color components of 'b'
+        B = su.get_algebra_factors_from_group_element_approximate(b)
+
+        # solve linear system using inverse
+        matvmul(Yinv, B, A, 8)
+
+        # reduce 'largeness' of A if needed
+        norm = 0.0
+        for j in range(8):
+            norm += A[j] ** 2
+        norm = sqrt(norm)
+        if norm > 1.0:
+            for j in range(8):
+                A[j] /= norm
+
+        # apply change to 'u' using exp(i*A)
+        u = su.mul(su.mexp(su.get_algebra_element(A)), u)
+
+    # final check
+    b = su.dagger(su.add(su.unit(), u))
+    b = su.mul(w, b)
+    check = su.sq(su.ah(b))
+
+    return u, check
 
 @myjit
-def loss(b1, m1):
-    unit = su.unit()
+def solve_initial_numba(u_a, u_b):
+    w = su.add(u_a, u_b)
 
-    # Check result
-    b3 = su.mexp(su.get_algebra_element(m1))
-    e1 = su.mul(b1, su.dagger(su.add(unit, b3)))
-    e2 = su.ah(e1)
-    res = su.sq(e2)
+    # initial condition
+    u = su.mul(u_a, u_b)
 
-    return res
+    # temporary arrays
+    Y = np.zeros(shape=(8, 8), dtype=su.GROUP_TYPE_REAL)
 
-# calculate gradient for loss
+    # iterative fixed point scheme
+    for i in range(ITERATION_MAX_ROUND_1):
+        b = su.dagger(su.add(su.unit(), u))
+        b = su.mul(w, b)
+
+        # check if equation has been solved
+        check = su.sq(su.ah(b))
+        if check < ACCURACY_GOAL:
+            break
+
+        # compute Y and Y_inv
+        y = su.mul(w, su.dagger(u))
+        for ia in range(su.ALGEBRA_ELEMENTS):
+            for ib in range(su.ALGEBRA_ELEMENTS):
+                Y[ia, ib] = proj(y, ia, ib)
+
+        # extract color components of 'b'
+        B = su.get_algebra_factors_from_group_element_approximate(b)
+        A = np.linalg.solve(Y, B)
+
+        # reduce 'largeness' of A if needed
+        norm = np.linalg.norm(A)
+        if norm > 1.0:
+            A /= norm
+
+        # apply change to 'u' using exp(i*A)
+        u = su.mul(su.mexp(su.get_algebra_element(A)), u)
+
+    # final check
+    b = su.dagger(su.add(su.unit(), u))
+    b = su.mul(w, b)
+    check = su.sq(su.ah(b))
+
+    return u, check
+
+
 @myjit
-def gradient(b1, m1):
-    grad = su3.get_zero_algebra()
-    for a in range(8):
-        mdelta = su3.get_unit_algebra()[a]
+def invert4x4(a, b):
+    """
+    Inverts a flattened 4x4 matrix 'a' and puts result into 'b' using an explicit formula.
 
-        # Calculate analytic derivative in direction mdelta
-        grad_a = gradient_component(b1, m1, mdelta)
-        grad = su.add_algebra(grad, su.mul_algebra(mdelta, grad_a))
-    return grad
+    This code was adapted from https://stackoverflow.com/a/1148405
+    """
+    b[0] = a[5] * a[10] * a[15] - a[5] * a[11] * a[14] - a[9] * a[6] * a[15] + a[9] * a[7] * a[14] + a[13] * a[6] * a[
+        11] - a[13] * a[7] * a[10]
+
+    b[4] = -a[4] * a[10] * a[15] + a[4] * a[11] * a[14] + a[8] * a[6] * a[15] - a[8] * a[7] * a[14] - a[12] * a[6] * \
+           a[11] + a[12] * a[7] * a[10]
+
+    b[8] = a[4] * a[9] * a[15] - a[4] * a[11] * a[13] - a[8] * a[5] * a[15] + a[8] * a[7] * a[13] + a[12] * a[5] * a[
+        11] - a[12] * a[7] * a[9]
+
+    b[12] = -a[4] * a[9] * a[14] + a[4] * a[10] * a[13] + a[8] * a[5] * a[14] - a[8] * a[6] * a[13] - a[12] * a[5] * \
+            a[10] + a[12] * a[6] * a[9]
+
+    b[1] = -a[1] * a[10] * a[15] + a[1] * a[11] * a[14] + a[9] * a[2] * a[15] - a[9] * a[3] * a[14] - a[13] * a[2] * \
+           a[11] + a[13] * a[3] * a[10]
+
+    b[5] = a[0] * a[10] * a[15] - a[0] * a[11] * a[14] - a[8] * a[2] * a[15] + a[8] * a[3] * a[14] + a[12] * a[2] * a[
+        11] - a[12] * a[3] * a[10]
+
+    b[9] = -a[0] * a[9] * a[15] + a[0] * a[11] * a[13] + a[8] * a[1] * a[15] - a[8] * a[3] * a[13] - a[12] * a[1] * a[
+        11] + a[12] * a[3] * a[9]
+
+    b[13] = a[0] * a[9] * a[14] - a[0] * a[10] * a[13] - a[8] * a[1] * a[14] + a[8] * a[2] * a[13] + a[12] * a[1] * a[
+        10] - a[12] * a[2] * a[9]
+
+    b[2] = a[1] * a[6] * a[15] - a[1] * a[7] * a[14] - a[5] * a[2] * a[15] + a[5] * a[3] * a[14] + a[13] * a[2] * a[
+        7] - a[13] * a[3] * a[6]
+
+    b[6] = -a[0] * a[6] * a[15] + a[0] * a[7] * a[14] + a[4] * a[2] * a[15] - a[4] * a[3] * a[14] - a[12] * a[2] * a[
+        7] + a[12] * a[3] * a[6]
+
+    b[10] = a[0] * a[5] * a[15] - a[0] * a[7] * a[13] - a[4] * a[1] * a[15] + a[4] * a[3] * a[13] + a[12] * a[1] * a[
+        7] - a[12] * a[3] * a[5]
+
+    b[14] = -a[0] * a[5] * a[14] + a[0] * a[6] * a[13] + a[4] * a[1] * a[14] - a[4] * a[2] * a[13] - a[12] * a[1] * a[
+        6] + a[12] * a[2] * a[5]
+
+    b[3] = -a[1] * a[6] * a[11] + a[1] * a[7] * a[10] + a[5] * a[2] * a[11] - a[5] * a[3] * a[10] - a[9] * a[2] * a[
+        7] + a[9] * a[3] * a[6]
+
+    b[7] = a[0] * a[6] * a[11] - a[0] * a[7] * a[10] - a[4] * a[2] * a[11] + a[4] * a[3] * a[10] + a[8] * a[2] * a[
+        7] - a[8] * a[3] * a[6]
+
+    b[11] = -a[0] * a[5] * a[11] + a[0] * a[7] * a[9] + a[4] * a[1] * a[11] - a[4] * a[3] * a[9] - a[8] * a[1] * a[
+        7] + a[8] * a[3] * a[5]
+
+    b[15] = a[0] * a[5] * a[10] - a[0] * a[6] * a[9] - a[4] * a[1] * a[10] + a[4] * a[2] * a[9] + a[8] * a[1] * a[6] - \
+            a[8] * a[2] * a[5]
+
+    det = a[0] * b[0] + a[1] * b[4] + a[2] * b[8] + a[3] * b[12]
+
+    # could check if det == 0 at this point
+
+    det = 1.0 / det
+
+    for i in range(16):
+        b[i] *= det
 
 @myjit
-def gradient_component(b1, m1, mdelta):
+def invert8x8(M, Inv):
+    """
+    Inverts a 8x8 matrix 'M' and puts result into 'Inv' using the block matrix formula.
+    """
+    # allocate temporary flattned 4x4 matrices
+    A = cuda.local.array(shape=4*4, dtype=numba.float64)
+    B = cuda.local.array(shape=4*4, dtype=numba.float64)
+    C = cuda.local.array(shape=4*4, dtype=numba.float64)
+    D = cuda.local.array(shape=4*4, dtype=numba.float64)
 
-    # b1 # A
-    unit = su.unit()
-    b3 = su.mexp(su.get_algebra_element(m1)) # B = exp(m1)
+    Ai = cuda.local.array(shape=4*4, dtype=numba.float64)
+    Bi = cuda.local.array(shape=4*4, dtype=numba.float64)
+    Ci = cuda.local.array(shape=4*4, dtype=numba.float64)
+    Di = cuda.local.array(shape=4*4, dtype=numba.float64)
 
-    e1 = su.mul(b1, su.dagger(su.add(unit, b3))) # X = A (1 + B)^dagger
+    # extract block matrices
+    extract_flattened_matrix(M, 0, 0, 4, A)
+    extract_flattened_matrix(M, 0, 4, 4, B)
+    extract_flattened_matrix(M, 4, 0, 4, C)
+    extract_flattened_matrix(M, 4, 4, 4, D)
 
-    e2 = su.add(e1, su.mul_s(su.dagger(e1), -1)) # X - X^dagger
-    e3 = su.mul_s(unit, -su.tr(e2) / su.N_C) # - tr(e2) / N_C * 1
-    e4 = su.add(e2, e3) # Y = [X]_ah
+    # allocate buffers
+    buff1 = cuda.local.array(shape=4*4, dtype=numba.float64)
+    buff2 = cuda.local.array(shape=4*4, dtype=numba.float64)
 
-    m3 = su.get_algebra_element(mdelta)
+    # block 'A'
+    invert4x4(D, buff1)
+    matmul_flat(B, buff1, buff2, 4)
+    matmul_flat(buff2, C, buff1, 4)
+    vec_add(A, buff1, buff2, -1, 16)
+    invert4x4(buff2, Ai)
+    reinsert_flattened_matrix(Inv, 0, 0, 4, Ai)
 
-    db3 = su.dmexp(su.get_algebra_element(m1), su.mul_s(m3, -1)) # derivative of b3
-    f1 = su.mul(b1, su.dagger(db3))  # A dB^dagger
+    # block 'B'
+    invert4x4(D, buff1)
+    matmul_flat(B, buff1, buff2, 4)
+    matmul_flat(Ai, buff2, buff1, 4)
+    vec_mul(buff1, Bi, -1, 16)
+    reinsert_flattened_matrix(Inv, 0, 4, 4, Bi)
 
-    f2 = su.add(f1, su.mul_s(su.dagger(f1), -1)) # f1 - f1^dagger
-    f3 = su.mul_s(unit, -su.tr(f2) / su.N_C) # - tr(f2) / N_C * 1
-    f4 = su.add(f2, f3) # d/da Y = d/da [X]_ah
+    # block 'C'
+    invert4x4(D, buff1)
+    matmul_flat(buff1, C, buff2, 4)
+    matmul_flat(buff2, Ai, buff1, 4)
+    vec_mul(buff1, Ci, -1, 16)
+    reinsert_flattened_matrix(Inv, 4, 0, 4, Ci)
 
-    g1 = su.mul(f4, su.dagger(e4)) # (d/da Y) . Y^dagger
-    g2 = su.mul(e4, su.dagger(f4)) # Y . d/da Y^dagger
-    g3 = su.tr(su.add(g1, g2)) # d/da tr(Y . Y^dagger) = tr(g1 + g2)
+    # block 'D'
+    invert4x4(D, Bi)
+    matmul_flat(Bi, C, buff1, 4)
+    matmul_flat(buff1, Ai, buff2, 4)
+    matmul_flat(buff2, B, buff1, 4)
+    matmul_flat(buff1, Bi, buff2, 4)
+    vec_add(Bi, buff2, Di, 1, 16)
+    reinsert_flattened_matrix(Inv, 4, 4, 4, Di)
 
-    res = -g3.real * 0.25 # Result should be real
-    return res
+
+"""
+    A few matrix and vector operations
+"""
+
+@myjit
+def extract_flattened_matrix(A, shift_i, shift_j, m, out):
+    for i in range(m):
+        for j in range(m):
+            out[m * i + j] = A[shift_i + i, shift_j + j]
+
+@myjit
+def reinsert_flattened_matrix(A, shift_i, shift_j, m, inp):
+    for i in range(m):
+        for j in range(m):
+            A[i + shift_i, j + shift_j] = inp[m * i + j]
+
+@myjit
+def matmul(A, B, C, n):
+    for i in range(n):
+        for j in range(n):
+            C[i, j] = 0.0
+            for k in range(n):
+                C[i, j] += A[i, k] * B[k, j]
+
+@myjit
+def matmul_flat(A, B, C, n):
+    for i in range(n):
+        for j in range(n):
+            C[n * i + j] = 0.0
+            for k in range(n):
+                C[n * i + j] += A[n * i + k] * B[n * k + j]
+
+@myjit
+def vec_add(A, B, C, f, n):
+    for i in range(n):
+        C[i] = A[i] + f * B[i]
+
+@myjit
+def vec_mul(A, B, f, n):
+    for i in range(n):
+        B[i] = f * A[i]
+
+@myjit
+def matvmul(A, x, b, n):
+    for i in range(n):
+        b[i] = 0.0
+        for j in range(n):
+            b[i] += A[i, j] * x[j]

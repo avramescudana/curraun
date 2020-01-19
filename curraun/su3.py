@@ -465,7 +465,7 @@ def get_algebra_factors_from_group_element_approximate(g):
 @myjit
 def proj(g, i, j):
     """
-    A helper function for initial_su3_new.py that only seems to work if I put it here.
+    A helper function for initial_su3.py that only seems to work if I put it here.
 
     Computes the 'matrix components' of g in the sense of
     proj(g, i, j) = 0.5 * Re(tr( s_i g s_j))

@@ -2,7 +2,7 @@ from curraun.numba_target import myjit, my_parallel_loop, use_cuda
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
-from curraun.initial_su3_new import init_kernel_2_su3_cuda, init_kernel_2_su3_numba
+from curraun.initial_su3 import init_kernel_2_su3_cuda, init_kernel_2_su3_numba
 from time import time
 
 DEBUG = False
