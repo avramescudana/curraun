@@ -111,3 +111,7 @@ venv.bak/
 
 # Simulation data
 *.dat
+*.pickle
+
+# Results
+results/
