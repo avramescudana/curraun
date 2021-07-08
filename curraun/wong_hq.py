@@ -1,12 +1,15 @@
 """
     Computes various quantities used in solving Wong's equations for a HQ immersed in the fields of the Glasma.
 """
-from curraun.numba_target import myjit, prange, my_parallel_loop, use_cuda, mycudajit
+
+from curraun.numba_target import use_cuda, mycudajit
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
 if use_cuda:
     import numba.cuda as cuda
+import math
+from scipy.interpolate import griddata
 
 class WongFields:
     # Computes Tr{QE} and Tr{QB}
@@ -265,3 +268,175 @@ def evolve_charge_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, Q, 
     res1 = su.mul_s(sum2, tau_step / ptau0)
     Q[:] = su.add(Q0, res1)
     Q2[:] = su.sq(Q[:]).real
+
+"""
+    Initialize positions, momenta and color charges
+""" 
+
+
+def initial_coords(p):
+    L = p['L']
+    # x0, y0 = np.random.uniform(0, L), np.random.uniform(0, L)
+    # TODO: Impose periodic boundary conditions
+    # Since the HQ doesn't move too much, it suffices to place it somewhere within the interior of the simulation plane
+    x0, y0 = np.random.uniform(L/3, 2*L/3), np.random.uniform(L/3, 2*L/3)
+    eta0 = 0
+    xmu0 = [x0, y0, eta0]
+    return xmu0
+
+# TODO: Initialise with FONLL pQCD distribution in momentum of HQs
+def initial_momenta(p):
+    pT = p['PT']
+    tau_form = p['TFORM']
+    mass = p['MASS']
+    px0 = np.random.uniform(0, pT)
+    py0 = np.sqrt(pT ** 2 - px0 ** 2)
+    peta0 = 0
+    ptau0 = np.sqrt(px0 ** 2 + py0 ** 2 + (tau_form * peta0) ** 2 + mass ** 2)
+    pmu0 = [ptau0, px0, py0, peta0]
+    return pmu0
+
+def initial_charge(p):
+    su_group = p['GROUP']
+    if su_group=='su3':
+        # TODO: Find the correct way to initialise the SU(3) color charges
+        # Values used to compute the SU(3) and SU(2) Casimirs
+        # J1, J2 = 1, 0
+        J1, J2 = 2.84801, 1.00841
+        # Angle Darboux variables
+        phi1, phi2, phi3 = np.random.uniform(), np.random.uniform(), np.random.uniform()
+        # phi1, phi2, phi3 = np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi)
+        # Momenta Darboux variables
+        pi3 = np.random.uniform(0, (J1+J2)/2)
+        pi2 = np.random.uniform((J2-J1)/np.sqrt(3), (J1-J2)/(2*np.sqrt(3)))
+        pi1 = np.random.uniform(-pi3, pi3)
+
+        pip, pim = np.sqrt(pi3+pi1), np.sqrt(pi3-pi1)
+        Cpp, Cpm, Cmp, Cmm = np.cos((phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((phi1+np.sqrt(3)*phi2-phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2-phi3)/2)
+        Spp, Spm, Smp, Smm = np.sin((phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((phi1+np.sqrt(3)*phi2-phi3)/2), np.sin((-phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((-phi1+np.sqrt(3)*phi2-phi3)/2)
+        A = np.sqrt(((J1-J2)/3+pi3+pi2/np.sqrt(3))*((J1+2*J2)/3+pi3+pi2/np.sqrt(3))*((2*J1+J2)/3-pi3-pi2/np.sqrt(3)))/(2*pi3)
+        B = np.sqrt(((J2-J1)/3+pi3-pi2/np.sqrt(3))*((J1+2*J2)/3-pi3+pi2/np.sqrt(3))*((2*J1+J2)/3+pi3-pi2/np.sqrt(3)))/(2*pi3)
+
+        # Color charges
+        Q1 = np.cos(phi1) * pip * pim
+        Q2 = np.sin(phi1) * pip * pim
+        Q3 = pi1
+        Q4 = Cpp * pip * A + Cpm * pim * B
+        Q5 = Spp * pip * A + Spm * pim * B
+        Q6 = Cmp * pim * A - Cmm * pip * B
+        Q7 = Smp * pim * A - Smm * pip * B
+        Q8 = pi2
+        q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
+    elif su_group=='su2':
+        J = 1
+        phi, pi = np.random.uniform(), np.random.uniform(-J, J)
+        # Bounded angles (0,2pi)
+        # phi, pi = np.random.uniform(0, 2*np.pi), np.random.uniform(-J, J)
+        Q1 = np.cos(phi) * np.sqrt(J**2 - pi**2)
+        Q2 = np.sin(phi) * np.sqrt(J**2 - pi**2)
+        Q3 = pi
+        q0 = np.array([Q1, Q2, Q3])
+    return q0
+
+"""
+    Interpolate fields
+"""
+
+def interpfield(x0, y0, Q0, fields):
+    # Interpolate the values of trQE and trQB by finding the lattice cell in which the HQ is located and using the values of the neighbouring lattice points,
+    # where the fields are evaluated, to extract the corresponding value where the HQ is at a given time
+    x_low, x_high = math.floor(x0), math.ceil(x0)
+    y_low, y_high = math.floor(y0), math.ceil(y0)
+    xyhq = ([np.round(x0, decimals=6), np.round(y0, decimals=6)])
+    points = np.array([[x_low, y_low], [x_low, y_high], [x_high, y_low], [x_high, y_high]])
+
+    trQEx, trQEy, trQEeta = [], [], []
+    trQBx, trQBy, trQBeta = [], [], []
+
+    for point in points:
+        fields.compute(Q0, point[0], point[1])
+        trQEx.append(fields.trQE.real[0])
+        trQEy.append(fields.trQE.real[1])
+        trQEeta.append(fields.trQE.real[2])
+        trQBx.append(fields.trQB.real[0])
+        trQBy.append(fields.trQB.real[1])
+        trQBeta.append(fields.trQB.real[2])
+
+    trQEx_interp, trQEy_interp, trQEeta_interp = griddata(points, np.array(trQEx), xyhq,  method='cubic'), griddata(points, np.array(trQEy), xyhq,  method='cubic'), griddata(points, np.array(trQEeta), xyhq,  method='cubic')
+    trQBx_interp, trQBy_interp, trQBeta_interp = griddata(points, np.array(trQBx), xyhq,  method='cubic'), griddata(points, np.array(trQBy), xyhq,  method='cubic'), griddata(points, np.array(trQBeta), xyhq,  method='cubic')
+
+    return [trQEx_interp[0], trQEy_interp[0], trQEeta_interp[0]], [trQBx_interp[0], trQBy_interp[0], trQBeta_interp[0]]
+
+def interppotential(x0, y0, axis, potentials):
+    # Interpolate the values of the gauge potentials to where the HQ is, in a similar way as done for the electric and magnetic fields
+    # Since Ax and Ay are extracted from lnUx and lnUy, they are evaluated at (x-a/2, y) and (x, y-a/2), whereas Aeta is computed at (x, y)
+    if axis=='x':
+        x_low = math.floor(x0-1/2)
+        x_high = math.ceil(x0-1/2)
+        y_low = math.floor(y0)
+        y_high = math.ceil(y0)
+        xyhq = ([np.round(x0-1/2, decimals=6), np.round(y0, decimals=6)])
+    elif axis=='y':
+        x_low = math.floor(x0)
+        x_high = math.ceil(x0)
+        y_low = math.floor(y0-1/2)
+        y_high = math.ceil(y0-1/2)
+        xyhq = ([np.round(x0, decimals=6), np.round(y0-1/2, decimals=6)])
+    elif axis=='eta':
+        x_low = math.floor(x0)
+        x_high = math.ceil(x0)
+        y_low = math.floor(y0)
+        y_high = math.ceil(y0)
+        xyhq = ([np.round(x0, decimals=6), np.round(y0, decimals=6)])
+
+    points = np.array([[x_low, y_low], [x_low, y_high], [x_high, y_low], [x_high, y_high]])
+
+    A = []
+    for point in points:
+        potentials.compute(axis, point[0], point[1])
+        if axis=='x':
+            A.append(potentials.Ax)
+        elif axis=='y':
+            A.append(potentials.Ay)
+        elif axis=='eta':
+            A.append(potentials.Aeta)
+
+    A_interp = griddata(points, np.array(A), xyhq,  method='cubic')
+
+    return A_interp[0]
+
+# TODO: Impose boundary conditions
+# def boundary(x1, y1, L, a):
+#     if x1<0:
+#         x1 = L-a
+#     elif x1>(L-a):
+#         x1 = a
+#     if y1<0:
+#         y1 = L-a
+#     elif y1>(L-a):
+#         y1 = a
+#     return x1, y1
+
+"""
+    Update positions and momenta using basic Euler to solve the associated Wong's equations
+"""
+
+def update_coords(x0, y0, eta0, ptau0, px0, py0, peta0, tau_step):
+    x1 = x0 + px0 / ptau0 * tau_step
+    y1 = y0 + py0 / ptau0 * tau_step
+    eta1 = eta0 + peta0 / ptau0 * tau_step
+
+    return x1, y1, eta1
+
+def update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, mass, E0):
+    # Dynkin index from Tr{T^aT^b}=T_R\delta^{ab} in fundamental representation R=F
+    # The minus sign comes from Tr{QF} from simulation being -Tr{QF} from the analytic formulas
+    tr = -1/2
+
+    px1 = px0 + tau_step / tr * (trQE[0] + trQB[2] * py0 / ptau0 - trQB[1] * peta0 * current_tau / ptau0)
+    py1 = py0 + tau_step / tr * (trQE[1] - trQB[2] * px0 / ptau0 + trQB[0] * peta0 * current_tau / ptau0)
+    peta1 = peta0 + tau_step * ((trQE[2] * ptau0 - trQB[0] * py0 + trQB[1] * px0) / tr  - 2 * peta0 * ptau0) / (current_tau * ptau0)
+    ptau1 = np.sqrt(px1 ** 2 + py1 ** 2 + (current_tau * peta1) ** 2 + (mass/E0) ** 2)
+    ptau2 = ptau0 + tau_step / tr * ((trQE[2]*peta0*current_tau + trQE[0]*px0 + trQE[1]*py0) - peta0 ** 2 * current_tau) / ptau0
+
+    return ptau1, ptau2, px1, py1, peta1
