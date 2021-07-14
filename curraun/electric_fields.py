@@ -32,8 +32,6 @@ class ElectricFields:
     def compute(self):
         u0 = self.s.d_u0
 
-        aeta0 = self.s.d_aeta0
-
         pt0 = self.s.d_pt0
         pt1 = self.s.d_pt1
 
@@ -43,7 +41,7 @@ class ElectricFields:
         t = self.s.t
         n = self.n
 
-        my_parallel_loop(elfields_kernel, n ** 2, n, u0, aeta0, peta1, peta0, pt1, pt0, t, self.d_elfields)
+        my_parallel_loop(elfields_kernel, n ** 2, n, u0, peta1, peta0, pt1, pt0, t, self.d_elfields)
 
         if use_cuda:
             self.copy_to_host()
@@ -53,7 +51,7 @@ class ElectricFields:
 
 # kernels
 @myjit
-def elfields_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, elfields):
+def elfields_kernel(xi, n, u0, peta1, peta0, pt1, pt0, tau, elfields):
 
     i = 0
     Ex = su.zero()

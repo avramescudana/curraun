@@ -38,13 +38,14 @@ uv = 10.0           # Ultraviolet regulator [GeV]
 # Heavy quark related parameters, chosen here for a charm quark
 mass = 1.5      # Heavy quark mass [GeV]
 tau_form = 0.06     # Formation time [fm/c]
-nq = 15     # Number of heavy quarks
+nq = 1     # Number of heavy quarks
 pT = 0.5    # Initial transverse momentum [GeV]
-ntp = 10    # Number of test particles
+ntp = 1    # Number of test particles
 
 # Other numerical parameters
-nevents = 10    # Number of Glasma events
-interp = 'yes'     # Interpolate fields or use nearest lattice points
+nevents = 1    # Number of Glasma events
+#TODO: remove option to interpolate
+interp = 'no'     # Interpolate fields or use nearest lattice points
 
 
 """
@@ -123,8 +124,10 @@ os.environ["MY_NUMBA_TARGET"] = "cuda"
 os.environ["PRECISION"] = "double"
 if p['GROUP'] == 'su2':
     os.environ["GAUGE_GROUP"] = 'su2_complex'
+    id0 = (1, 0, 0, 1)
 elif p['GROUP'] == 'su3':
     os.environ["GAUGE_GROUP"] = p['GROUP']
+    id0 = (1, 0, 0, 0, 1, 0, 0, 0, 1)
 
 # Import relevant modules
 import curraun.core as core
@@ -135,6 +138,8 @@ from curraun.numba_target import use_cuda
 if use_cuda:
     from numba import cuda
 from curraun.wong_hq import WongFields, WongPotentials, InitialColorCharge, ColorChargeEvolve, initial_coords, initial_momenta, initial_charge, interpfield, interppotential, update_coords, update_momenta
+# from curraun.wong_force_correlators import ElectroMagneticFields
+from curraun.wong_force_correlators import ElectricFields, LorentzForce, ForceCorrelators
 
 # Define hbar * c in units of GeV * fm
 hbarc = 0.197326 
@@ -171,6 +176,11 @@ def simulate(p, xmu0, pmu0, q0, seed):
     charge_initial = InitialColorCharge(s)
     charge_evolve = ColorChargeEvolve(s)
 
+    # elmag_fields = ElectroMagneticFields(s)
+    electric_fields = ElectricFields(s)
+    lorentz_force = LorentzForce(s)
+    force_correlators = ForceCorrelators(s)
+
     if use_cuda:
         s.copy_to_device()
 
@@ -200,9 +210,18 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 else:
                     logging.info('Approximating by nearest lattice points...')
 
+                xhq0, yhq0 = int(round(x0)), int(round(y0))
+                Eform = electric_fields.compute(xhq0, yhq0)
+                Fform = lorentz_force.compute(xhq0, yhq0, ptau0, px0, py0, peta0, current_tau)
+
+                # print('Fform=', Fform)
+
+                Uxhq0, Uyhq0 = np.array(id0), np.array(id0)
+
             # Solve Wong's equations using basic Euler
             # Update positions
             x1, y1, eta1 = update_coords(x0, y0, eta0, ptau0, px0, py0, peta0, tau_step)
+            delta_eta = eta1-eta0
 
             # Convert to physical units
             xmu.append([a*current_tau, a*x1, a*y1, eta1])
@@ -253,6 +272,31 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 qsq.append(Qsq)
                 logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq0))
 
+                # [(GeV / fm) ** 2]
+                units = (E0 ** 2 / hbarc) ** 2 / p['G'] ** 2
+
+                E = electric_fields.compute(xhq, yhq)
+                F = lorentz_force.compute(xhq, yhq, ptau0, px0, py0, peta0, current_tau)
+
+                force_correlators.compute('naive', Eform[0], Eform[1], Eform[2], E[0], E[1], E[2], Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta)
+                ExformEx, EyformEy, EzformEz = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz
+
+                print('EformE=', (ExformEx+EyformEy+EzformEz)*units)
+                # print('ExformEx=', ExformEx*units)
+                # print('EyformEy=', EyformEy*units)
+                # print('EzformEz=', EzformEz*units)
+            
+                Uxhq, Uyhq = force_correlators.Uxhq, force_correlators.Uyhq
+
+                force_correlators.compute('naive', Fform[0], Fform[1], Fform[2], F[0], F[1], F[2], Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta)
+                FxformFx, FyformFy, FzformFz = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz
+
+                # print('FformF=', (FxformFx+FyformFy+FzformFz)*units)
+                print('FxformFx=', FxformFx*units)
+                # print('FyformFy=', FyformFy*units)
+                print('FzformFz=', FzformFz*units)
+
+
             # Convert to physical units
             logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x1, a*y1, eta1))
             logging.debug("Momenta: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(E0*ptau1, E0*px1, E0*py1, E0/a*peta1))
@@ -263,10 +307,16 @@ def simulate(p, xmu0, pmu0, q0, seed):
             logging.debug("Transverse coordinate variance: {:.3e}".format((xT-xT0)**2))
             logging.debug("Transverse momentum variance: {:3.3f}".format((pT-pT0)**2))
 
+            if (xhq!=xhq0):
+                xhq0=xhq
+            if (yhq!=yhq0):
+                yhq0=yhq
+
             # Swap initial x, p, Q for next time step
             x0, y0, eta0 = x1, y1, eta1
             px0, py0, peta0, ptau0 = px1, py1, peta1, ptau1
             Q0 = Q1
+            Uxhq0, Uyhq0 = Uxhq, Uyhq
 
     if use_cuda:
         s.copy_to_host()

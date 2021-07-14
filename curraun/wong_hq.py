@@ -66,7 +66,6 @@ def fields_kernel(Q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, trQE,
     poshq = l.get_index(xhq, yhq, n)
 
     # Electric fields
-    Ex = su.add(pt1[poshq, 0, :], pt1[poshq, 0, :])
     Ex = su.zero()
     Ex = su.add(Ex, pt1[poshq, 0, :])
     Ex = su.add(Ex, pt0[poshq, 0, :])
