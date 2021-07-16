@@ -310,48 +310,50 @@ with open('parameters.pickle', 'wb') as handle:
     The number of quarks or antiquarks in enlarged by a given number of test particles
 """
 
-for ne in tqdm(range(p['NEVENTS']), desc="Events", position=0):
-    logging.info("Simulating event {}/{}".format(ne, nevents))
+# Initializing progress bar objects
+# Source: https://stackoverflow.com/questions/60928718/python-how-to-replace-tqdm-progress-bar-by-next-one-in-nested-loop
+outer_loop=tqdm(range(p['NEVENTS']), desc="Event", position=0)
+mid_loop=tqdm(range(p['NQ']), desc="Quark antiquark pair", position=1)
+inner_loop=tqdm(range(p['NTP']), desc="Test particle", position=2)
+
+
+for ev in range(len(outer_loop)):
+    logging.info("Simulating event {}/{}".format(ev+1, nevents))
     # Fixing the seed in a certain event
-    seed = ne
+    seed = ev
 
-    for qi in tqdm(range(p['NQ']), desc="Quark antiquark pairs", position=1, leave=bool(ne == (p['NEVENTS']-1))):
+    mid_loop.refresh() 
+    mid_loop.reset() 
+    outer_loop.update() 
 
-        xmu0 = initial_coords(p)
-        pmu0 = initial_momenta(p)
+    for q in range(len(mid_loop)):
+        logging.info("Simulating quark antiquark pair {}/{}".format(q+1, p['NQ']))
 
-        # Quark
-        q0 = initial_charge(p)
-        logging.info("Simulating quark {}/{}".format(qi, p['NQ']))
+        inner_loop.refresh()  
+        inner_loop.reset()  
+        mid_loop.update()  
 
-        for tp in tqdm(range(p['NTP']), desc="Quark test particles", position=2, leave=bool(ne == (p['NQ']-1))):
-            time_i = time.time()
-            logging.info("Simulating test particle {}/{}".format(tp, p['NTP']))
+        for tp in range(len(inner_loop)):
+            xmu0 = initial_coords(p)
+            pmu0 = initial_momenta(p)
 
-            xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
-
-            filename = 'q_' + str(qi+1) + '_tp_' + str(tp+1) + '.npz'
-            np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq)
-
-            time_f = time.time()
-            logging.info('Simulation time for a single quark test particle: {:5.2f}s'.format(time_f-time_i))
-            time.sleep(0.1)
-
-        # Antiquark
-        q0 = initial_charge(p)
-        pmu0 = [pmu0[0], -pmu0[1], -pmu0[2], pmu0[3]]
-        logging.info("Simulating antiquark {}/{}".format(qi, nq))
-        for tp in tqdm(range(p['NTP']), desc="Antiquark test particles", position=2, leave=bool(ne == (p['NQ']-1))):
-            time_i = time.time()
-            logging.info("Simulating test particle {}/{}".format(tp, p['NTP']))
+            # Quark
+            logging.info("Simulating quark test particle {}/{}".format(tp+1, p['NTP']))
+            q0 = initial_charge(p)
 
             xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
 
-            filename = 'aq_' + str(qi+1) + '_tp_' + str(tp+1) + '.npz'
+            filename = 'ev_' + str(ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1) + '.npz'
             np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq)
 
-            time_f = time.time()
-            logging.info('Simulation time for a single antiquark test particle: {:5.2f}s'.format(time_f-time_i))
-            time.sleep(0.1)
-        
-        time.sleep(0.1)
+            # Antiquark having opposite momentum and random color charge
+            logging.info("Simulating antiquark test particle {}/{}".format(tp+1, p['NTP']))
+            q0 = initial_charge(p)
+            pmu0 = [pmu0[0], -pmu0[1], -pmu0[2], pmu0[3]]
+
+            xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
+
+            filename = 'ev_' + str(ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1) + '.npz'
+            np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq) 
+
+            inner_loop.update()    

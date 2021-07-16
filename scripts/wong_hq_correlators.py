@@ -1,5 +1,4 @@
 import numpy as np
-import time
 import argparse
 from tqdm import tqdm
 import pickle
@@ -16,7 +15,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format='%(message)
 
 # General parameters
 su_group = 'su2'
-folder = 'pb+pb_5020gev_su2_interp_pT_0.5'
+folder = 'corr_pb+pb_5020gev_su2_interp_pT_0.5'
 
 # Simulation box parameters
 L = 10      # Length of simulation box [fm]
@@ -44,8 +43,6 @@ ntp = 1    # Number of test particles
 
 # Other numerical parameters
 nevents = 1    # Number of Glasma events
-#TODO: remove option to interpolate
-interp = 'no'     # Interpolate fields or use nearest lattice points
 
 
 """
@@ -79,8 +76,6 @@ p = {
 
     # Numerical parameters
     'NEVENTS': nevents,     # number of Glasma events
-    'INTERP': interp,       # interpolate fields or use nearest lattice points
-
 }
 
 """
@@ -109,7 +104,6 @@ parser.add_argument('-NQ', type=int, help="Number of heavy quarks", default=nq)
 parser.add_argument('-NTP', type=int, help="Number of test particles", default=ntp)
 
 parser.add_argument('-NEVENTS', type=int, help="Number of events", default=nevents)
-parser.add_argument('-INTERP', type=str, help="Interpolate fields.", default=interp)
 
 # Parse argumentss and update parameters dictionary
 args = parser.parse_args()
@@ -143,6 +137,35 @@ from curraun.wong_force_correlators import ElectricFields, LorentzForce, ForceCo
 
 # Define hbar * c in units of GeV * fm
 hbarc = 0.197326 
+
+"""
+    Function to compute and store correlators
+"""
+
+def compute_correlator(force_correlators, tags, Fform, F, Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta, xhq_init, yhq_init, units):
+ 
+    FformF = {}
+    for tag in tags:
+
+        # Used to compute the correlator of electric fields in the initial point where the HQ is initialized, as the Glasma fields evolve
+        if tag=='static':
+            FformF[tag] = np.zeros((3, 3))
+            force_correlators.compute(tag, Fform[0], Fform[1], Fform[2], F[0], F[1], F[2], Uxhq0, Uyhq0, xhq_init, xhq_init, yhq_init, yhq_init, delta_eta)
+            FformF[tag][0, 0], FformF[tag][1, 1], FformF[tag][2, 2] = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz * units
+            force_correlators.compute(tag, Fform[1], Fform[2], Fform[0], F[0], F[1], F[2], Uxhq0, Uyhq0, xhq_init, xhq_init, yhq_init, yhq_init, delta_eta)
+            FformF[tag][1, 0], FformF[tag][2, 1], FformF[tag][0, 2] = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz * units
+            force_correlators.compute(tag, Fform[2], Fform[0], Fform[1], F[0], F[1], F[2], Uxhq0, Uyhq0, xhq_init, xhq_init, yhq_init, yhq_init, delta_eta)
+            FformF[tag][2, 0], FformF[tag][0, 1], FformF[tag][1, 2] = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz * units
+        else:
+            FformF[tag] = np.zeros((3, 3))
+            force_correlators.compute(tag, Fform[0], Fform[1], Fform[2], F[0], F[1], F[2], Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta)
+            FformF[tag][0, 0], FformF[tag][1, 1], FformF[tag][2, 2] = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz * units
+            force_correlators.compute(tag, Fform[1], Fform[2], Fform[0], F[0], F[1], F[2], Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta)
+            FformF[tag][1, 0], FformF[tag][2, 1], FformF[tag][0, 2] = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz * units
+            force_correlators.compute(tag, Fform[2], Fform[0], Fform[1], F[0], F[1], F[2], Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta)
+            FformF[tag][2, 0], FformF[tag][0, 1], FformF[tag][1, 2] = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz * units
+
+    return FformF
 
 """
     Simulation function
@@ -185,6 +208,17 @@ def simulate(p, xmu0, pmu0, q0, seed):
         s.copy_to_device()
 
     xmu, pmu, constraint, qsq = [], [], [], []
+    output = {}
+    tags_output = ['xmu', 'pmu', 'constraint', 'qsq']
+    for tag in tags_output:
+        output[tag] = []
+
+    tags_e, tags_f = ['static', 'naive', 'UxUy', 'UxUyAeta', 'AetaUxUy'], ['naive', 'UxUy', 'UxUyAeta', 'AetaUxUy']
+    all_EformE, all_FformF = {}, {}
+    for tag in tags_e:
+        all_EformE[tag] = []
+    for tag in tags_f:
+        all_FformF[tag] = []
 
     for t in range(maxt):
         core.evolve_leapfrog(s)
@@ -194,27 +228,20 @@ def simulate(p, xmu0, pmu0, q0, seed):
             tau_step = DT
             
             if t==formt:
-                xmu.append([a*current_tau, a*x0, a*y0, eta0])
-                pmu.append([E0*ptau0, E0*px0, E0*py0, E0/a*peta0])
+                output['xmu'].append([a*current_tau, a*x0, a*y0, eta0])
+                output['pmu'].append([E0*ptau0, E0*px0, E0*py0, E0/a*peta0])
                 logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x0, a*y0, eta0))
                 logging.debug("Momenta: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(E0*ptau0, E0*px0, E0*py0, E0/a*peta0))
 
                 charge_initial.compute(q0)
                 Q0 = charge_initial.Q
                 Qsq0 = charge_initial.Q2[0].real
-                qsq.append(Qsq0)
+                output['qsq'].append(Qsq0)
                 logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq0))
-
-                if interp=='yes':
-                    logging.info('Interpolating fields...')
-                else:
-                    logging.info('Approximating by nearest lattice points...')
 
                 xhq0, yhq0 = int(round(x0)), int(round(y0))
                 Eform = electric_fields.compute(xhq0, yhq0)
                 Fform = lorentz_force.compute(xhq0, yhq0, ptau0, px0, py0, peta0, current_tau)
-
-                # print('Fform=', Fform)
 
                 Uxhq0, Uyhq0 = np.array(id0), np.array(id0)
 
@@ -224,77 +251,51 @@ def simulate(p, xmu0, pmu0, q0, seed):
             delta_eta = eta1-eta0
 
             # Convert to physical units
-            xmu.append([a*current_tau, a*x1, a*y1, eta1])
+            output['xmu'].append([a*current_tau, a*x1, a*y1, eta1])
 
-            if interp=='yes':                
-                trQE_interp, trQB_interp = interpfield(x0, y0, Q0, fields)
-                Ax_interp, Ay_interp, Aeta_interp = interppotential(x0, y0, 'x', potentials), interppotential(x0, y0, 'y', potentials), interppotential(x0, y0, 'eta', potentials)
+            # Approximate the position of the quark with closest lattice point
+            # Locations where transverse gauge fields extracted from gauge links are evaluated, in the middle of lattice sites
+            xhq, yhq = int(round(x0)), int(round(y0))
+            xahq, yahq = int(round(x0-1/2)), int(round(y0-1/2))
 
-                # Update momenta using Euler, with interpolated fields
-                ptau1, ptau2, px1, py1, peta1 = update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE_interp, trQB_interp, mass, E0)
+            fields.compute(Q0, xhq, yhq)
+            trQE, trQB = fields.trQE.real, fields.trQB.real
 
-                # Convert to physical units
-                pmu.append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
-                constraint.append(E0*(ptau2-ptau1))
+            potentials.compute('x', xahq, yhq)
+            Ax = potentials.Ax
+            potentials.compute('y', xhq, yahq)
+            Ay = potentials.Ay
+            potentials.compute('eta', xhq, yhq)
+            Aeta = potentials.Aeta
 
-                charge_evolve.compute(Q0, tau_step, ptau0, px0, py0, peta0, Ax_interp, Ay_interp, Aeta_interp)
-                Q1 = charge_evolve.Q
-                Qsq = charge_evolve.Q2[0].real
-                qsq.append(Qsq)
-                logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq0))
-               
-            elif interp=='no':
-                # Approximate the position of the quark with closest lattice point
-                # Locations where transverse gauge fields extracted from gauge links are evaluated, in the middle of lattice sites
-                xhq, yhq = int(round(x0)), int(round(y0))
-                xahq, yahq = int(round(x0-1/2)), int(round(y0-1/2))
+            # Update momenta using Euler, with fields evaluated at nearest lattice points
+            ptau1, ptau2, px1, py1, peta1 = update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, mass, E0)
 
-                fields.compute(Q0, xhq, yhq)
-                trQE, trQB = fields.trQE.real, fields.trQB.real
+            # Convert to physical units
+            output['pmu'].append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
+            output['constraint'].append(E0*(ptau2-ptau1))
 
-                potentials.compute('x', xahq, yhq)
-                Ax = potentials.Ax
-                potentials.compute('y', xhq, yahq)
-                Ay = potentials.Ay
-                potentials.compute('eta', xhq, yhq)
-                Aeta = potentials.Aeta
+            charge_evolve.compute(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta)
+            Q1 = charge_evolve.Q
+            Qsq = charge_evolve.Q2[0].real
+            output['qsq'].append(Qsq)
+            logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq0))
 
-                # Update momenta using Euler, with fields evaluated at nearest lattice points
-                ptau1, ptau2, px1, py1, peta1 = update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, mass, E0)
+            # [(GeV / fm) ** 2]
+            units = (E0 ** 2 / hbarc) ** 2 / p['G'] ** 2
 
-                # Convert to physical units
-                pmu.append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
-                constraint.append(E0*(ptau2-ptau1))
+            E = electric_fields.compute(xhq, yhq)
+            F = lorentz_force.compute(xhq, yhq, ptau0, px0, py0, peta0, current_tau)
 
-                charge_evolve.compute(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta)
-                Q1 = charge_evolve.Q
-                Qsq = charge_evolve.Q2[0].real
-                qsq.append(Qsq)
-                logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq0))
+            EformE = compute_correlator(force_correlators, tags_e, Eform, E, Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta, xmu0[1]/a, xmu0[2]/a, units)
+            FformF = compute_correlator(force_correlators, tags_f, Fform, F, Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta, xmu0[1]/a, xmu0[2]/a, units)
 
-                # [(GeV / fm) ** 2]
-                units = (E0 ** 2 / hbarc) ** 2 / p['G'] ** 2
+            for tag in tags_e:
+                all_EformE[tag].append(EformE[tag])
+            for tag in tags_f:
+                all_FformF[tag].append(FformF[tag])
 
-                E = electric_fields.compute(xhq, yhq)
-                F = lorentz_force.compute(xhq, yhq, ptau0, px0, py0, peta0, current_tau)
-
-                force_correlators.compute('naive', Eform[0], Eform[1], Eform[2], E[0], E[1], E[2], Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta)
-                ExformEx, EyformEy, EzformEz = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz
-
-                print('EformE=', (ExformEx+EyformEy+EzformEz)*units)
-                # print('ExformEx=', ExformEx*units)
-                # print('EyformEy=', EyformEy*units)
-                # print('EzformEz=', EzformEz*units)
-            
-                Uxhq, Uyhq = force_correlators.Uxhq, force_correlators.Uyhq
-
-                force_correlators.compute('naive', Fform[0], Fform[1], Fform[2], F[0], F[1], F[2], Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_eta)
-                FxformFx, FyformFy, FzformFz = force_correlators.fxformfx, force_correlators.fyformfy, force_correlators.fzformfz
-
-                # print('FformF=', (FxformFx+FyformFy+FzformFz)*units)
-                print('FxformFx=', FxformFx*units)
-                # print('FyformFy=', FyformFy*units)
-                print('FzformFz=', FzformFz*units)
+            Uxhq, Uyhq = force_correlators.Uxhq, force_correlators.Uyhq
 
 
             # Convert to physical units
@@ -318,13 +319,15 @@ def simulate(p, xmu0, pmu0, q0, seed):
             Q0 = Q1
             Uxhq0, Uyhq0 = Uxhq, Uyhq
 
+    output['EformE'], output['FformF'] = all_EformE, all_FformF
+
     if use_cuda:
         s.copy_to_host()
         cuda.current_context().deallocations.clear()
 
     logging.info("Simulation complete!")
 
-    return xmu, pmu, constraint, qsq
+    return output
 
 """
     Create folders to store the files resulting from the simulations
@@ -360,48 +363,52 @@ with open('parameters.pickle', 'wb') as handle:
     The number of quarks or antiquarks in enlarged by a given number of test particles
 """
 
-for ne in tqdm(range(p['NEVENTS']), desc="Events", position=0):
-    logging.info("Simulating event {}/{}".format(ne, nevents))
+# Initializing progress bar objects
+# Source: https://stackoverflow.com/questions/60928718/python-how-to-replace-tqdm-progress-bar-by-next-one-in-nested-loop
+outer_loop=tqdm(range(p['NEVENTS']), desc="Event", position=0)
+mid_loop=tqdm(range(p['NQ']), desc="Quark antiquark pair", position=1)
+inner_loop=tqdm(range(p['NTP']), desc="Test particle", position=2)
+
+
+for ev in range(len(outer_loop)):
+    logging.info("Simulating event {}/{}".format(ev+1, nevents))
     # Fixing the seed in a certain event
-    seed = ne
+    seed = ev
 
-    for qi in tqdm(range(p['NQ']), desc="Quark antiquark pairs", position=1, leave=bool(ne == (p['NEVENTS']-1))):
+    mid_loop.refresh() 
+    mid_loop.reset() 
+    outer_loop.update() 
 
-        xmu0 = initial_coords(p)
-        pmu0 = initial_momenta(p)
+    for q in range(len(mid_loop)):
+        logging.info("Simulating quark antiquark pair {}/{}".format(q+1, p['NQ']))
 
-        # Quark
-        q0 = initial_charge(p)
-        logging.info("Simulating quark {}/{}".format(qi, p['NQ']))
+        inner_loop.refresh()  
+        inner_loop.reset()  
+        mid_loop.update()  
 
-        for tp in tqdm(range(p['NTP']), desc="Quark test particles", position=2, leave=bool(ne == (p['NQ']-1))):
-            time_i = time.time()
-            logging.info("Simulating test particle {}/{}".format(tp, p['NTP']))
+        for tp in range(len(inner_loop)):
+            xmu0 = initial_coords(p)
+            pmu0 = initial_momenta(p)
 
-            xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
+            # Quark
+            logging.info("Simulating quark test particle {}/{}".format(tp+1, p['NTP']))
+            q0 = initial_charge(p)
 
-            filename = 'q_' + str(qi+1) + '_tp_' + str(tp+1) + '.npz'
-            np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq)
+            output = simulate(p, xmu0, pmu0, q0, seed)
 
-            time_f = time.time()
-            logging.info('Simulation time for a single quark test particle: {:5.2f}s'.format(time_f-time_i))
-            time.sleep(0.1)
+            filename = 'ev_' + str(ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1) + '.pickle'
+            with open(filename, 'wb') as handle:
+                pickle.dump(output, handle)
 
-        # Antiquark
-        q0 = initial_charge(p)
-        pmu0 = [pmu0[0], -pmu0[1], -pmu0[2], pmu0[3]]
-        logging.info("Simulating antiquark {}/{}".format(qi, nq))
-        for tp in tqdm(range(p['NTP']), desc="Antiquark test particles", position=2, leave=bool(ne == (p['NQ']-1))):
-            time_i = time.time()
-            logging.info("Simulating test particle {}/{}".format(tp, p['NTP']))
+            # Antiquark having opposite momentum and random color charge
+            logging.info("Simulating antiquark test particle {}/{}".format(tp+1, p['NTP']))
+            q0 = initial_charge(p)
+            pmu0 = [pmu0[0], -pmu0[1], -pmu0[2], pmu0[3]]
 
-            xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
+            output = simulate(p, xmu0, pmu0, q0, seed)
 
-            filename = 'aq_' + str(qi+1) + '_tp_' + str(tp+1) + '.npz'
-            np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq)
+            filename = 'ev_' + str(ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1) + '.pickle'
+            with open(filename, 'wb') as handle:
+                pickle.dump(output, handle)
 
-            time_f = time.time()
-            logging.info('Simulation time for a single antiquark test particle: {:5.2f}s'.format(time_f-time_i))
-            time.sleep(0.1)
-        
-        time.sleep(0.1)
+            inner_loop.update()    

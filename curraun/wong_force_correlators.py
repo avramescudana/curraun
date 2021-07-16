@@ -212,16 +212,12 @@ class ForceCorrelators:
         self.s = s
         self.n = s.n
 
-        self.fxformfx = np.zeros(1, dtype=su.GROUP_TYPE_REAL)
-        self.fyformfy = np.zeros(1, dtype=su.GROUP_TYPE_REAL)
-        self.fzformfz = np.zeros(1, dtype=su.GROUP_TYPE_REAL)
+        self.fformf = np.zeros((3, 3), dtype=su.GROUP_TYPE_REAL)
 
         self.Uxhq = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
         self.Uyhq = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
 
-        self.d_fxformfx = self.fxformfx
-        self.d_fyformfy = self.fyformfy
-        self.d_fzformfz = self.fzformfz
+        self.d_fformf = self.fformf
 
         self.d_Uxhq = self.Uxhq
         self.d_Uyhq = self.Uyhq
@@ -230,22 +226,20 @@ class ForceCorrelators:
             self.copy_to_device()
 
     def copy_to_device(self):
-        self.d_fxformfx = cuda.to_device(self.fxformfx)
-        self.d_fyformfy = cuda.to_device(self.fyformfy)
-        self.d_fzformfz = cuda.to_device(self.fzformfz)
+
+        self.d_fformf = cuda.to_device(self.fformf)
 
         self.d_Uxhq = cuda.to_device(self.Uxhq)
         self.d_Uyhq = cuda.to_device(self.Uyhq)
 
     def copy_to_host(self):
-        self.d_fxformfx.copy_to_host(self.fxformfx)
-        self.d_fyformfy.copy_to_host(self.fyformfy)
-        self.d_fzformfz.copy_to_host(self.fzformfz)
+
+        self.d_fformf.copy_to_host(self.fformf)
 
         self.d_Uxhq.copy_to_host(self.Uxhq)
         self.d_Uyhq.copy_to_host(self.Uyhq)
 
-    def compute(self, tag, Fxform, Fyform, Fzform, Fx, Fy, Fz, Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_etahq):
+    def compute(self, tag, Fform, F, Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_etahq):
 
         u0 = self.s.d_u0
         n = self.n
@@ -253,9 +247,9 @@ class ForceCorrelators:
         aeta0 = self.s.d_aeta0
 
         threadsperblock = 32
-        blockspergrid = (Fx.size + (threadsperblock - 1)) // threadsperblock
+        blockspergrid = (F[0].size + (threadsperblock - 1)) // threadsperblock
         if tag=='naive':
-            force_correlator_naive_kernel[blockspergrid, threadsperblock](Fxform, Fyform, Fzform, Fx, Fy, Fz, self.d_fxformfx, self.d_fyformfy, self.d_fzformfz)
+            force_correlator_naive_kernel[blockspergrid, threadsperblock](Fform, F, self.d_fformf)
 
         blockspergrid = (Uxhq0.size + (threadsperblock - 1)) // threadsperblock
 
@@ -273,18 +267,15 @@ class ForceCorrelators:
         if (yhq==yhq0):
             U_same[blockspergrid, threadsperblock](Uyhq0, self.d_Uyhq)
 
-        blockspergrid = (Fx.size + (threadsperblock - 1)) // threadsperblock
         if tag=='UxUy':
-            force_correlator_UxUy_kernel[blockspergrid, threadsperblock](Fxform, Fyform, Fzform, Fx, Fy, Fz, self.d_Uxhq, self.d_Uyhq, self.d_fxformfx, self.d_fyformfy, self.d_fzformfz)
+            force_correlator_UxUy_kernel[blockspergrid, threadsperblock](Fform, F, self.d_Uxhq, self.d_Uyhq, self.d_fformf)
         elif tag=='UxUyAeta':
-            force_correlator_UxUyAeta_kernel[blockspergrid, threadsperblock](Fxform, Fyform, Fzform, Fx, Fy, Fz, self.d_Uxhq, self.d_Uyhq, xhq, yhq, n, delta_etahq, aeta0, self.d_fxformfx, self.d_fyformfy, self.d_fzformfz)
+            force_correlator_UxUyAeta_kernel[blockspergrid, threadsperblock](Fform, F, self.d_Uxhq, self.d_Uyhq, xhq, yhq, n, delta_etahq, aeta0, self.d_fformf)
         elif tag=='AetaUxUy':
-            force_correlator_AetaUxUy_kernel[blockspergrid, threadsperblock](Fxform, Fyform, Fzform, Fx, Fy, Fz, self.d_Uxhq, self.d_Uyhq, xhq, yhq, n, delta_etahq, aeta0, self.d_fxformfx, self.d_fyformfy, self.d_fzformfz)
+            force_correlator_AetaUxUy_kernel[blockspergrid, threadsperblock](Fform, F, self.d_Uxhq, self.d_Uyhq, xhq, yhq, n, delta_etahq, aeta0, self.d_fformf)
         
         if use_cuda:
             self.copy_to_host()
-
-        # return [self.d_fxformfx, self.d_fyformfy, self.d_fzformfz]
 
 @mycudajit
 def U_same(U0, U):
@@ -311,54 +302,40 @@ def Uy_down(Uyhq0, xhq, yhq, n, u0, Uyhq):
     su.store(Uyhq, su.mul(Uyhq0, su.dagger(u0[xs, 1])))
 
 @mycudajit
-def force_correlator_naive_kernel(Fxform, Fyform, Fzform, Fx, Fy, Fz, fxformfx, fyformfy, fzformfz):
-    
-    fxformfx[:] = su.tr(su.mul(Fx, su.dagger(Fxform))).real
-    fyformfy[:] = su.tr(su.mul(Fy, su.dagger(Fyform))).real
-    fzformfz[:] = su.tr(su.mul(Fz, su.dagger(Fzform))).real
+def force_correlator_naive_kernel(Fform, F, fformf):
+    for i in range(3):
+        for j in range(3):
+            fformf[i, j] = su.tr(su.mul(F[j], su.dagger(Fform[i]))).real
 
 @mycudajit
-def force_correlator_UxUy_kernel(Fxform, Fyform, Fzform, Fx, Fy, Fz, Uxhq, Uyhq, fxformfx, fyformfy, fzformfz):
-    
-    FxformUxUy = l.act(su.mul(Uxhq, Uyhq), Fxform)
-    fxformfx[:] = su.tr(su.mul(Fx, su.dagger(FxformUxUy))).real
-
-    FyformUxUy = l.act(su.mul(Uxhq, Uyhq), Fyform)
-    fyformfy[:] = su.tr(su.mul(Fy, su.dagger(FyformUxUy))).real
-
-    FzformUxUy = l.act(su.mul(Uxhq, Uyhq), Fzform)
-    fzformfz[:] = su.tr(su.mul(Fz, su.dagger(FzformUxUy))).real
+def force_correlator_UxUy_kernel(Fform, F, Uxhq, Uyhq, fformf):
+    for i in range(3):
+        FformUxUy = l.act(su.mul(Uxhq, Uyhq), Fform[i])
+        for j in range(3):
+            fformf[i, j] = su.tr(su.mul(F[j], su.dagger(FformUxUy))).real
 
 
 @mycudajit
-def force_correlator_UxUyAeta_kernel(Fxform, Fyform, Fzform, Fx, Fy, Fz, Uxhq, Uyhq, xhq, yhq, n, delta_etahq, aeta0, fxformfx, fyformfy, fzformfz):
+def force_correlator_UxUyAeta_kernel(Fform, F, Uxhq, Uyhq, xhq, yhq, n, delta_etahq, aeta0, fformf):
     
     xs = l.get_index(xhq, yhq, n)
     Uetahq = su.mexp(su.mul_s(aeta0[xs, :], delta_etahq))
     UxUyUetahq = su.mul(su.mul(Uxhq, Uyhq), Uetahq)
 
-    FxformUxUyAeta = l.act(UxUyUetahq, Fxform)
-    fxformfx[:] = su.tr(su.mul(Fx, su.dagger(FxformUxUyAeta))).real
-
-    FyformUxUyAeta = l.act(UxUyUetahq, Fyform)
-    fyformfy[:] = su.tr(su.mul(Fy, su.dagger(FyformUxUyAeta))).real
-
-    FzformUxUyAeta = l.act(UxUyUetahq, Fzform)
-    fzformfz[:] = su.tr(su.mul(Fz, su.dagger(FzformUxUyAeta))).real
+    for i in range(3):
+        FformUxUyAeta = l.act(UxUyUetahq, Fform[i])
+        for j in range(3):
+            fformf[i, j] = su.tr(su.mul(F[j], su.dagger(FformUxUyAeta))).real
 
 
 @mycudajit
-def force_correlator_AetaUxUy_kernel(Fxform, Fyform, Fzform, Fx, Fy, Fz, Uxhq, Uyhq, xhq, yhq, n, delta_etahq, aeta0, fxformfx, fyformfy, fzformfz):
+def force_correlator_AetaUxUy_kernel(Fform, F, Uxhq, Uyhq, xhq, yhq, n, delta_etahq, aeta0, fformf):
     
     xs = l.get_index(xhq, yhq, n)
     Uetahq = su.mexp(su.mul_s(aeta0[xs, :], delta_etahq))
-    UxUyUetahq = su.mul(Uetahq, su.mul(Uxhq, Uyhq))
+    UetaUxUyhq = su.mul(Uetahq, su.mul(Uxhq, Uyhq))
 
-    FxformAetaUxUy = l.act(UxUyUetahq, Fxform)
-    fxformfx[:] = su.tr(su.mul(Fx, su.dagger(FxformAetaUxUy))).real
-
-    FyformAetaUxUy = l.act(UxUyUetahq, Fyform)
-    fyformfy[:] = su.tr(su.mul(Fy, su.dagger(FyformAetaUxUy))).real
-
-    FzformAetaUxUy = l.act(UxUyUetahq, Fzform)
-    fzformfz[:] = su.tr(su.mul(Fz, su.dagger(FzformAetaUxUy))).real
+    for i in range(3):
+        FformAetaUxUy = l.act(UetaUxUyhq, Fform[i])
+        for j in range(3):
+            fformf[i, j] = su.tr(su.mul(F[j], su.dagger(FformAetaUxUy))).real
