@@ -195,6 +195,8 @@ class InitialColorCharge:
         self.d_Q = self.Q
         self.Q2 = np.zeros(1, dtype=su.GROUP_TYPE)
         self.d_Q2 = self.Q2
+        self.Q3 = np.zeros(1, dtype=su.GROUP_TYPE)
+        self.d_Q3 = self.Q3
 
         if use_cuda:
             self.copy_to_device()
@@ -202,22 +204,33 @@ class InitialColorCharge:
     def copy_to_device(self):
         self.d_Q = cuda.to_device(self.Q)
         self.d_Q2 = cuda.to_device(self.Q2)
+        self.d_Q3 = cuda.to_device(self.Q3)
 
     def copy_to_host(self):
         self.d_Q.copy_to_host(self.Q)
         self.d_Q2.copy_to_host(self.Q2)
+        self.d_Q3.copy_to_host(self.Q3)
 
-    def compute(self, q0):
+    def compute(self, su_group, q0):
 
         threadsperblock = 32
         blockspergrid = (q0.size + (threadsperblock - 1)) // threadsperblock
-        initial_charge_kernel[blockspergrid, threadsperblock](q0, self.d_Q, self.d_Q2)
+        if su_group=='su3':
+            initial_charge_su3_kernel[blockspergrid, threadsperblock](q0, self.d_Q, self.d_Q2, self.d_Q3)
+        else:
+            initial_charge_su2_kernel[blockspergrid, threadsperblock](q0, self.d_Q, self.d_Q2)
 
         if use_cuda:
             self.copy_to_host()
 
 @mycudajit
-def initial_charge_kernel(q0, Q, Q2):
+def initial_charge_su3_kernel(q0, Q, Q2, Q3):
+    Q[:] = su.get_algebra_element(q0)
+    Q2[:] = su.sq(Q[:]).real
+    Q3[:] = su.tr(su.mul(Q[:],su.mul(Q[:], su.dagger(Q[:])))).imag
+
+@mycudajit
+def initial_charge_su2_kernel(q0, Q, Q2):
     Q[:] = su.get_algebra_element(q0)
     Q2[:] = su.sq(Q[:]).real
 
@@ -231,6 +244,8 @@ class ColorChargeEvolve:
         self.d_Q = self.Q
         self.Q2 = np.zeros(su.ALGEBRA_ELEMENTS, dtype=su.GROUP_TYPE)
         self.d_Q2 = self.Q2
+        self.Q3 = np.zeros(1, dtype=su.GROUP_TYPE)
+        self.d_Q3 = self.Q3
 
         if use_cuda:
             self.copy_to_device()
@@ -238,23 +253,44 @@ class ColorChargeEvolve:
     def copy_to_device(self):
         self.d_Q = cuda.to_device(self.Q)
         self.d_Q2 = cuda.to_device(self.Q2)
+        self.d_Q3 = cuda.to_device(self.Q3)
 
     def copy_to_host(self):
         self.d_Q.copy_to_host(self.Q)
         self.d_Q2.copy_to_host(self.Q2)
+        self.d_Q3.copy_to_host(self.Q3)
 
-    def compute(self, Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta):
+    def compute(self, su_group, Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta):
 
         threadsperblock = 32
         blockspergrid = (Q0.size + (threadsperblock - 1)) // threadsperblock
-        evolve_charge_kernel[blockspergrid, threadsperblock](Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, self.d_Q, self.d_Q2)
+        if su_group=='su3':
+            evolve_charge_su3_kernel[blockspergrid, threadsperblock](Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, self.d_Q, self.d_Q2, self.d_Q3)
+        else:
+            evolve_charge_su2_kernel[blockspergrid, threadsperblock](Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, self.d_Q, self.d_Q2)
 
         if use_cuda:
             self.copy_to_host()
 
 
 @mycudajit
-def evolve_charge_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, Q, Q2):
+def evolve_charge_su3_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, Q, Q2, Q3):
+    commQAx = l.comm(Q0, Ax)
+    commQAy = l.comm(Q0, Ay)
+    commQAeta = l.comm(Q0, Aeta)
+    
+    prodx = su.mul_s(commQAx, px0)
+    prody = su.mul_s(commQAy, py0)
+    prodeta = su.mul_s(commQAeta, peta0)
+    sum1 = su.add(prodx, prody)
+    sum2 = su.add(sum1, prodeta)
+    res1 = su.mul_s(sum2, tau_step / ptau0)
+    Q[:] = su.add(Q0, res1)
+    Q2[:] = su.sq(Q[:]).real
+    Q3[:] = su.tr(su.mul(Q[:], su.mul(Q[:], su.dagger(Q[:])))).imag
+
+@mycudajit
+def evolve_charge_su2_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, Q, Q2):
     commQAx = l.comm(Q0, Ax)
     commQAy = l.comm(Q0, Ay)
     commQAeta = l.comm(Q0, Aeta)
@@ -306,15 +342,34 @@ def initial_charge(p):
         phi1, phi2, phi3 = np.random.uniform(), np.random.uniform(), np.random.uniform()
         # phi1, phi2, phi3 = np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi)
         # Momenta Darboux variables
-        pi3 = np.random.uniform(0, (J1+J2)/2)
-        pi2 = np.random.uniform((J2-J1)/np.sqrt(3), (J1-J2)/(2*np.sqrt(3)))
-        pi1 = np.random.uniform(-pi3, pi3)
+        # Fixed J1 and J2
+        # pi3 = np.random.uniform(0, (J1+J2)/2)
+        # pi2 = np.random.uniform((J2-J1)/np.sqrt(3), (J1-J2)/(2*np.sqrt(3)))
+        # pi1 = np.random.uniform(-pi3, pi3)
+        # A = np.sqrt(((J1-J2)/3+pi3+pi2/np.sqrt(3))*((J1+2*J2)/3+pi3+pi2/np.sqrt(3))*((2*J1+J2)/3-pi3-pi2/np.sqrt(3)))/(2*pi3)
+        # B = np.sqrt(((J2-J1)/3+pi3-pi2/np.sqrt(3))*((J1+2*J2)/3-pi3+pi2/np.sqrt(3))*((2*J1+J2)/3+pi3-pi2/np.sqrt(3)))/(2*pi3)
+
+        search = True
+        while search:
+            pi2, pi3 = np.random.uniform(), np.random.uniform()
+            pi1 = np.random.uniform(-pi3, pi3)
+
+            # numA = 20-np.sqrt(3)*pi2**3+36*pi3-9*pi2**2*pi3-9*pi3**3-12*np.sqrt(3)*pi2-9*np.sqrt(3)*pi2*pi3**2
+            # numB = -20+np.sqrt(3)*pi2**3+36*pi3-9*pi2**2*pi3-9*pi3**3-12*np.sqrt(3)*pi2+9*np.sqrt(3)*pi2*pi3**2
+            numA = ((J1-J2)/3+pi3+pi2/np.sqrt(3))*((J1+2*J2)/3+pi3+pi2/np.sqrt(3))*((2*J1+J2)/3-pi3-pi2/np.sqrt(3))
+            numB = ((J2-J1)/3+pi3-pi2/np.sqrt(3))*((J1+2*J2)/3-pi3+pi2/np.sqrt(3))*((2*J1+J2)/3+pi3-pi2/np.sqrt(3))
+
+            if (numA>0) & (numB>0):
+                search = False
+
+        # A = np.sqrt(numA)/(6*pi3)
+        # B = np.sqrt(numB)/(6*pi3)
+        A = np.sqrt(numA)/(2*pi3)
+        B = np.sqrt(numB)/(2*pi3)
 
         pip, pim = np.sqrt(pi3+pi1), np.sqrt(pi3-pi1)
         Cpp, Cpm, Cmp, Cmm = np.cos((phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((phi1+np.sqrt(3)*phi2-phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2-phi3)/2)
         Spp, Spm, Smp, Smm = np.sin((phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((phi1+np.sqrt(3)*phi2-phi3)/2), np.sin((-phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((-phi1+np.sqrt(3)*phi2-phi3)/2)
-        A = np.sqrt(((J1-J2)/3+pi3+pi2/np.sqrt(3))*((J1+2*J2)/3+pi3+pi2/np.sqrt(3))*((2*J1+J2)/3-pi3-pi2/np.sqrt(3)))/(2*pi3)
-        B = np.sqrt(((J2-J1)/3+pi3-pi2/np.sqrt(3))*((J1+2*J2)/3-pi3+pi2/np.sqrt(3))*((2*J1+J2)/3+pi3-pi2/np.sqrt(3)))/(2*pi3)
 
         # Color charges
         Q1 = np.cos(phi1) * pip * pim

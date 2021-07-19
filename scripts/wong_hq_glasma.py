@@ -1,5 +1,4 @@
 import numpy as np
-import time
 import argparse
 from tqdm import tqdm
 import pickle
@@ -8,15 +7,15 @@ import logging, sys
 numba_logger = logging.getLogger('numba')
 numba_logger.setLevel(logging.WARNING)
 # Format logging messages, set level=logging.DEBUG or logging.INFO for more information printed out, logging.WARNING for basic info
-logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format='%(message)s')
+logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format='%(message)s')
 
 """
     Default simulation parameters chosen for Pb-Pb at 5.02 TeV
 """
 
 # General parameters
-su_group = 'su2'
-folder = 'pb+pb_5020gev_su2_interp_pT_0.5'
+su_group = 'su2'        # Gauge group
+folder = 'pb+pb_5020gev_su2_interp_pT_0.5'      # Results folder
 
 # Simulation box parameters
 L = 10      # Length of simulation box [fm]
@@ -54,7 +53,7 @@ interp = 'yes'     # Interpolate fields or use nearest lattice points
 p = {
     # General parameters
     'GROUP':    su_group,       # SU(2) or SU(3) group
-    'FOLDER':   folder ,         # results folder
+    'FOLDER':   folder,         # results folder
 
     # Parameters for simulation box
     'L':    L,           # transverse size [fm]
@@ -175,6 +174,8 @@ def simulate(p, xmu0, pmu0, q0, seed):
         s.copy_to_device()
 
     xmu, pmu, constraint, qsq = [], [], [], []
+    if p['GROUP']=='su3':
+        qcub = []
 
     for t in range(maxt):
         core.evolve_leapfrog(s)
@@ -189,13 +190,17 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x0, a*y0, eta0))
                 logging.debug("Momenta: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(E0*ptau0, E0*px0, E0*py0, E0/a*peta0))
 
-                charge_initial.compute(q0)
+                charge_initial.compute(p['GROUP'], q0)
                 Q0 = charge_initial.Q
                 Qsq0 = charge_initial.Q2[0].real
                 qsq.append(Qsq0)
                 logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq0))
+                if p['GROUP']=='su3':
+                    Qcub0 = charge_initial.Q3[0].real
+                    qcub.append(Qcub0)
+                    logging.debug("Cubic Casimir: {:3.3f}".format(Qcub0))
 
-                if interp=='yes':
+                if p['INTERP']=='yes':
                     logging.info('Interpolating fields...')
                 else:
                     logging.info('Approximating by nearest lattice points...')
@@ -207,7 +212,7 @@ def simulate(p, xmu0, pmu0, q0, seed):
             # Convert to physical units
             xmu.append([a*current_tau, a*x1, a*y1, eta1])
 
-            if interp=='yes':                
+            if p['INTERP']=='yes':                
                 trQE_interp, trQB_interp = interpfield(x0, y0, Q0, fields)
                 Ax_interp, Ay_interp, Aeta_interp = interppotential(x0, y0, 'x', potentials), interppotential(x0, y0, 'y', potentials), interppotential(x0, y0, 'eta', potentials)
 
@@ -218,13 +223,16 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 pmu.append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
                 constraint.append(E0*(ptau2-ptau1))
 
-                charge_evolve.compute(Q0, tau_step, ptau0, px0, py0, peta0, Ax_interp, Ay_interp, Aeta_interp)
+                charge_evolve.compute(p['GROUP'], Q0, tau_step, ptau0, px0, py0, peta0, Ax_interp, Ay_interp, Aeta_interp)
                 Q1 = charge_evolve.Q
                 Qsq = charge_evolve.Q2[0].real
                 qsq.append(Qsq)
-                logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq0))
-               
-            elif interp=='no':
+                logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq))
+                if p['GROUP']=='su3':
+                    Qcub = charge_evolve.Q3[0].real
+                    qcub.append(Qcub)
+                    logging.debug("Cubic Casimir: {:3.3f}".format(Qcub))
+            else:
                 # Approximate the position of the quark with closest lattice point
                 # Locations where transverse gauge fields extracted from gauge links are evaluated, in the middle of lattice sites
                 xhq, yhq = int(round(x0)), int(round(y0))
@@ -247,11 +255,15 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 pmu.append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
                 constraint.append(E0*(ptau2-ptau1))
 
-                charge_evolve.compute(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta)
+                charge_evolve.compute(p['GROUP'], Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta)
                 Q1 = charge_evolve.Q
                 Qsq = charge_evolve.Q2[0].real
                 qsq.append(Qsq)
-                logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq0))
+                logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq))
+                if p['GROUP']=='su3':
+                    Qcub = charge_evolve.Q3[0].real
+                    qcub.append(Qcub)
+                    logging.debug("Cubic Casimir: {:3.3f}".format(Qcub))
 
             # Convert to physical units
             logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x1, a*y1, eta1))
@@ -274,7 +286,10 @@ def simulate(p, xmu0, pmu0, q0, seed):
 
     logging.info("Simulation complete!")
 
-    return xmu, pmu, constraint, qsq
+    if p['GROUP']=='su3':
+        return xmu, pmu, constraint, qsq, qcub
+    else: 
+        return xmu, pmu, constraint, qsq
 
 """
     Create folders to store the files resulting from the simulations
@@ -318,7 +333,7 @@ inner_loop=tqdm(range(p['NTP']), desc="Test particle", position=2)
 
 
 for ev in range(len(outer_loop)):
-    logging.info("Simulating event {}/{}".format(ev+1, nevents))
+    logging.info("\nSimulating event {}/{}".format(ev+1, nevents))
     # Fixing the seed in a certain event
     seed = ev
 
@@ -327,7 +342,7 @@ for ev in range(len(outer_loop)):
     outer_loop.update() 
 
     for q in range(len(mid_loop)):
-        logging.info("Simulating quark antiquark pair {}/{}".format(q+1, p['NQ']))
+        logging.info("\nSimulating quark antiquark pair {}/{}".format(q+1, p['NQ']))
 
         inner_loop.refresh()  
         inner_loop.reset()  
@@ -338,22 +353,29 @@ for ev in range(len(outer_loop)):
             pmu0 = initial_momenta(p)
 
             # Quark
-            logging.info("Simulating quark test particle {}/{}".format(tp+1, p['NTP']))
+            logging.info("\nSimulating quark test particle {}/{}".format(tp+1, p['NTP']))
             q0 = initial_charge(p)
 
-            xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
-
             filename = 'ev_' + str(ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1) + '.npz'
-            np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq)
+            if p['GROUP']=='su3':
+                xmu, pmu, constraint, qsq, qcub = simulate(p, xmu0, pmu0, q0, seed)
+                np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq, qcub=qcub)
+            else: 
+                xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
+                np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq)
 
             # Antiquark having opposite momentum and random color charge
-            logging.info("Simulating antiquark test particle {}/{}".format(tp+1, p['NTP']))
+            logging.info("\nSimulating antiquark test particle {}/{}".format(tp+1, p['NTP']))
             q0 = initial_charge(p)
             pmu0 = [pmu0[0], -pmu0[1], -pmu0[2], pmu0[3]]
 
-            xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
-
             filename = 'ev_' + str(ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1) + '.npz'
-            np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq) 
+            if p['GROUP']=='su3':
+                xmu, pmu, constraint, qsq, qcub = simulate(p, xmu0, pmu0, q0, seed)
+                np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq, qcub=qcub) 
+            else: 
+                xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
+                np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq) 
+
 
             inner_loop.update()    
