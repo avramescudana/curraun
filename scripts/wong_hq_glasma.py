@@ -377,5 +377,4 @@ for ev in range(len(outer_loop)):
                 xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
                 np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq) 
 
-
             inner_loop.update()    

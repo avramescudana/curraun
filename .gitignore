@@ -119,3 +119,6 @@ venv.bak/
 
 # Results
 results/
+
+# Plots
+*.png

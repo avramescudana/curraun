@@ -195,7 +195,7 @@ def lorentzforce_kernel(xhq, yhq, ptauhq, pxhq, pyhq, petahq, current_t, n, u0, 
 
     b1 = su.mul_s(Bz, -pxhq/ptauhq)
     b2 = su.add(Ey, b1)
-    b3 = su.mul_s(Bx, current_t*pyhq/ptauhq)
+    b3 = su.mul_s(Bx, current_t*petahq/ptauhq)
     Fy = su.add(b2, b3)
 
     b1 = su.mul_s(By, pxhq/ptauhq)
