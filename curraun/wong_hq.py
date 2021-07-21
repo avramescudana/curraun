@@ -383,7 +383,8 @@ def initial_charge(p):
         q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
     elif su_group=='su2':
         # J = 1
-        J = 2
+        # J = 2
+        J = 1.5
         phi, pi = np.random.uniform(), np.random.uniform(-J, J)
         # Bounded angles (0,2pi)
         # phi, pi = np.random.uniform(0, 2*np.pi), np.random.uniform(-J, J)
