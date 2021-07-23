@@ -12,7 +12,7 @@ import numpy as np
 N_C = 2  # Number of colors
 ALGEBRA_ELEMENTS = 3
 GROUP_ELEMENTS = 4
-
+CASIMIRS = 1
 
 zero_algebra = (0,0,0)
 
@@ -456,6 +456,15 @@ def proj(g, i, j):
     """
     b = mul(slist[i], mul(g, slist[j]))
     return GROUP_TYPE_REAL(0.5 * tr(b).real)
+
+@myjit
+def casimir(Q):
+    """
+    Computes the quadratic Casimir C_2. 
+    Notice that Tr{Q^2}=T(R)C_2 with T(R)=1/2 for R=F.
+    """
+    C = sq(Q).real * 2
+    return C
 
 
 """

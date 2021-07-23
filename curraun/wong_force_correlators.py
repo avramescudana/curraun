@@ -2,7 +2,7 @@
     Extraction of the electric and magnetic fields, which are then used to evaluate the correlators of color Lorentz force along HQs' trajectories.
 """
 
-from curraun.numba_target import mycudajit, use_cuda
+from curraun.numba_target import mycudajit, use_cuda, my_cuda_loop
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
@@ -41,9 +41,7 @@ class ElectricFields:
         t = self.s.t
         n = self.n
 
-        threadsperblock = 32
-        blockspergrid = (su.GROUP_ELEMENTS + (threadsperblock - 1)) // threadsperblock
-        elfields_kernel[blockspergrid, threadsperblock](xhq, yhq, n, u0, peta1, peta0, pt1, pt0, t, self.d_elfields)
+        my_cuda_loop(elfields_kernel, self.d_elfields, xhq, yhq, n, u0, peta1, peta0, pt1, pt0, t)
 
         if use_cuda:
             self.copy_to_host()
@@ -52,7 +50,7 @@ class ElectricFields:
 
 # kernels
 @mycudajit
-def elfields_kernel(xhq, yhq, n, u0, peta1, peta0, pt1, pt0, tau, lorentzforce):
+def elfields_kernel(elfields, xhq, yhq, n, u0, peta1, peta0, pt1, pt0, tau):
 
     poshq = l.get_index(xhq, yhq, n)
 
@@ -83,9 +81,9 @@ def elfields_kernel(xhq, yhq, n, u0, peta1, peta0, pt1, pt0, tau, lorentzforce):
     Ez = l.add_mul(Ez, peta0[poshq], 0.5)
 
 
-    su.store(lorentzforce[0, :], Ex)
-    su.store(lorentzforce[1, :], Ey)
-    su.store(lorentzforce[2, :], Ez)
+    su.store(elfields[0, :], Ex)
+    su.store(elfields[1, :], Ey)
+    su.store(elfields[2, :], Ez)
 
 class LorentzForce:
     def __init__(self, s):
@@ -93,7 +91,6 @@ class LorentzForce:
         self.n = s.n
 
         # Lorentz force, stored as [Fx, Fy, Fz], evaluated at a given time, in the lattice point where the HQ resides
-
         self.lorentzforce = np.zeros((3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.d_lorentzforce = self.lorentzforce
 
@@ -120,9 +117,7 @@ class LorentzForce:
         t = self.s.t
         n = self.n
 
-        threadsperblock = 32
-        blockspergrid = (su.GROUP_ELEMENTS + (threadsperblock - 1)) // threadsperblock
-        lorentzforce_kernel[blockspergrid, threadsperblock](xhq, yhq, ptauhq, pxhq, pyhq, petahq, current_t, n, u0, aeta0, peta1, peta0, pt1, pt0, t, self.d_lorentzforce)
+        my_cuda_loop(lorentzforce_kernel, self.d_lorentzforce, xhq, yhq, ptauhq, pxhq, pyhq, petahq, current_t, n, u0, aeta0, peta1, peta0, pt1, pt0, t)
 
         if use_cuda:
             self.copy_to_host()
@@ -131,7 +126,7 @@ class LorentzForce:
 
 # kernels
 @mycudajit
-def lorentzforce_kernel(xhq, yhq, ptauhq, pxhq, pyhq, petahq, current_t, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, lorentzforce):
+def lorentzforce_kernel(lorentzforce, xhq, yhq, ptauhq, pxhq, pyhq, petahq, current_t, n, u0, aeta0, peta1, peta0, pt1, pt0, tau):
 
     poshq = l.get_index(xhq, yhq, n)
 
@@ -212,15 +207,12 @@ class ForceCorrelators:
         self.s = s
         self.n = s.n
 
-        self.fformf = np.zeros((3, 3), dtype=su.GROUP_TYPE_REAL)
-
-        self.Uxhq = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
-        self.Uyhq = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
+        self.fformf = np.zeros(3, dtype=su.GROUP_TYPE_REAL)
+        self.w = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
+        my_cuda_loop(init_wilson_line_kernel, self.w)
 
         self.d_fformf = self.fformf
-
-        self.d_Uxhq = self.Uxhq
-        self.d_Uyhq = self.Uyhq
+        self.d_w = self.w
 
         if use_cuda:
             self.copy_to_device()
@@ -228,114 +220,78 @@ class ForceCorrelators:
     def copy_to_device(self):
 
         self.d_fformf = cuda.to_device(self.fformf)
-
-        self.d_Uxhq = cuda.to_device(self.Uxhq)
-        self.d_Uyhq = cuda.to_device(self.Uyhq)
+        self.d_w = cuda.to_device(self.w)
 
     def copy_to_host(self):
 
         self.d_fformf.copy_to_host(self.fformf)
+        self.d_w.copy_to_host(self.w)
 
-        self.d_Uxhq.copy_to_host(self.Uxhq)
-        self.d_Uyhq.copy_to_host(self.Uyhq)
-
-    def compute(self, tag, Fform, F, Uxhq0, Uyhq0, xhq, xhq0, yhq, yhq0, delta_etahq):
+    def compute(self, tag, Fform, F, xhq, xhq0, yhq, yhq0, delta_etahq):
 
         u0 = self.s.d_u0
         n = self.n
 
         aeta0 = self.s.d_aeta0
 
-        threadsperblock = 32
-        blockspergrid = (F[0].size + (threadsperblock - 1)) // threadsperblock
         if tag=='naive':
-            force_correlator_naive_kernel[blockspergrid, threadsperblock](Fform, F, self.d_fformf)
-
-        blockspergrid = (Uxhq0.size + (threadsperblock - 1)) // threadsperblock
+            my_cuda_loop(force_correlator_naive_kernel, Fform, F, self.d_fformf)
 
         if (xhq>xhq0):
-            Ux_up[blockspergrid, threadsperblock](Uxhq0, xhq, yhq, n, u0, self.d_Uxhq)
-        if (xhq<xhq0):
-            Ux_down[blockspergrid, threadsperblock](Uxhq0, xhq, yhq, n, u0, self.d_Uxhq)
-        if (xhq==xhq0):
-            U_same[blockspergrid, threadsperblock](Uxhq0, self.d_Uxhq)
+            my_cuda_loop(Ux_up, self.d_w, xhq, yhq, n, u0)
+        elif (xhq<xhq0):
+            my_cuda_loop(Ux_down, self.d_w, xhq, yhq, n, u0)
 
         if (yhq>yhq0):
-            Uy_up[blockspergrid, threadsperblock](Uyhq0, xhq, yhq, n, u0, self.d_Uyhq)
-        if (yhq<yhq0):
-            Uy_down[blockspergrid, threadsperblock](Uyhq0, xhq, yhq, n, u0, self.d_Uxhq)
-        if (yhq==yhq0):
-            U_same[blockspergrid, threadsperblock](Uyhq0, self.d_Uyhq)
+            my_cuda_loop(Uy_up, self.d_w, xhq, yhq, n, u0)
+        elif (yhq<yhq0):
+            my_cuda_loop(Uy_down, self.d_w, xhq, yhq, n, u0)
 
-        if tag=='UxUy':
-            force_correlator_UxUy_kernel[blockspergrid, threadsperblock](Fform, F, self.d_Uxhq, self.d_Uyhq, self.d_fformf)
-        elif tag=='UxUyAeta':
-            force_correlator_UxUyAeta_kernel[blockspergrid, threadsperblock](Fform, F, self.d_Uxhq, self.d_Uyhq, xhq, yhq, n, delta_etahq, aeta0, self.d_fformf)
-        elif tag=='AetaUxUy':
-            force_correlator_AetaUxUy_kernel[blockspergrid, threadsperblock](Fform, F, self.d_Uxhq, self.d_Uyhq, xhq, yhq, n, delta_etahq, aeta0, self.d_fformf)
-        
+        my_cuda_loop(Ueta, self.d_w, xhq, yhq, n, delta_etahq, aeta0)
+
+        if tag=='transported':
+            my_cuda_loop(force_correlator_transported_kernel, Fform, F, self.d_fformf, self.d_w)
+
         if use_cuda:
             self.copy_to_host()
 
 @mycudajit
-def U_same(U0, U):
-    su.store(U, U0)
+def init_wilson_line_kernel(w):
+    su.store(w, su.unit())
 
 @mycudajit
-def Ux_up(Uxhq0, xhq, yhq, n, u0, Uxhq):
+def Ux_up(w, xhq, yhq, n, u0):
     xs = l.get_index(xhq, yhq, n)
-    su.store(Uxhq, su.mul(Uxhq0, u0[xs, 0]))
+    su.store(w, su.mul(w, u0[xs, 0]))
 
 @mycudajit
-def Ux_down(Uxhq0, xhq, yhq, n, u0, Uxhq):
+def Ux_down(w, xhq, yhq, n, u0):
     xs = l.get_index(xhq, yhq, n)
-    su.store(Uxhq, su.mul(Uxhq0, su.dagger(u0[xs, 0])))
+    su.store(w, su.mul(w, su.dagger(u0[xs, 0])))
 
 @mycudajit
-def Uy_up(Uyhq0, xhq, yhq, n, u0, Uyhq):
+def Uy_up(w, xhq, yhq, n, u0):
     xs = l.get_index(xhq, yhq, n)
-    su.store(Uyhq, su.mul(Uyhq0, u0[xs, 1]))
+    su.store(w, su.mul(w, u0[xs, 1]))
 
 @mycudajit
-def Uy_down(Uyhq0, xhq, yhq, n, u0, Uyhq):
+def Uy_down(w, xhq, yhq, n, u0):
     xs = l.get_index(xhq, yhq, n)
-    su.store(Uyhq, su.mul(Uyhq0, su.dagger(u0[xs, 1])))
+    su.store(w, su.mul(w, su.dagger(u0[xs, 1])))
+
+@mycudajit
+def Ueta(w, xhq, yhq, n, delta_etahq, aeta0):
+    xs = l.get_index(xhq, yhq, n)
+    buf = su.mexp(su.mul_s(aeta0[xs], delta_etahq))
+    su.store(w, su.mul(w, buf))
 
 @mycudajit
 def force_correlator_naive_kernel(Fform, F, fformf):
     for i in range(3):
-        for j in range(3):
-            fformf[i, j] = su.tr(su.mul(F[j], su.dagger(Fform[i]))).real
+        fformf[i] = su.tr(su.mul(F[i], su.dagger(Fform[i]))).real
 
 @mycudajit
-def force_correlator_UxUy_kernel(Fform, F, Uxhq, Uyhq, fformf):
+def force_correlator_transported_kernel(Fform, F, fformf, w):
     for i in range(3):
-        FformUxUy = l.act(su.mul(Uxhq, Uyhq), Fform[i])
-        for j in range(3):
-            fformf[i, j] = su.tr(su.mul(F[j], su.dagger(FformUxUy))).real
-
-
-@mycudajit
-def force_correlator_UxUyAeta_kernel(Fform, F, Uxhq, Uyhq, xhq, yhq, n, delta_etahq, aeta0, fformf):
-    
-    xs = l.get_index(xhq, yhq, n)
-    Uetahq = su.mexp(su.mul_s(aeta0[xs, :], delta_etahq))
-    UxUyUetahq = su.mul(su.mul(Uxhq, Uyhq), Uetahq)
-
-    for i in range(3):
-        FformUxUyAeta = l.act(UxUyUetahq, Fform[i])
-        for j in range(3):
-            fformf[i, j] = su.tr(su.mul(F[j], su.dagger(FformUxUyAeta))).real
-
-
-@mycudajit
-def force_correlator_AetaUxUy_kernel(Fform, F, Uxhq, Uyhq, xhq, yhq, n, delta_etahq, aeta0, fformf):
-    
-    xs = l.get_index(xhq, yhq, n)
-    Uetahq = su.mexp(su.mul_s(aeta0[xs, :], delta_etahq))
-    UetaUxUyhq = su.mul(Uetahq, su.mul(Uxhq, Uyhq))
-
-    for i in range(3):
-        FformAetaUxUy = l.act(UetaUxUyhq, Fform[i])
-        for j in range(3):
-            fformf[i, j] = su.tr(su.mul(F[j], su.dagger(FformAetaUxUy))).real
+        UdagFformU = l.act(w, Fform[i])
+        fformf[i] = su.tr(su.mul(F[i], su.dagger(UdagFformU))).real

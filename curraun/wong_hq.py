@@ -2,12 +2,12 @@
     Computes various quantities used in solving Wong's equations for a HQ immersed in the fields of the Glasma.
 """
 
-from curraun.numba_target import use_cuda, mycudajit
-import numpy as np
+from curraun.numba_target import use_cuda, mycudajit, my_cuda_loop
 import curraun.lattice as l
 import curraun.su as su
 if use_cuda:
     import numba.cuda as cuda
+import numpy as np
 import math
 from scipy.interpolate import griddata
 
@@ -50,9 +50,7 @@ class WongFields:
         t = self.s.t
         n = self.n
 
-        threadsperblock = 32
-        blockspergrid = (Q0.size + (threadsperblock - 1)) // threadsperblock
-        fields_kernel[blockspergrid, threadsperblock](Q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, t, self.d_trQE, self.d_trQB)
+        my_cuda_loop(fields_kernel, Q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, t, self.d_trQE, self.d_trQB)
 
         if use_cuda:
             self.copy_to_host()
@@ -126,7 +124,6 @@ def fields_kernel(Q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, trQE,
     trQB[1] = su.tr(su.mul(Q0, By)).real
     trQB[2] = su.tr(su.mul(Q0, Beta)).real
 
-
 class WongPotentials:
     # Computes Ax, Ay and Aeta
     def __init__(self, s):
@@ -185,96 +182,36 @@ def Aeta_kernel(xhq, yhq, n, aeta0, Aeta):
     poshq = l.get_index(xhq, yhq, n)
     su.store(Aeta, aeta0[poshq, :])
 
-
-class InitialColorCharge:
-    # Computes the Lie algebra valued color charge from color components of initial color charge
-    def __init__(self, s):
+class ColorChargeGaugePotentials:
+    def __init__(self, s, q0):
         self.s = s
 
         self.Q = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
-        self.d_Q = self.Q
-        self.Q2 = np.zeros(1, dtype=su.GROUP_TYPE)
-        self.d_Q2 = self.Q2
-        self.Q3 = np.zeros(1, dtype=su.GROUP_TYPE)
-        self.d_Q3 = self.Q3
+        self.C = np.zeros(su.CASIMIRS, dtype=su.GROUP_TYPE)
+        my_cuda_loop(initial_charge_kernel, q0, self.Q, self.C)
+
+        self.d_Q, self.d_C = self.Q, self.C
 
         if use_cuda:
             self.copy_to_device()
 
     def copy_to_device(self):
-        self.d_Q = cuda.to_device(self.Q)
-        self.d_Q2 = cuda.to_device(self.Q2)
-        self.d_Q3 = cuda.to_device(self.Q3)
+        self.d_Q, self.d_C = cuda.to_device(self.Q), cuda.to_device(self.C)
 
     def copy_to_host(self):
         self.d_Q.copy_to_host(self.Q)
-        self.d_Q2.copy_to_host(self.Q2)
-        self.d_Q3.copy_to_host(self.Q3)
+        self.d_C.copy_to_host(self.C)
 
-    def compute(self, su_group, q0):
+    def evolve(self, Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta):
 
-        threadsperblock = 32
-        blockspergrid = (q0.size + (threadsperblock - 1)) // threadsperblock
-        if su_group=='su3':
-            initial_charge_su3_kernel[blockspergrid, threadsperblock](q0, self.d_Q, self.d_Q2, self.d_Q3)
-        else:
-            initial_charge_su2_kernel[blockspergrid, threadsperblock](q0, self.d_Q, self.d_Q2)
-
-        if use_cuda:
-            self.copy_to_host()
-
-@mycudajit
-def initial_charge_su3_kernel(q0, Q, Q2, Q3):
-    Q[:] = su.get_algebra_element(q0)
-    Q2[:] = su.sq(Q[:]).real
-    Q3[:] = su.tr(su.mul(Q[:],su.mul(Q[:], su.dagger(Q[:])))).imag
-
-@mycudajit
-def initial_charge_su2_kernel(q0, Q, Q2):
-    Q[:] = su.get_algebra_element(q0)
-    Q2[:] = su.sq(Q[:]).real
-
-class ColorChargeEvolve:
-    # Evolves the color charge and computes the quadratic Casimir, for both SU(2) and SU(3)
-    #TODO: Compute the cubic Casimir, for SU(3)
-    def __init__(self, s):
-        self.s = s
-
-        self.Q = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
-        self.d_Q = self.Q
-        self.Q2 = np.zeros(su.ALGEBRA_ELEMENTS, dtype=su.GROUP_TYPE)
-        self.d_Q2 = self.Q2
-        self.Q3 = np.zeros(1, dtype=su.GROUP_TYPE)
-        self.d_Q3 = self.Q3
-
-        if use_cuda:
-            self.copy_to_device()
-
-    def copy_to_device(self):
-        self.d_Q = cuda.to_device(self.Q)
-        self.d_Q2 = cuda.to_device(self.Q2)
-        self.d_Q3 = cuda.to_device(self.Q3)
-
-    def copy_to_host(self):
-        self.d_Q.copy_to_host(self.Q)
-        self.d_Q2.copy_to_host(self.Q2)
-        self.d_Q3.copy_to_host(self.Q3)
-
-    def compute(self, su_group, Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta):
-
-        threadsperblock = 32
-        blockspergrid = (Q0.size + (threadsperblock - 1)) // threadsperblock
-        if su_group=='su3':
-            evolve_charge_su3_kernel[blockspergrid, threadsperblock](Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, self.d_Q, self.d_Q2, self.d_Q3)
-        else:
-            evolve_charge_su2_kernel[blockspergrid, threadsperblock](Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, self.d_Q, self.d_Q2)
+        my_cuda_loop(evolve_charge_gauge_fields_kernel, Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, self.d_Q, self.d_C)
 
         if use_cuda:
             self.copy_to_host()
 
 
 @mycudajit
-def evolve_charge_su3_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, Q, Q2, Q3):
+def evolve_charge_gauge_fields_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, Q, C):
     commQAx = l.comm(Q0, Ax)
     commQAy = l.comm(Q0, Ay)
     commQAeta = l.comm(Q0, Aeta)
@@ -286,23 +223,100 @@ def evolve_charge_su3_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta,
     sum2 = su.add(sum1, prodeta)
     res1 = su.mul_s(sum2, tau_step / ptau0)
     Q[:] = su.add(Q0, res1)
-    Q2[:] = su.sq(Q[:]).real
-    Q3[:] = su.tr(su.mul(Q[:], su.mul(Q[:], su.dagger(Q[:])))).imag
+    C[:] = su.casimir(Q[:])
+
+class ColorChargeWilsonLines:
+    def __init__(self, s, q0):
+        self.s = s
+
+        self.Q = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
+        self.C = np.zeros(su.CASIMIRS, dtype=su.GROUP_TYPE)
+        my_cuda_loop(initial_charge_kernel, q0, self.Q, self.C)
+
+        self.w = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
+        my_cuda_loop(init_wilson_line_kernel, self.w)
+
+        self.d_Q, self.d_C = self.Q, self.C
+        self.d_w = self.w
+
+        if use_cuda:
+            self.copy_to_device()
+
+    def copy_to_device(self):
+        self.d_Q, self.d_C = cuda.to_device(self.Q), cuda.to_device(self.C)
+        self.d_w = cuda.to_device(self.w)
+
+    def copy_to_host(self):
+        self.d_Q.copy_to_host(self.Q)
+        self.d_C.copy_to_host(self.C)
+        self.d_w.copy_to_host(self.w)
+
+    def evolve(self, xhq, xhq0, yhq, yhq0, delta_etahq):
+
+        u0 = self.s.d_u0
+        n = self.s.n
+        aeta0 = self.s.d_aeta0
+
+        my_cuda_loop(init_wilson_line_kernel, self.d_w)
+
+        if (xhq>xhq0):
+            my_cuda_loop(Ux_up, self.d_w, xhq, yhq, n, u0)
+        elif (xhq<xhq0):
+            my_cuda_loop(Ux_down, self.d_w, xhq, yhq, n, u0)
+
+        if (yhq>yhq0):
+            my_cuda_loop(Uy_up, self.d_w, xhq, yhq, n, u0)
+        elif (yhq<yhq0):
+            my_cuda_loop(Uy_down, self.d_w, xhq, yhq, n, u0)
+
+        my_cuda_loop(Ueta, self.d_w, xhq, yhq, n, delta_etahq, aeta0)
+
+        my_cuda_loop(evolve_charge_wilson_lines_kernel, self.d_w, self.d_Q, self.d_C)
+
+        if use_cuda:
+            self.copy_to_host()
 
 @mycudajit
-def evolve_charge_su2_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, Q, Q2):
-    commQAx = l.comm(Q0, Ax)
-    commQAy = l.comm(Q0, Ay)
-    commQAeta = l.comm(Q0, Aeta)
-    
-    prodx = su.mul_s(commQAx, px0)
-    prody = su.mul_s(commQAy, py0)
-    prodeta = su.mul_s(commQAeta, peta0)
-    sum1 = su.add(prodx, prody)
-    sum2 = su.add(sum1, prodeta)
-    res1 = su.mul_s(sum2, tau_step / ptau0)
-    Q[:] = su.add(Q0, res1)
-    Q2[:] = su.sq(Q[:]).real
+def initial_charge_kernel(q0, Q, C):
+    Q[:] = su.get_algebra_element(q0)
+    C[:] = su.casimir(Q[:])
+
+@mycudajit
+def init_wilson_line_kernel(w):
+    su.store(w, su.unit())
+
+@mycudajit
+def Ux_up(w, xhq, yhq, n, u0):
+    xs = l.get_index(xhq, yhq, n)
+    su.store(w, su.mul(w, u0[xs, 0]))
+
+@mycudajit
+def Ux_down(w, xhq, yhq, n, u0):
+    xs = l.get_index(xhq, yhq, n)
+    su.store(w, su.mul(w, su.dagger(u0[xs, 0])))
+
+@mycudajit
+def Uy_up(w, xhq, yhq, n, u0):
+    xs = l.get_index(xhq, yhq, n)
+    su.store(w, su.mul(w, u0[xs, 1]))
+
+@mycudajit
+def Uy_down(w, xhq, yhq, n, u0):
+    xs = l.get_index(xhq, yhq, n)
+    su.store(w, su.mul(w, su.dagger(u0[xs, 1])))
+
+@mycudajit
+def Ueta(w, xhq, yhq, n, delta_etahq, aeta0):
+    xs = l.get_index(xhq, yhq, n)
+    buf = su.mexp(su.mul_s(aeta0[xs], delta_etahq))
+    su.store(w, su.mul(w, buf))
+
+@mycudajit
+def evolve_charge_wilson_lines_kernel(w, Q, C):
+    buf = l.act(w, Q)
+    su.store(Q, su.ah(buf))
+    C[:] = su.casimir(Q[:])
+
 
 """
     Initialize positions, momenta and color charges
@@ -334,36 +348,24 @@ def initial_momenta(p):
 def initial_charge(p):
     su_group = p['GROUP']
     if su_group=='su3':
-        # TODO: Find the correct way to initialise the SU(3) color charges
-        # Values used to compute the SU(3) and SU(2) Casimirs
+        # Values used to compute the SU(3) Casimirs
         # J1, J2 = 1, 0
         J1, J2 = 2.84801, 1.00841
         # Angle Darboux variables
         phi1, phi2, phi3 = np.random.uniform(), np.random.uniform(), np.random.uniform()
         # phi1, phi2, phi3 = np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi)
-        # Momenta Darboux variables
-        # Fixed J1 and J2
-        # pi3 = np.random.uniform(0, (J1+J2)/2)
-        # pi2 = np.random.uniform((J2-J1)/np.sqrt(3), (J1-J2)/(2*np.sqrt(3)))
-        # pi1 = np.random.uniform(-pi3, pi3)
-        # A = np.sqrt(((J1-J2)/3+pi3+pi2/np.sqrt(3))*((J1+2*J2)/3+pi3+pi2/np.sqrt(3))*((2*J1+J2)/3-pi3-pi2/np.sqrt(3)))/(2*pi3)
-        # B = np.sqrt(((J2-J1)/3+pi3-pi2/np.sqrt(3))*((J1+2*J2)/3-pi3+pi2/np.sqrt(3))*((2*J1+J2)/3+pi3-pi2/np.sqrt(3)))/(2*pi3)
 
         search = True
         while search:
             pi2, pi3 = np.random.uniform(), np.random.uniform()
             pi1 = np.random.uniform(-pi3, pi3)
 
-            # numA = 20-np.sqrt(3)*pi2**3+36*pi3-9*pi2**2*pi3-9*pi3**3-12*np.sqrt(3)*pi2-9*np.sqrt(3)*pi2*pi3**2
-            # numB = -20+np.sqrt(3)*pi2**3+36*pi3-9*pi2**2*pi3-9*pi3**3-12*np.sqrt(3)*pi2+9*np.sqrt(3)*pi2*pi3**2
             numA = ((J1-J2)/3+pi3+pi2/np.sqrt(3))*((J1+2*J2)/3+pi3+pi2/np.sqrt(3))*((2*J1+J2)/3-pi3-pi2/np.sqrt(3))
             numB = ((J2-J1)/3+pi3-pi2/np.sqrt(3))*((J1+2*J2)/3-pi3+pi2/np.sqrt(3))*((2*J1+J2)/3+pi3-pi2/np.sqrt(3))
 
             if (numA>0) & (numB>0):
                 search = False
 
-        # A = np.sqrt(numA)/(6*pi3)
-        # B = np.sqrt(numB)/(6*pi3)
         A = np.sqrt(numA)/(2*pi3)
         B = np.sqrt(numB)/(2*pi3)
 
@@ -381,10 +383,10 @@ def initial_charge(p):
         Q7 = Smp * pim * A - Smm * pip * B
         Q8 = pi2
         q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
+
     elif su_group=='su2':
         # J = 1
-        # J = 2
-        J = 1.5
+        J = np.sqrt(1.5)
         phi, pi = np.random.uniform(), np.random.uniform(-J, J)
         # Bounded angles (0,2pi)
         # phi, pi = np.random.uniform(0, 2*np.pi), np.random.uniform(-J, J)
@@ -393,6 +395,43 @@ def initial_charge(p):
         Q3 = pi
         q0 = np.array([Q1, Q2, Q3])
     return q0
+
+
+# TODO: Impose boundary conditions
+# def boundary(x1, y1, L, a):
+#     if x1<0:
+#         x1 = L-a
+#     elif x1>(L-a):
+#         x1 = a
+#     if y1<0:
+#         y1 = L-a
+#     elif y1>(L-a):
+#         y1 = a
+#     return x1, y1
+
+"""
+    Update positions and momenta using basic Euler to solve the associated Wong's equations
+"""
+
+def update_coords(x0, y0, eta0, ptau0, px0, py0, peta0, tau_step):
+    x1 = x0 + px0 / ptau0 * tau_step
+    y1 = y0 + py0 / ptau0 * tau_step
+    eta1 = eta0 + peta0 / ptau0 * tau_step
+
+    return x1, y1, eta1
+
+def update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, mass, E0):
+    # Dynkin index from Tr{T^aT^b}=T_R\delta^{ab} in fundamental representation R=F
+    # The minus sign comes from Tr{QF} from simulation being -Tr{QF} from the analytic formulas
+    tr = -1/2
+
+    px1 = px0 + tau_step / tr * (trQE[0] + trQB[2] * py0 / ptau0 - trQB[1] * peta0 * current_tau / ptau0)
+    py1 = py0 + tau_step / tr * (trQE[1] - trQB[2] * px0 / ptau0 + trQB[0] * peta0 * current_tau / ptau0)
+    peta1 = peta0 + tau_step * ((trQE[2] * ptau0 - trQB[0] * py0 + trQB[1] * px0) / tr  - 2 * peta0 * ptau0) / (current_tau * ptau0)
+    ptau1 = np.sqrt(px1 ** 2 + py1 ** 2 + (current_tau * peta1) ** 2 + (mass/E0) ** 2)
+    ptau2 = ptau0 + tau_step / tr * ((trQE[2]*peta0*current_tau + trQE[0]*px0 + trQE[1]*py0) - peta0 ** 2 * current_tau) / ptau0
+
+    return ptau1, ptau2, px1, py1, peta1
 
 """
     Interpolate fields
@@ -460,39 +499,3 @@ def interppotential(x0, y0, axis, potentials):
     A_interp = griddata(points, np.array(A), xyhq,  method='cubic')
 
     return A_interp[0]
-
-# TODO: Impose boundary conditions
-# def boundary(x1, y1, L, a):
-#     if x1<0:
-#         x1 = L-a
-#     elif x1>(L-a):
-#         x1 = a
-#     if y1<0:
-#         y1 = L-a
-#     elif y1>(L-a):
-#         y1 = a
-#     return x1, y1
-
-"""
-    Update positions and momenta using basic Euler to solve the associated Wong's equations
-"""
-
-def update_coords(x0, y0, eta0, ptau0, px0, py0, peta0, tau_step):
-    x1 = x0 + px0 / ptau0 * tau_step
-    y1 = y0 + py0 / ptau0 * tau_step
-    eta1 = eta0 + peta0 / ptau0 * tau_step
-
-    return x1, y1, eta1
-
-def update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, mass, E0):
-    # Dynkin index from Tr{T^aT^b}=T_R\delta^{ab} in fundamental representation R=F
-    # The minus sign comes from Tr{QF} from simulation being -Tr{QF} from the analytic formulas
-    tr = -1/2
-
-    px1 = px0 + tau_step / tr * (trQE[0] + trQB[2] * py0 / ptau0 - trQB[1] * peta0 * current_tau / ptau0)
-    py1 = py0 + tau_step / tr * (trQE[1] - trQB[2] * px0 / ptau0 + trQB[0] * peta0 * current_tau / ptau0)
-    peta1 = peta0 + tau_step * ((trQE[2] * ptau0 - trQB[0] * py0 + trQB[1] * px0) / tr  - 2 * peta0 * ptau0) / (current_tau * ptau0)
-    ptau1 = np.sqrt(px1 ** 2 + py1 ** 2 + (current_tau * peta1) ** 2 + (mass/E0) ** 2)
-    ptau2 = ptau0 + tau_step / tr * ((trQE[2]*peta0*current_tau + trQE[0]*px0 + trQE[1]*py0) - peta0 ** 2 * current_tau) / ptau0
-
-    return ptau1, ptau2, px1, py1, peta1

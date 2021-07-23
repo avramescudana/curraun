@@ -43,7 +43,8 @@ ntp = 10    # Number of test particles
 
 # Other numerical parameters
 nevents = 10    # Number of Glasma events
-interp = 'yes'     # Interpolate fields or use nearest lattice points
+interp = 'no'     # Interpolate fields or use nearest lattice points
+solveq = 'wilson lines'     # Solve the equation for the color charge with Wilson lines or gauge potentials
 
 
 """
@@ -78,6 +79,7 @@ p = {
     # Numerical parameters
     'NEVENTS': nevents,     # number of Glasma events
     'INTERP': interp,       # interpolate fields or use nearest lattice points
+    'SOLVEQ': solveq,       # method used to solve the equation for color charge
 
 }
 
@@ -108,6 +110,7 @@ parser.add_argument('-NTP', type=int, help="Number of test particles", default=n
 
 parser.add_argument('-NEVENTS', type=int, help="Number of events", default=nevents)
 parser.add_argument('-INTERP', type=str, help="Interpolate fields.", default=interp)
+parser.add_argument('-SOLVEQ', type=str, help="Method to evolve color charge.", default=solveq)
 
 # Parse argumentss and update parameters dictionary
 args = parser.parse_args()
@@ -115,6 +118,9 @@ data = args.__dict__
 for d in data:
     if data[d] is not None:
         p[d] = data[d]
+
+if p['SOLVEQ']=='wilson lines':
+    p['INTERP']='no'
 
 # Set environment variables 
 import os
@@ -125,6 +131,8 @@ if p['GROUP'] == 'su2':
 elif p['GROUP'] == 'su3':
     os.environ["GAUGE_GROUP"] = p['GROUP']
 
+NUM_CHECKS = True
+
 # Import relevant modules
 import curraun.core as core
 import curraun.mv as mv
@@ -133,7 +141,7 @@ initial.DEBUG = False
 from curraun.numba_target import use_cuda
 if use_cuda:
     from numba import cuda
-from curraun.wong_hq import WongFields, WongPotentials, InitialColorCharge, ColorChargeEvolve, initial_coords, initial_momenta, initial_charge, interpfield, interppotential, update_coords, update_momenta
+from curraun.wong_hq import WongFields, ColorChargeWilsonLines, WongPotentials, ColorChargeGaugePotentials, initial_coords, initial_momenta, initial_charge, interpfield, interppotential, update_coords, update_momenta
 
 # Define hbar * c in units of GeV * fm
 hbarc = 0.197326 
@@ -166,16 +174,16 @@ def simulate(p, xmu0, pmu0, q0, seed):
     initial.init(s, va, vb)
 
     fields = WongFields(s)
-    potentials = WongPotentials(s)
-    charge_initial = InitialColorCharge(s)
-    charge_evolve = ColorChargeEvolve(s)
+    if p['SOLVEQ']=='gauge potentials':
+        potentials = WongPotentials(s)  
 
     if use_cuda:
         s.copy_to_device()
 
-    xmu, pmu, constraint, qsq = [], [], [], []
-    if p['GROUP']=='su3':
-        qcub = []
+    output = {}
+    output['xmu'], output['pmu'] = [], []
+    if NUM_CHECKS:
+        output['constraint'], output['casimirs'] = [], []
 
     for t in range(maxt):
         core.evolve_leapfrog(s)
@@ -185,20 +193,24 @@ def simulate(p, xmu0, pmu0, q0, seed):
             tau_step = DT
             
             if t==formt:
-                xmu.append([a*current_tau, a*x0, a*y0, eta0])
-                pmu.append([E0*ptau0, E0*px0, E0*py0, E0/a*peta0])
+                output['xmu'].append([a*current_tau, a*x0, a*y0, eta0])
+                output['pmu'].append([E0*ptau0, E0*px0, E0*py0, E0/a*peta0])
                 logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x0, a*y0, eta0))
                 logging.debug("Momenta: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(E0*ptau0, E0*px0, E0*py0, E0/a*peta0))
 
-                charge_initial.compute(p['GROUP'], q0)
-                Q0 = charge_initial.Q
-                Qsq0 = charge_initial.Q2[0].real
-                qsq.append(Qsq0)
-                logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq0))
-                if p['GROUP']=='su3':
-                    Qcub0 = charge_initial.Q3[0].real
-                    qcub.append(Qcub0)
-                    logging.debug("Cubic Casimir: {:3.3f}".format(Qcub0))
+                if p['SOLVEQ']=='gauge potentials':
+                    charge = ColorChargeGaugePotentials(s, q0)
+                else:
+                    charge = ColorChargeWilsonLines(s, q0)
+                    xhq0, yhq0 = int(round(x0)), int(round(y0))
+
+                Q0 = charge.Q
+                if NUM_CHECKS:
+                    C = charge.C.real
+                    output['casimirs'].append(C)
+                    logging.debug("Quadratic Casimir: {:3.3f}".format(C[0]))
+                    if p['GROUP']=='su3':
+                        logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
 
                 if p['INTERP']=='yes':
                     logging.info('Interpolating fields...')
@@ -210,7 +222,7 @@ def simulate(p, xmu0, pmu0, q0, seed):
             x1, y1, eta1 = update_coords(x0, y0, eta0, ptau0, px0, py0, peta0, tau_step)
 
             # Convert to physical units
-            xmu.append([a*current_tau, a*x1, a*y1, eta1])
+            output['xmu'].append([a*current_tau, a*x1, a*y1, eta1])
 
             if p['INTERP']=='yes':                
                 trQE_interp, trQB_interp = interpfield(x0, y0, Q0, fields)
@@ -220,50 +232,61 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 ptau1, ptau2, px1, py1, peta1 = update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE_interp, trQB_interp, mass, E0)
 
                 # Convert to physical units
-                pmu.append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
-                constraint.append(E0*(ptau2-ptau1))
+                output['pmu'].append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
+                if NUM_CHECKS:
+                    output['constraint'].append(E0*(ptau2-ptau1))
 
-                charge_evolve.compute(p['GROUP'], Q0, tau_step, ptau0, px0, py0, peta0, Ax_interp, Ay_interp, Aeta_interp)
-                Q1 = charge_evolve.Q
-                Qsq = charge_evolve.Q2[0].real
-                qsq.append(Qsq)
-                logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq))
-                if p['GROUP']=='su3':
-                    Qcub = charge_evolve.Q3[0].real
-                    qcub.append(Qcub)
-                    logging.debug("Cubic Casimir: {:3.3f}".format(Qcub))
+                charge.evolve(Q0, tau_step, ptau0, px0, py0, peta0, Ax_interp, Ay_interp, Aeta_interp)
+                Q1 = charge.Q 
+                if NUM_CHECKS:
+                    C = charge.C.real
+                    output['casimirs'].append(C)
+                    logging.debug("Quadratic Casimir: {:3.3f}".format(C[0]))
+                    if p['GROUP']=='su3':
+                        logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
+
             else:
                 # Approximate the position of the quark with closest lattice point
                 # Locations where transverse gauge fields extracted from gauge links are evaluated, in the middle of lattice sites
                 xhq, yhq = int(round(x0)), int(round(y0))
-                xahq, yahq = int(round(x0-1/2)), int(round(y0-1/2))
 
                 fields.compute(Q0, xhq, yhq)
                 trQE, trQB = fields.trQE.real, fields.trQB.real
 
-                potentials.compute('x', xahq, yhq)
-                Ax = potentials.Ax
-                potentials.compute('y', xhq, yahq)
-                Ay = potentials.Ay
-                potentials.compute('eta', xhq, yhq)
-                Aeta = potentials.Aeta
+                if p['SOLVEQ']=='gauge potentials':
+                    xahq, yahq = int(round(x0-1/2)), int(round(y0-1/2))
+                    potentials.compute('x', xahq, yhq)
+                    Ax = potentials.Ax
+                    potentials.compute('y', xhq, yahq)
+                    Ay = potentials.Ay
+                    potentials.compute('eta', xhq, yhq)
+                    Aeta = potentials.Aeta
 
                 # Update momenta using Euler, with fields evaluated at nearest lattice points
                 ptau1, ptau2, px1, py1, peta1 = update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, mass, E0)
 
                 # Convert to physical units
-                pmu.append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
-                constraint.append(E0*(ptau2-ptau1))
+                output['pmu'].append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
+                if NUM_CHECKS:
+                    output['constraint'].append(E0*(ptau2-ptau1))
 
-                charge_evolve.compute(p['GROUP'], Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta)
-                Q1 = charge_evolve.Q
-                Qsq = charge_evolve.Q2[0].real
-                qsq.append(Qsq)
-                logging.debug("Quadratic Casimir: {:3.3f}".format(Qsq))
-                if p['GROUP']=='su3':
-                    Qcub = charge_evolve.Q3[0].real
-                    qcub.append(Qcub)
-                    logging.debug("Cubic Casimir: {:3.3f}".format(Qcub))
+                if p['SOLVEQ']=='gauge potentials':
+                    charge.evolve(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta)
+                else:
+                    delta_etahq = eta1-eta0
+                    charge.evolve(xhq, xhq0, yhq, yhq0, delta_etahq)
+                    if (xhq!=xhq0):
+                        xhq0=xhq
+                    if (yhq!=yhq0):
+                        yhq0=yhq
+
+                Q1 = charge.Q
+                if NUM_CHECKS:
+                    C = charge.C.real
+                    output['casimirs'].append(C)
+                    logging.debug("Quadratic Casimir: {:3.3f}".format(C[0]))
+                    if p['GROUP']=='su3':
+                        logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
 
             # Convert to physical units
             logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x1, a*y1, eta1))
@@ -286,10 +309,7 @@ def simulate(p, xmu0, pmu0, q0, seed):
 
     logging.info("Simulation complete!")
 
-    if p['GROUP']=='su3':
-        return xmu, pmu, constraint, qsq, qcub
-    else: 
-        return xmu, pmu, constraint, qsq
+    return output
 
 """
     Create folders to store the files resulting from the simulations
@@ -319,6 +339,7 @@ os.chdir(wong_path)
 # Save parameters dictionary to file
 with open('parameters.pickle', 'wb') as handle:
     pickle.dump(p, handle)
+
 
 """
     Simulate multiple Glasma events, each event with 15 quarks and 15 antiquarks, produced at the same positions as the quarks, having opposite momenta and random charge
@@ -356,25 +377,19 @@ for ev in range(len(outer_loop)):
             logging.info("\nSimulating quark test particle {}/{}".format(tp+1, p['NTP']))
             q0 = initial_charge(p)
 
-            filename = 'ev_' + str(ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1) + '.npz'
-            if p['GROUP']=='su3':
-                xmu, pmu, constraint, qsq, qcub = simulate(p, xmu0, pmu0, q0, seed)
-                np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq, qcub=qcub)
-            else: 
-                xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
-                np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq)
+            filename = 'ev_' + str(ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1) + '.pickle'
+            output = simulate(p, xmu0, pmu0, q0, seed)
+            with open(filename, 'wb') as handle:
+                pickle.dump(output, handle)
 
             # Antiquark having opposite momentum and random color charge
             logging.info("\nSimulating antiquark test particle {}/{}".format(tp+1, p['NTP']))
             q0 = initial_charge(p)
             pmu0 = [pmu0[0], -pmu0[1], -pmu0[2], pmu0[3]]
 
-            filename = 'ev_' + str(ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1) + '.npz'
-            if p['GROUP']=='su3':
-                xmu, pmu, constraint, qsq, qcub = simulate(p, xmu0, pmu0, q0, seed)
-                np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq, qcub=qcub) 
-            else: 
-                xmu, pmu, constraint, qsq = simulate(p, xmu0, pmu0, q0, seed)
-                np.savez(filename, xmu=xmu, pmu=pmu, constraint=constraint, qsq=qsq) 
+            filename = 'ev_' + str(ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1) + '.pickle'
+            output = simulate(p, xmu0, pmu0, q0, seed)
+            with open(filename, 'wb') as handle:
+                pickle.dump(output, handle)
 
             inner_loop.update()    
