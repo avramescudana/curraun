@@ -7,7 +7,7 @@ import logging, sys
 numba_logger = logging.getLogger('numba')
 numba_logger.setLevel(logging.WARNING)
 # Format logging messages, set level=logging.DEBUG or logging.INFO for more information printed out, logging.WARNING for basic info
-logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format='%(message)s')
+logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format='%(message)s')
 
 """
     Default simulation parameters chosen for Pb-Pb at 5.02 TeV
@@ -37,12 +37,12 @@ uv = 10.0           # Ultraviolet regulator [GeV]
 # Heavy quark related parameters, chosen here for a charm quark
 mass = 1.5      # Heavy quark mass [GeV]
 tau_form = 0.06     # Formation time [fm/c]
-nq = 15     # Number of heavy quarks
+nq = 2     # Number of heavy quarks
 pT = 0.5    # Initial transverse momentum [GeV]
-ntp = 10    # Number of test particles
+ntp = 2    # Number of test particles
 
 # Other numerical parameters
-nevents = 10    # Number of Glasma events
+nevents = 2    # Number of Glasma events
 interp = 'no'     # Interpolate fields or use nearest lattice points
 solveq = 'wilson lines'     # Solve the equation for the color charge with Wilson lines or gauge potentials
 
@@ -132,6 +132,9 @@ elif p['GROUP'] == 'su3':
     os.environ["GAUGE_GROUP"] = p['GROUP']
 
 NUM_CHECKS = True
+FORCE_CORR = True
+if FORCE_CORR:
+    p['INTERP']='no'
 
 # Import relevant modules
 import curraun.core as core
@@ -142,6 +145,7 @@ from curraun.numba_target import use_cuda
 if use_cuda:
     from numba import cuda
 from curraun.wong_hq import WongFields, ColorChargeWilsonLines, WongPotentials, ColorChargeGaugePotentials, initial_coords, initial_momenta, initial_charge, interpfield, interppotential, update_coords, update_momenta
+from curraun.wong_force_correlators import ElectricFields, LorentzForce, ForceCorrelators
 
 # Define hbar * c in units of GeV * fm
 hbarc = 0.197326 
@@ -176,6 +180,10 @@ def simulate(p, xmu0, pmu0, q0, seed):
     fields = WongFields(s)
     if p['SOLVEQ']=='gauge potentials':
         potentials = WongPotentials(s)  
+    if FORCE_CORR:
+        electric_fields = ElectricFields(s)
+        lorentz_force = LorentzForce(s)
+        force_correlators = ForceCorrelators(s)
 
     if use_cuda:
         s.copy_to_device()
@@ -184,6 +192,12 @@ def simulate(p, xmu0, pmu0, q0, seed):
     output['xmu'], output['pmu'] = [], []
     if NUM_CHECKS:
         output['constraint'], output['casimirs'] = [], []
+
+    if FORCE_CORR:
+        tags = ['naive', 'transported']
+        all_EformE, all_FformF = {}, {}
+        for tag in tags:
+            all_EformE[tag], all_FformF[tag] = [], []
 
     for t in range(maxt):
         core.evolve_leapfrog(s)
@@ -216,6 +230,10 @@ def simulate(p, xmu0, pmu0, q0, seed):
                     logging.info('Interpolating fields...')
                 else:
                     logging.info('Approximating by nearest lattice points...')
+
+                if FORCE_CORR:
+                    Eform = electric_fields.compute(xhq0, yhq0)
+                    Fform = lorentz_force.compute(xhq0, yhq0, ptau0, px0, py0, peta0, current_tau)
 
             # Solve Wong's equations using basic Euler
             # Update positions
@@ -288,6 +306,23 @@ def simulate(p, xmu0, pmu0, q0, seed):
                     if p['GROUP']=='su3':
                         logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
 
+                if FORCE_CORR:
+                    # [(GeV / fm) ** 2]
+                    units = (E0 ** 2 / hbarc) ** 2 / p['G'] ** 2
+
+                    E = electric_fields.compute(xhq, yhq)
+                    F = lorentz_force.compute(xhq, yhq, ptau0, px0, py0, peta0, current_tau)
+
+                    EformE, FformF  = {}, {}
+                    for tag in tags:
+                        force_correlators.compute(tag, Eform, E, xhq, xhq0, yhq, yhq0, delta_etahq)
+                        EformE[tag] = force_correlators.fformf * units
+                        all_EformE[tag].append(EformE[tag][0]+EformE[tag][1]+EformE[tag][2])
+
+                        force_correlators.compute(tag, Fform, F, xhq, xhq0, yhq, yhq0, delta_etahq)
+                        FformF[tag] = force_correlators.fformf * units
+                        all_FformF[tag].append(FformF[tag][0]+FformF[tag][1]+FformF[tag][2])
+
             # Convert to physical units
             logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x1, a*y1, eta1))
             logging.debug("Momenta: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(E0*ptau1, E0*px1, E0*py1, E0/a*peta1))
@@ -306,6 +341,9 @@ def simulate(p, xmu0, pmu0, q0, seed):
     if use_cuda:
         s.copy_to_host()
         cuda.current_context().deallocations.clear()
+
+    if FORCE_CORR:
+        output['EformE'], output['FformF'] = all_EformE, all_FformF
 
     logging.info("Simulation complete!")
 
