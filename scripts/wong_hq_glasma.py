@@ -37,12 +37,13 @@ uv = 10.0           # Ultraviolet regulator [GeV]
 # Heavy quark related parameters, chosen here for a charm quark
 mass = 1.5      # Heavy quark mass [GeV]
 tau_form = 0.06     # Formation time [fm/c]
-nq = 2     # Number of heavy quarks
+nq = 15     # Number of heavy quarks
 pT = 0.5    # Initial transverse momentum [GeV]
-ntp = 2    # Number of test particles
+ntp = 10    # Number of test particles
 
 # Other numerical parameters
-nevents = 2    # Number of Glasma events
+nevents = 5    # Number of Glasma events
+nevoffset = 5
 interp = 'no'     # Interpolate fields or use nearest lattice points
 solveq = 'wilson lines'     # Solve the equation for the color charge with Wilson lines or gauge potentials
 
@@ -80,7 +81,7 @@ p = {
     'NEVENTS': nevents,     # number of Glasma events
     'INTERP': interp,       # interpolate fields or use nearest lattice points
     'SOLVEQ': solveq,       # method used to solve the equation for color charge
-
+    'NEVOFFSET': nevoffset,     # offset in events number
 }
 
 """
@@ -111,6 +112,8 @@ parser.add_argument('-NTP', type=int, help="Number of test particles", default=n
 parser.add_argument('-NEVENTS', type=int, help="Number of events", default=nevents)
 parser.add_argument('-INTERP', type=str, help="Interpolate fields.", default=interp)
 parser.add_argument('-SOLVEQ', type=str, help="Method to evolve color charge.", default=solveq)
+
+parser.add_argument('-NEVOFFSET', type=int, help="Events number offset", default=nevents)
 
 # Parse argumentss and update parameters dictionary
 args = parser.parse_args()
@@ -220,10 +223,12 @@ def simulate(p, xmu0, pmu0, q0, seed):
 
                 Q0 = charge.Q
                 if NUM_CHECKS:
-                    C = charge.C.real
-                    output['casimirs'].append(C)
+                    C = charge.C.real                        
                     logging.debug("Quadratic Casimir: {:3.3f}".format(C[0]))
-                    if p['GROUP']=='su3':
+                    if p['GROUP']=='su2':
+                        output['casimirs'].append(C[0])
+                    elif p['GROUP']=='su3':
+                        output['casimirs'].append([C[0], C[1]])
                         logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
 
                 if p['INTERP']=='yes':
@@ -258,9 +263,11 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 Q1 = charge.Q 
                 if NUM_CHECKS:
                     C = charge.C.real
-                    output['casimirs'].append(C)
                     logging.debug("Quadratic Casimir: {:3.3f}".format(C[0]))
-                    if p['GROUP']=='su3':
+                    if p['GROUP']=='su2':
+                        output['casimirs'].append(C[0])
+                    elif p['GROUP']=='su3':
+                        output['casimirs'].append([C[0], C[1]])
                         logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
 
             else:
@@ -301,9 +308,11 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 Q1 = charge.Q
                 if NUM_CHECKS:
                     C = charge.C.real
-                    output['casimirs'].append(C)
                     logging.debug("Quadratic Casimir: {:3.3f}".format(C[0]))
-                    if p['GROUP']=='su3':
+                    if p['GROUP']=='su2':
+                        output['casimirs'].append(C[0])
+                    elif p['GROUP']=='su3':
+                        output['casimirs'].append([C[0], C[1]])
                         logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
 
                 if FORCE_CORR:
@@ -392,7 +401,7 @@ inner_loop=tqdm(range(p['NTP']), desc="Test particle", position=2)
 
 
 for ev in range(len(outer_loop)):
-    logging.info("\nSimulating event {}/{}".format(ev+1, nevents))
+    logging.info("\nSimulating event {}/{}".format(ev+nevoffset+1, nevoffset+nevents))
     # Fixing the seed in a certain event
     seed = ev
 
@@ -415,7 +424,7 @@ for ev in range(len(outer_loop)):
             logging.info("\nSimulating quark test particle {}/{}".format(tp+1, p['NTP']))
             q0 = initial_charge(p)
 
-            filename = 'ev_' + str(ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1) + '.pickle'
+            filename = 'ev_' + str(ev+nevoffset+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1) + '.pickle'
             output = simulate(p, xmu0, pmu0, q0, seed)
             with open(filename, 'wb') as handle:
                 pickle.dump(output, handle)
@@ -425,7 +434,7 @@ for ev in range(len(outer_loop)):
             q0 = initial_charge(p)
             pmu0 = [pmu0[0], -pmu0[1], -pmu0[2], pmu0[3]]
 
-            filename = 'ev_' + str(ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1) + '.pickle'
+            filename = 'ev_' + str(ev+nevoffset+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1) + '.pickle'
             output = simulate(p, xmu0, pmu0, q0, seed)
             with open(filename, 'wb') as handle:
                 pickle.dump(output, handle)

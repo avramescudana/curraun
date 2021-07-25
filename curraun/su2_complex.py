@@ -55,7 +55,7 @@ slist = (id0, s1, s2, s3)
 def get_algebra_element(algebra_factors):
     """
     Algebra elements are formed from the algebra factors by:
-    U = i t_a A_a = i lambda_a A_a / 2 ... for lambda_a the Gell-Mann matrices.
+    U = i t_a A_a = i sigma_a A_a / 2 ... for sigma_a the Pauli matrices.
 
     The exponential map is given by mexp(get_algebra_element(algebra_factors))
 
