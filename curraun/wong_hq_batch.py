@@ -7,9 +7,17 @@ import curraun.lattice as l
 import curraun.su as su
 if use_cuda:
     import numba.cuda as cuda
+from curraun.wong_force_correlators import ElectricFields, LorentzForce, ForceCorrelators
 import numpy as np
-import math
-from scipy.interpolate import griddata
+import logging, sys
+# Supress Numba warnings
+numba_logger = logging.getLogger('numba')
+numba_logger.setLevel(logging.WARNING)
+# Format logging messages, set level=logging.DEBUG or logging.INFO for more information printed out, logging.WARNING for basic info
+logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format='%(message)s')
+
+# Define hbar * c in units of GeV * fm
+hbarc = 0.197326 
 
 class WongFields:
     # Computes Tr{QE} and Tr{QB}
@@ -36,7 +44,7 @@ class WongFields:
         self.d_trQE.copy_to_host(self.trQE)
         self.d_trQB.copy_to_host(self.trQB)
 
-    def compute(self, Q0, xhq, yhq):
+    def compute(self, q0, xhq, yhq):
         u0 = self.s.d_u0
 
         aeta0 = self.s.d_aeta0
@@ -50,7 +58,7 @@ class WongFields:
         t = self.s.t
         n = self.n
 
-        my_cuda_loop(fields_kernel, Q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, t, self.d_trQE, self.d_trQB)
+        my_cuda_loop(fields_kernel, q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, t, self.d_trQE, self.d_trQB)
 
         if use_cuda:
             self.copy_to_host()
@@ -58,7 +66,7 @@ class WongFields:
 
 # kernels
 @mycudajit
-def fields_kernel(Q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, trQE, trQB):
+def fields_kernel(q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, trQE, trQB):
 
     # Position of the HQ
     poshq = l.get_index(xhq, yhq, n)
@@ -116,6 +124,8 @@ def fields_kernel(Q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, trQE,
     b2 = su.ah(b1)
     Beta = l.add_mul(bf1, b2, +0.25)
 
+    Q0 = su.get_algebra_element(q0)
+
     trQE[0] = su.tr(su.mul(Q0, Ex)).real
     trQE[1] = su.tr(su.mul(Q0, Ey)).real
     trQE[2] = su.tr(su.mul(Q0, Eeta)).real
@@ -124,10 +134,16 @@ def fields_kernel(Q0, xhq, yhq, n, u0, aeta0, peta1, peta0, pt1, pt0, tau, trQE,
     trQB[1] = su.tr(su.mul(Q0, By)).real
     trQB[2] = su.tr(su.mul(Q0, Beta)).real
 
-class WongPotentials:
-    # Computes Ax, Ay and Aeta
-    def __init__(self, s):
+
+class ColorChargeGaugePotentials:
+    def __init__(self, s, q0):
         self.s = s
+
+        self.Q = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
+        self.C = np.zeros(su.CASIMIRS, dtype=su.GROUP_TYPE)
+        self.q = np.zeros(su.ALGEBRA_ELEMENTS, dtype=su.GROUP_TYPE)
+        my_cuda_loop(initial_charge_kernel, q0, self.Q, self.C)
+        self.d_Q, self.d_C, self.d_q = self.Q, self.C, self.q
 
         # Gauge fields stored as [Ax, Ay, Aeta], evaluated at a given time
         self.Ax = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
@@ -141,77 +157,52 @@ class WongPotentials:
             self.copy_to_device()
 
     def copy_to_device(self):
+        self.d_Q, self.d_C, self.d_q = cuda.to_device(self.Q), cuda.to_device(self.C), cuda.to_device(self.q)
         self.d_Ax = cuda.to_device(self.Ax)
         self.d_Ay = cuda.to_device(self.Ay)
         self.d_Aeta = cuda.to_device(self.Aeta)
 
     def copy_to_host(self):
+        self.d_Q.copy_to_host(self.Q)
+        self.d_C.copy_to_host(self.C)
+        self.d_q.copy_to_host(self.q)
         self.d_Ax.copy_to_host(self.Ax)
         self.d_Ay.copy_to_host(self.Ay)
         self.d_Aeta.copy_to_host(self.Aeta)
 
-    def compute(self, tag, xhq, yhq):
+    def evolve(self, q0, tau_step, ptau0, px0, py0, peta0, xhq, yhq, xahq, yahq):
         u0 = self.s.d_u0
         aeta0 = self.s.d_aeta0
         n = self.s.n
 
-        threadsperblock = 32
-        blockspergrid = (su.GROUP_ELEMENTS + (threadsperblock - 1)) // threadsperblock
-        if tag=='x':
-            Ax_kernel[blockspergrid, threadsperblock](xhq, yhq, n, u0, self.d_Ax)
-        elif tag=='y':
-            Ay_kernel[blockspergrid, threadsperblock](xhq, yhq, n, u0, self.d_Ay)
-        elif tag=='eta':
-            Aeta_kernel[blockspergrid, threadsperblock](xhq, yhq, n, aeta0, self.d_Aeta)
+        my_cuda_loop(Ax_kernel, self.d_Ax, xahq, yhq, n, u0)
+        my_cuda_loop(Ay_kernel, self.d_Ay, xhq, yahq, n, u0)
+        my_cuda_loop(Aeta_kernel, self.d_Aeta, xhq, yhq, n, aeta0)
+
+        my_cuda_loop(evolve_charge_gauge_fields_kernel, q0, tau_step, ptau0, px0, py0, peta0, self.d_Ax, self.d_Ay, self.d_Aeta, self.d_Q, self.d_C, self.d_q)
 
         if use_cuda:
             self.copy_to_host()
 
 @mycudajit
-def Ax_kernel(xhq, yhq, n, u0, Ax):
+def Ax_kernel(Ax, xhq, yhq, n, u0):
     poshq = l.get_index(xhq, yhq, n)
     su.store(Ax, su.mlog(u0[poshq, 0, :]))
 
 @mycudajit
-def Ay_kernel(xhq, yhq, n, u0, Ay):
+def Ay_kernel(Ay, xhq, yhq, n, u0):
     poshq = l.get_index(xhq, yhq, n)
     su.store(Ay, su.mlog(u0[poshq, 1, :]))
 
 @mycudajit
-def Aeta_kernel(xhq, yhq, n, aeta0, Aeta):
+def Aeta_kernel(Aeta, xhq, yhq, n, aeta0):
     poshq = l.get_index(xhq, yhq, n)
     su.store(Aeta, aeta0[poshq, :])
 
-class ColorChargeGaugePotentials:
-    def __init__(self, s, q0):
-        self.s = s
-
-        self.Q = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
-        self.C = np.zeros(su.CASIMIRS, dtype=su.GROUP_TYPE)
-        my_cuda_loop(initial_charge_kernel, q0, self.Q, self.C)
-
-        self.d_Q, self.d_C = self.Q, self.C
-
-        if use_cuda:
-            self.copy_to_device()
-
-    def copy_to_device(self):
-        self.d_Q, self.d_C = cuda.to_device(self.Q), cuda.to_device(self.C)
-
-    def copy_to_host(self):
-        self.d_Q.copy_to_host(self.Q)
-        self.d_C.copy_to_host(self.C)
-
-    def evolve(self, Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta):
-
-        my_cuda_loop(evolve_charge_gauge_fields_kernel, Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, self.d_Q, self.d_C)
-
-        if use_cuda:
-            self.copy_to_host()
-
 
 @mycudajit
-def evolve_charge_gauge_fields_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, Q, C):
+def evolve_charge_gauge_fields_kernel(q0, tau_step, ptau0, px0, py0, peta0, Ax, Ay, Aeta, Q, C, q1):
+    Q0 = su.get_algebra_element(q0)
     commQAx = l.comm(Q0, Ax)
     commQAy = l.comm(Q0, Ay)
     commQAeta = l.comm(Q0, Aeta)
@@ -224,6 +215,8 @@ def evolve_charge_gauge_fields_kernel(Q0, tau_step, ptau0, px0, py0, peta0, Ax, 
     res1 = su.mul_s(sum2, tau_step / ptau0)
     Q[:] = su.add(Q0, res1)
     C[:] = su.casimir(Q[:])
+    q1[:] = su.get_algebra_factors_from_group_element_approximate(Q[:])
+
 
 class ColorChargeWilsonLines:
     def __init__(self, s, q0):
@@ -231,6 +224,7 @@ class ColorChargeWilsonLines:
 
         self.Q = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
         self.C = np.zeros(su.CASIMIRS, dtype=su.GROUP_TYPE)
+        self.q = np.zeros(su.ALGEBRA_ELEMENTS, dtype=su.GROUP_TYPE)
         my_cuda_loop(initial_charge_kernel, q0, self.Q, self.C)
 
         self.w = np.zeros(su.GROUP_ELEMENTS, dtype=su.GROUP_TYPE)
@@ -238,6 +232,7 @@ class ColorChargeWilsonLines:
 
         self.d_Q, self.d_C = self.Q, self.C
         self.d_w = self.w
+        self.d_q = self.q
 
         if use_cuda:
             self.copy_to_device()
@@ -245,13 +240,15 @@ class ColorChargeWilsonLines:
     def copy_to_device(self):
         self.d_Q, self.d_C = cuda.to_device(self.Q), cuda.to_device(self.C)
         self.d_w = cuda.to_device(self.w)
+        self.d_q = cuda.to_device(self.q)
 
     def copy_to_host(self):
         self.d_Q.copy_to_host(self.Q)
         self.d_C.copy_to_host(self.C)
         self.d_w.copy_to_host(self.w)
+        self.d_q.copy_to_host(self.q)
 
-    def evolve(self, xhq, xhq0, yhq, yhq0, delta_etahq):
+    def evolve(self, q0, xhq, xhq0, yhq, yhq0, delta_etahq):
 
         u0 = self.s.d_u0
         n = self.s.n
@@ -271,7 +268,7 @@ class ColorChargeWilsonLines:
 
         my_cuda_loop(Ueta, self.d_w, xhq, yhq, n, delta_etahq, aeta0)
 
-        my_cuda_loop(evolve_charge_wilson_lines_kernel, self.d_w, self.d_Q, self.d_C)
+        my_cuda_loop(evolve_charge_wilson_lines_kernel, self.d_w, q0, self.d_Q, self.d_C, self.d_q)
 
         if use_cuda:
             self.copy_to_host()
@@ -312,10 +309,12 @@ def Ueta(w, xhq, yhq, n, delta_etahq, aeta0):
     su.store(w, su.mul(w, buf))
 
 @mycudajit
-def evolve_charge_wilson_lines_kernel(w, Q, C):
-    buf = l.act(w, Q)
-    su.store(Q, su.ah(buf))
+def evolve_charge_wilson_lines_kernel(w, q0, Q, C, q1):
+    Q0 = su.get_algebra_element(q0)
+    buf = l.act(su.dagger(w), Q0)
+    su.store(Q, buf)
     C[:] = su.casimir(Q[:])
+    q1[:] = su.get_algebra_factors_from_group_element_approximate(Q[:])
 
 
 """
@@ -325,12 +324,13 @@ def evolve_charge_wilson_lines_kernel(w, Q, C):
 
 def initial_coords(p):
     L = p['L']
-    # x0, y0 = np.random.uniform(0, L), np.random.uniform(0, L)
-    # TODO: Impose periodic boundary conditions
-    # Since the HQ doesn't move too much, it suffices to place it somewhere within the interior of the simulation plane
-    x0, y0 = np.random.uniform(L/3, 2*L/3), np.random.uniform(L/3, 2*L/3)
+    a = L / p['N']
+    DT = 1.0 / p['DTS']
+    formt = int(p['TFORM'] / a * p['DTS'])
+    tau0 = formt * DT
+    x0, y0 = np.random.uniform(0, L-a), np.random.uniform(0, L-a)
     eta0 = 0
-    xmu0 = [x0, y0, eta0]
+    xmu0 = [tau0, x0, y0, eta0]
     return xmu0
 
 # TODO: Initialise with FONLL pQCD distribution in momentum of HQs
@@ -351,9 +351,12 @@ def initial_charge(p):
         # Values used to compute the SU(3) Casimirs
         # J1, J2 = 1, 0
         J1, J2 = 2.84801, 1.00841
+        # K1, K2 = (2*J1+J2)/3, (2*J2+J1)/3
+
         # Angle Darboux variables
-        phi1, phi2, phi3 = np.random.uniform(), np.random.uniform(), np.random.uniform()
-        # phi1, phi2, phi3 = np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi)
+        # phi1, phi2, phi3 = np.random.uniform(), np.random.uniform(), np.random.uniform()
+        # Bounded angles (0,2pi)
+        phi1, phi2, phi3 = np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi)
 
         search = True
         while search:
@@ -368,6 +371,14 @@ def initial_charge(p):
 
         A = np.sqrt(numA)/(2*pi3)
         B = np.sqrt(numB)/(2*pi3)
+
+        # pi2, pi3 = np.random.uniform(np.sqrt(3)*(K2-K1), np.sqrt(3)/2*(K1-K2)), np.random.uniform(0, (K1+K2)/2)
+        # pi1 = np.random.uniform(-pi3, pi3)
+        # numA = ((J1-J2)/3+pi3+pi2/np.sqrt(3))*((J1+2*J2)/3+pi3+pi2/np.sqrt(3))*((2*J1+J2)/3-pi3-pi2/np.sqrt(3))
+        # numB = ((J2-J1)/3+pi3-pi2/np.sqrt(3))*((J1+2*J2)/3-pi3+pi2/np.sqrt(3))*((2*J1+J2)/3+pi3-pi2/np.sqrt(3))
+        # print('SU(3) color charges ', numA, ' ', numB)
+        # A = np.sqrt(numA)/(2*pi3)
+        # B = np.sqrt(numB)/(2*pi3)
 
         pip, pim = np.sqrt(pi3+pi1), np.sqrt(pi3-pi1)
         Cpp, Cpm, Cmp, Cmm = np.cos((phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((phi1+np.sqrt(3)*phi2-phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2-phi3)/2)
@@ -385,7 +396,6 @@ def initial_charge(p):
         q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
 
     elif su_group=='su2':
-        # J = 1
         J = np.sqrt(1.5)
         # phi, pi = np.random.uniform(), np.random.uniform(-J, J)
         # Bounded angles (0,2pi)
@@ -397,28 +407,29 @@ def initial_charge(p):
     return q0
 
 
-# TODO: Impose boundary conditions
-# def boundary(x1, y1, L, a):
-#     if x1<0:
-#         x1 = L-a
-#     elif x1>(L-a):
-#         x1 = a
-#     if y1<0:
-#         y1 = L-a
-#     elif y1>(L-a):
-#         y1 = a
-#     return x1, y1
-
 """
     Update positions and momenta using basic Euler to solve the associated Wong's equations
 """
 
-def update_coords(x0, y0, eta0, ptau0, px0, py0, peta0, tau_step):
+def update_coords(p, x0, y0, eta0, ptau0, px0, py0, peta0, tau_step):
+    N = p['N']
     x1 = x0 + px0 / ptau0 * tau_step
     y1 = y0 + py0 / ptau0 * tau_step
     eta1 = eta0 + peta0 / ptau0 * tau_step
+    x1, y1 = boundary(x1, y1, N)
 
     return x1, y1, eta1
+
+def boundary(x1, y1, N):
+    if x1<0:
+        x1 = N-1
+    elif x1>(N-1):
+        x1 = 0
+    if y1<0:
+        y1 = N-1
+    elif y1>(N-1):
+        y1 = 0
+    return x1, y1
 
 def update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, mass, E0):
     # Dynkin index from Tr{T^aT^b}=T_R\delta^{ab} in fundamental representation R=F
@@ -433,69 +444,132 @@ def update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, ma
 
     return ptau1, ptau2, px1, py1, peta1
 
+
 """
-    Interpolate fields
+    Routine to numerically solve Wong's equations for positions, momenta and color charge for a quark or heavy quark test particle
 """
 
-def interpfield(x0, y0, Q0, fields):
-    # Interpolate the values of trQE and trQB by finding the lattice cell in which the HQ is located and using the values of the neighbouring lattice points,
-    # where the fields are evaluated, to extract the corresponding value where the HQ is at a given time
-    x_low, x_high = math.floor(x0), math.ceil(x0)
-    y_low, y_high = math.floor(y0), math.ceil(y0)
-    xyhq = ([np.round(x0, decimals=6), np.round(y0, decimals=6)])
-    points = np.array([[x_low, y_low], [x_low, y_high], [x_high, y_low], [x_high, y_high]])
+def solve_wong(s, p, t, xmu0, pmu0, q0, xmu, pmu, fields, charge, tag, constraint, casimirs):
 
-    trQEx, trQEy, trQEeta = [], [], []
-    trQBx, trQBy, trQBeta = [], [], []
+    a = p['L'] / p['N']
+    DT = 1.0 / p['DTS']
+    E0 = p['N'] / p['L'] * hbarc
+    formt = int(p['TFORM'] / a * p['DTS'])
+    mass = p['MASS']
 
-    for point in points:
-        fields.compute(Q0, point[0], point[1])
-        trQEx.append(fields.trQE.real[0])
-        trQEy.append(fields.trQE.real[1])
-        trQEeta.append(fields.trQE.real[2])
-        trQBx.append(fields.trQB.real[0])
-        trQBy.append(fields.trQB.real[1])
-        trQBeta.append(fields.trQB.real[2])
+    current_tau = t * DT
+    tau_step = DT
 
-    trQEx_interp, trQEy_interp, trQEeta_interp = griddata(points, np.array(trQEx), xyhq,  method='cubic'), griddata(points, np.array(trQEy), xyhq,  method='cubic'), griddata(points, np.array(trQEeta), xyhq,  method='cubic')
-    trQBx_interp, trQBy_interp, trQBeta_interp = griddata(points, np.array(trQBx), xyhq,  method='cubic'), griddata(points, np.array(trQBy), xyhq,  method='cubic'), griddata(points, np.array(trQBeta), xyhq,  method='cubic')
+    x0, y0, eta0 = xmu0[1]/a, xmu0[2]/a, xmu0[3]
+    ptau0, px0, py0, peta0 = pmu0[0]/E0, pmu0[1]/E0, pmu0[2]/E0, pmu0[3]*a/E0
 
-    return [trQEx_interp[0], trQEy_interp[0], trQEeta_interp[0]], [trQBx_interp[0], trQBy_interp[0], trQBeta_interp[0]]
 
-def interppotential(x0, y0, axis, potentials):
-    # Interpolate the values of the gauge potentials to where the HQ is, in a similar way as done for the electric and magnetic fields
-    # Since Ax and Ay are extracted from lnUx and lnUy, they are evaluated at (x-a/2, y) and (x, y-a/2), whereas Aeta is computed at (x, y)
-    if axis=='x':
-        x_low = math.floor(x0-1/2)
-        x_high = math.ceil(x0-1/2)
-        y_low = math.floor(y0)
-        y_high = math.ceil(y0)
-        xyhq = ([np.round(x0-1/2, decimals=6), np.round(y0, decimals=6)])
-    elif axis=='y':
-        x_low = math.floor(x0)
-        x_high = math.ceil(x0)
-        y_low = math.floor(y0-1/2)
-        y_high = math.ceil(y0-1/2)
-        xyhq = ([np.round(x0, decimals=6), np.round(y0-1/2, decimals=6)])
-    elif axis=='eta':
-        x_low = math.floor(x0)
-        x_high = math.ceil(x0)
-        y_low = math.floor(y0)
-        y_high = math.ceil(y0)
-        xyhq = ([np.round(x0, decimals=6), np.round(y0, decimals=6)])
+    if t==formt:
+        fields[tag] = WongFields(s)
+        if p['NUM_CHECKS']:
+            constraint[tag], casimirs[tag] = [], []
+        # if p['FORCE_CORR']:
+        #     tags_corr = ['naive', 'transported']
+        #     for tag_corr in tags_corr:
+        #         correlators['EformE'][tag_corr][tag], correlators['FformF'][tag_corr][tag] = [], []
+        # if p['FORCE_CORR']:
+        #     electric_fields = ElectricFields(s)
+        #     lorentz_force = LorentzForce(s)
+        #     force_correlators = ForceCorrelators(s)
+        
+        xmu[tag], pmu[tag] = [], []
+        xmu[tag].append([a*current_tau, a*x0, a*y0, eta0])
+        pmu[tag].append([E0*ptau0, E0*px0, E0*py0, E0/a*peta0])
+        logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x0, a*y0, eta0))
+        logging.debug("Momenta: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(E0*ptau0, E0*px0, E0*py0, E0/a*peta0))
 
-    points = np.array([[x_low, y_low], [x_low, y_high], [x_high, y_low], [x_high, y_high]])
+        if p['SOLVEQ']=='gauge potentials':
+            charge[tag] = ColorChargeGaugePotentials(s, q0)
+        else:
+            charge[tag] = ColorChargeWilsonLines(s, q0)
 
-    A = []
-    for point in points:
-        potentials.compute(axis, point[0], point[1])
-        if axis=='x':
-            A.append(potentials.Ax)
-        elif axis=='y':
-            A.append(potentials.Ay)
-        elif axis=='eta':
-            A.append(potentials.Aeta)
+        if p['NUM_CHECKS']:
+            C = charge[tag].C.real                        
+            logging.debug("Quadratic Casimir: {:3.5f}".format(C[0]))
+            if p['GROUP']=='su2':
+                casimirs[tag].append(C[0])
+            elif p['GROUP']=='su3':
+                casimirs[tag].append([C[0], C[1]])
+                logging.debug("Cubic Casimir: {:3.5f}".format(C[1]))
 
-    A_interp = griddata(points, np.array(A), xyhq,  method='cubic')
+        # if p['FORCE_CORR']:
+        #     Eform = electric_fields.compute(xhq0, yhq0)
+        #     Fform = lorentz_force.compute(xhq0, yhq0, ptau0, px0, py0, peta0, current_tau)
 
-    return A_interp[0]
+    elif t>formt:
+        # Solve Wong's equations using basic Euler
+        # Update positions
+        x1, y1, eta1 = update_coords(p, x0, y0, eta0, ptau0, px0, py0, peta0, tau_step)
+
+        # Convert to physical units
+        xmu[tag].append([a*current_tau, a*x1, a*y1, eta1])
+
+        # Approximate the position of the quark with closest lattice point
+        # Locations where transverse gauge fields extracted from gauge links are evaluated, in the middle of lattice sites
+        xhq0, yhq0 = int(round(xmu[tag][t-formt-1][1]/a)), int(round(xmu[tag][t-formt-1][2]/a))
+        xhq, yhq = int(round(x1)), int(round(y1))
+
+        fields[tag].compute(q0, xhq, yhq)
+        trQE, trQB = fields[tag].trQE.real, fields[tag].trQB.real
+
+        # Update momenta using Euler, with fields evaluated at nearest lattice points
+        ptau1, ptau2, px1, py1, peta1 = update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, mass, E0)
+
+        # Convert to physical units
+        pmu[tag].append([E0*ptau1, E0*px1, E0*py1, E0/a*peta1])
+        if p['NUM_CHECKS']:
+            constraint[tag].append(E0*(ptau2-ptau1))
+
+        if p['SOLVEQ']=='gauge potentials':
+            xahq, yahq = int(round(x1-1/2)), int(round(y1-1/2))
+            charge[tag].evolve(q0, tau_step, ptau0, px0, py0, peta0, xhq, yhq, xahq, yahq)
+        else:
+            delta_etahq = eta1-eta0
+            charge[tag].evolve(q0, xhq, xhq0, yhq, yhq0, delta_etahq)
+
+        q1 = charge[tag].q
+        if p['NUM_CHECKS']:
+            C = charge[tag].C.real
+            logging.debug("Quadratic Casimir: {:3.5f}".format(C[0]))
+            if p['GROUP']=='su2':
+                casimirs[tag].append(C[0])
+            elif p['GROUP']=='su3':
+                casimirs[tag].append([C[0], C[1]])
+                logging.debug("Cubic Casimir: {:3.5f}".format(C[1]))
+
+        # if p['FORCE_CORR']:
+        #     # [(GeV / fm) ** 2]
+        #     units = (E0 ** 2 / hbarc) ** 2 / p['G'] ** 2
+
+        #     E = electric_fields.compute(xhq, yhq)
+        #     F = lorentz_force.compute(xhq, yhq, ptau0, px0, py0, peta0, current_tau)
+
+        #     EformE, FformF  = {}, {}
+        #     for tag_corr in tags_corr:
+        #         force_correlators.compute(tag_corr, Eform, E, xhq, xhq0, yhq, yhq0, delta_etahq)
+        #         EformE[tag_corr] = force_correlators.fformf * units
+        #         correlators['EformE'][tag_corr][tag].append(EformE[tag_corr][0]+EformE[tag_corr][1]+EformE[tag_corr][2])
+
+        #         force_correlators.compute(tag_corr, Fform, F, xhq, xhq0, yhq, yhq0, delta_etahq)
+        #         FformF[tag_corr] = force_correlators.fformf * units
+        #         correlators['FformF'][tag_corr][tag].append(FformF[tag_corr][0]+FformF[tag_corr][1]+FformF[tag_corr][2])
+
+        # Convert to physical units
+        logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x1, a*y1, eta1))
+        logging.debug("Momenta: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(E0*ptau1, E0*px1, E0*py1, E0/a*peta1))
+        logging.debug("Ptau constraint: {:.3e}".format(E0*ptau2-E0*ptau1)) 
+
+        pT0, pT = np.sqrt(pmu[tag][0][1]**2+pmu[tag][0][2]**2), E0*np.sqrt(px1**2+py1**2)
+        xT0, xT = np.sqrt(xmu[tag][0][1]**2+xmu[tag][0][2]**2), a*np.sqrt(x1**2+y1**2)
+        logging.debug("Transverse coordinate variance: {:.3e}".format((xT-xT0)**2))
+        logging.debug("Transverse momentum variance: {:3.3f}".format((pT-pT0)**2))
+
+        xmu1 = [current_tau, a*x1, a*y1, eta1]
+        pmu1 = [E0*ptau1, E0*px1, E0*py1, E0*peta1/a]
+
+        return xmu1, pmu1, q1

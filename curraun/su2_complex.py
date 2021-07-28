@@ -463,7 +463,7 @@ def casimir(Q):
     Computes the quadratic Casimir C_2. 
     Notice that Tr{Q^2}=T(R)C_2 with T(R)=1/2 for R=F.
     """
-    C = sq(Q).real * 2
+    C = sq(Q).real * 2 / N_C
     return C
 
 

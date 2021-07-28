@@ -7,7 +7,7 @@ import logging, sys
 numba_logger = logging.getLogger('numba')
 numba_logger.setLevel(logging.WARNING)
 # Format logging messages, set level=logging.DEBUG or logging.INFO for more information printed out, logging.WARNING for basic info
-logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format='%(message)s')
+logging.basicConfig(stream=sys.stderr, level=logging.DEBUG, format='%(message)s')
 
 """
     Default simulation parameters chosen for Pb-Pb at 5.02 TeV
@@ -43,7 +43,7 @@ ntp = 10    # Number of test particles
 
 # Other numerical parameters
 nevents = 5    # Number of Glasma events
-nevoffset = 5
+nevoffset = 0
 interp = 'no'     # Interpolate fields or use nearest lattice points
 solveq = 'wilson lines'     # Solve the equation for the color charge with Wilson lines or gauge potentials
 
@@ -135,7 +135,7 @@ elif p['GROUP'] == 'su3':
     os.environ["GAUGE_GROUP"] = p['GROUP']
 
 NUM_CHECKS = True
-FORCE_CORR = True
+FORCE_CORR = False
 if FORCE_CORR:
     p['INTERP']='no'
 
@@ -224,12 +224,12 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 Q0 = charge.Q
                 if NUM_CHECKS:
                     C = charge.C.real                        
-                    logging.debug("Quadratic Casimir: {:3.3f}".format(C[0]))
+                    logging.debug("Quadratic Casimir: {:3.5f}".format(C[0]))
                     if p['GROUP']=='su2':
                         output['casimirs'].append(C[0])
                     elif p['GROUP']=='su3':
                         output['casimirs'].append([C[0], C[1]])
-                        logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
+                        logging.debug("Cubic Casimir: {:3.5f}".format(C[1]))
 
                 if p['INTERP']=='yes':
                     logging.info('Interpolating fields...')
@@ -263,12 +263,12 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 Q1 = charge.Q 
                 if NUM_CHECKS:
                     C = charge.C.real
-                    logging.debug("Quadratic Casimir: {:3.3f}".format(C[0]))
+                    logging.debug("Quadratic Casimir: {:3.5f}".format(C[0]))
                     if p['GROUP']=='su2':
                         output['casimirs'].append(C[0])
                     elif p['GROUP']=='su3':
                         output['casimirs'].append([C[0], C[1]])
-                        logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
+                        logging.debug("Cubic Casimir: {:3.5f}".format(C[1]))
 
             else:
                 # Approximate the position of the quark with closest lattice point
@@ -308,12 +308,12 @@ def simulate(p, xmu0, pmu0, q0, seed):
                 Q1 = charge.Q
                 if NUM_CHECKS:
                     C = charge.C.real
-                    logging.debug("Quadratic Casimir: {:3.3f}".format(C[0]))
+                    logging.debug("Quadratic Casimir: {:3.5f}".format(C[0]))
                     if p['GROUP']=='su2':
                         output['casimirs'].append(C[0])
                     elif p['GROUP']=='su3':
                         output['casimirs'].append([C[0], C[1]])
-                        logging.debug("Cubic Casimir: {:3.3f}".format(C[1]))
+                        logging.debug("Cubic Casimir: {:3.5f}".format(C[1]))
 
                 if FORCE_CORR:
                     # [(GeV / fm) ** 2]

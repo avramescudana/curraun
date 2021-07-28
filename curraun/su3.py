@@ -509,8 +509,8 @@ def casimir(Q):
     Computes the quadratic and cubic Casimirs C_2 and C_3. 
     Notice that Tr{Q^2}=T(R)C_2 and Tr{Q^3}=[T(R)]^2C_3, with T(R)=1/2 for R=F.
     """
-    c0 = sq(Q).real * 2
-    c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag * 4
+    c0 = sq(Q).real * 2 / N_C
+    c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag * 4 / N_C
     return c0, c1
 
 """
