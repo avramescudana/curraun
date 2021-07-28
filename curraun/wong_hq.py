@@ -313,8 +313,8 @@ def Ueta(w, xhq, yhq, n, delta_etahq, aeta0):
 
 @mycudajit
 def evolve_charge_wilson_lines_kernel(w, Q, C):
-    buf = l.act(w, Q)
-    su.store(Q, su.ah(buf))
+    buf = l.act(su.dagger(w), Q)
+    su.store(Q, buf)
     C[:] = su.casimir(Q[:])
 
 

@@ -449,7 +449,7 @@ def update_momenta(ptau0, px0, py0, peta0, tau_step, current_tau, trQE, trQB, ma
     Routine to numerically solve Wong's equations for positions, momenta and color charge for a quark or heavy quark test particle
 """
 
-def solve_wong(s, p, t, xmu0, pmu0, q0, xmu, pmu, fields, charge, tag, constraint, casimirs):
+def solve_wong(s, p, t, xmu0, pmu0, q0, xmu, pmu, fields, charge, tag, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators):
 
     a = p['L'] / p['N']
     DT = 1.0 / p['DTS']
@@ -462,20 +462,22 @@ def solve_wong(s, p, t, xmu0, pmu0, q0, xmu, pmu, fields, charge, tag, constrain
 
     x0, y0, eta0 = xmu0[1]/a, xmu0[2]/a, xmu0[3]
     ptau0, px0, py0, peta0 = pmu0[0]/E0, pmu0[1]/E0, pmu0[2]/E0, pmu0[3]*a/E0
+    xhq0, yhq0 = int(round(x0)), int(round(y0))
 
 
     if t==formt:
         fields[tag] = WongFields(s)
         if p['NUM_CHECKS']:
             constraint[tag], casimirs[tag] = [], []
-        # if p['FORCE_CORR']:
-        #     tags_corr = ['naive', 'transported']
-        #     for tag_corr in tags_corr:
-        #         correlators['EformE'][tag_corr][tag], correlators['FformF'][tag_corr][tag] = [], []
-        # if p['FORCE_CORR']:
-        #     electric_fields = ElectricFields(s)
-        #     lorentz_force = LorentzForce(s)
-        #     force_correlators = ForceCorrelators(s)
+        if p['FORCE_CORR']:
+            tags_corr = ['naive', 'transported']
+            for tag_corr in tags_corr:
+                correlators['EformE'][tag_corr][tag], correlators['FformF'][tag_corr][tag] = [], []
+            electric_fields[tag] = ElectricFields(s)
+            fieldsform['E'][tag] = electric_fields[tag].compute(xhq0, yhq0)
+            lorentz_force[tag] = LorentzForce(s)
+            fieldsform['F'][tag] = lorentz_force[tag].compute(xhq0, yhq0, ptau0, px0, py0, peta0, current_tau)
+            force_correlators[tag] = ForceCorrelators(s)
         
         xmu[tag], pmu[tag] = [], []
         xmu[tag].append([a*current_tau, a*x0, a*y0, eta0])
@@ -496,10 +498,6 @@ def solve_wong(s, p, t, xmu0, pmu0, q0, xmu, pmu, fields, charge, tag, constrain
             elif p['GROUP']=='su3':
                 casimirs[tag].append([C[0], C[1]])
                 logging.debug("Cubic Casimir: {:3.5f}".format(C[1]))
-
-        # if p['FORCE_CORR']:
-        #     Eform = electric_fields.compute(xhq0, yhq0)
-        #     Fform = lorentz_force.compute(xhq0, yhq0, ptau0, px0, py0, peta0, current_tau)
 
     elif t>formt:
         # Solve Wong's equations using basic Euler
@@ -542,22 +540,23 @@ def solve_wong(s, p, t, xmu0, pmu0, q0, xmu, pmu, fields, charge, tag, constrain
                 casimirs[tag].append([C[0], C[1]])
                 logging.debug("Cubic Casimir: {:3.5f}".format(C[1]))
 
-        # if p['FORCE_CORR']:
-        #     # [(GeV / fm) ** 2]
-        #     units = (E0 ** 2 / hbarc) ** 2 / p['G'] ** 2
+        if p['FORCE_CORR']:
+            # [(GeV / fm) ** 2]
+            units = (E0 ** 2 / hbarc) ** 2 / p['G'] ** 2
 
-        #     E = electric_fields.compute(xhq, yhq)
-        #     F = lorentz_force.compute(xhq, yhq, ptau0, px0, py0, peta0, current_tau)
+            E = electric_fields[tag].compute(xhq, yhq)
+            F = lorentz_force[tag].compute(xhq, yhq, ptau0, px0, py0, peta0, current_tau)
 
-        #     EformE, FformF  = {}, {}
-        #     for tag_corr in tags_corr:
-        #         force_correlators.compute(tag_corr, Eform, E, xhq, xhq0, yhq, yhq0, delta_etahq)
-        #         EformE[tag_corr] = force_correlators.fformf * units
-        #         correlators['EformE'][tag_corr][tag].append(EformE[tag_corr][0]+EformE[tag_corr][1]+EformE[tag_corr][2])
+            EformE, FformF  = {}, {}
+            tags_corr = ['naive', 'transported']
+            for tag_corr in tags_corr:
+                force_correlators[tag].compute(tag_corr, fieldsform['E'][tag], E, xhq, xhq0, yhq, yhq0, delta_etahq)
+                EformE[tag_corr] = force_correlators[tag].fformf * units
+                correlators['EformE'][tag_corr][tag].append(EformE[tag_corr][0]+EformE[tag_corr][1]+EformE[tag_corr][2])
 
-        #         force_correlators.compute(tag_corr, Fform, F, xhq, xhq0, yhq, yhq0, delta_etahq)
-        #         FformF[tag_corr] = force_correlators.fformf * units
-        #         correlators['FformF'][tag_corr][tag].append(FformF[tag_corr][0]+FformF[tag_corr][1]+FformF[tag_corr][2])
+                force_correlators[tag].compute(tag_corr, fieldsform['F'][tag], F, xhq, xhq0, yhq, yhq0, delta_etahq)
+                FformF[tag_corr] = force_correlators[tag].fformf * units
+                correlators['FformF'][tag_corr][tag].append(FformF[tag_corr][0]+FformF[tag_corr][1]+FformF[tag_corr][2])
 
         # Convert to physical units
         logging.debug("Coordinates: [{:3.3f}, {:3.3f}, {:3.3f}, {:3.3f}]".format(a*current_tau, a*x1, a*y1, eta1))
