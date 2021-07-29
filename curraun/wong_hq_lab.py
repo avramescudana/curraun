@@ -282,7 +282,7 @@ def update_momenta(pt0, px0, py0, pz0, t_step, trQE, trQB, mass, E0):
     Routine to numerically solve Wong's equations for positions, momenta and color charge for a quark or heavy quark test particle
 """
 
-def solve_wong(s, p, t, xmu0, pmu0, q0, xmu, pmu, fields, charge, tag, constraint, casimirs):
+def solve_wong(s, p, t, xmu0, pmu0, q0, xmu, pmu, fields, charge, tag, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators):
 
     a = p['L'] / p['N']
     DT = 1.0 / p['DTS']

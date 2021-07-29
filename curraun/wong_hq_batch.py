@@ -351,34 +351,19 @@ def initial_charge(p):
         # Values used to compute the SU(3) Casimirs
         # J1, J2 = 1, 0
         J1, J2 = 2.84801, 1.00841
-        # K1, K2 = (2*J1+J2)/3, (2*J2+J1)/3
+        K1, K2 = (2*J1+J2)/3, (2*J2+J1)/3
+        x, y = np.random.uniform(K2-K1, K1), np.random.uniform(K1-K2, K2)
+        A1, A2, A3 = K1-K2+x, K2+x, K1-x
+        B1, B2, B3 = K2-K1+y, K2-y, K1+y
+        numA, numB = A1*A2*A3, B1*B2*B3
+        pi2, pi3 = (x-y)*np.sqrt(3)/2, (x+y)/2
+        pi1 = np.random.uniform(-pi3, pi3)
+        A, B = np.sqrt(numA)/(2*pi3), np.sqrt(numB)/(2*pi3)
 
         # Angle Darboux variables
         # phi1, phi2, phi3 = np.random.uniform(), np.random.uniform(), np.random.uniform()
         # Bounded angles (0,2pi)
         phi1, phi2, phi3 = np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi)
-
-        search = True
-        while search:
-            pi2, pi3 = np.random.uniform(), np.random.uniform()
-            pi1 = np.random.uniform(-pi3, pi3)
-
-            numA = ((J1-J2)/3+pi3+pi2/np.sqrt(3))*((J1+2*J2)/3+pi3+pi2/np.sqrt(3))*((2*J1+J2)/3-pi3-pi2/np.sqrt(3))
-            numB = ((J2-J1)/3+pi3-pi2/np.sqrt(3))*((J1+2*J2)/3-pi3+pi2/np.sqrt(3))*((2*J1+J2)/3+pi3-pi2/np.sqrt(3))
-
-            if (numA>0) & (numB>0):
-                search = False
-
-        A = np.sqrt(numA)/(2*pi3)
-        B = np.sqrt(numB)/(2*pi3)
-
-        # pi2, pi3 = np.random.uniform(np.sqrt(3)*(K2-K1), np.sqrt(3)/2*(K1-K2)), np.random.uniform(0, (K1+K2)/2)
-        # pi1 = np.random.uniform(-pi3, pi3)
-        # numA = ((J1-J2)/3+pi3+pi2/np.sqrt(3))*((J1+2*J2)/3+pi3+pi2/np.sqrt(3))*((2*J1+J2)/3-pi3-pi2/np.sqrt(3))
-        # numB = ((J2-J1)/3+pi3-pi2/np.sqrt(3))*((J1+2*J2)/3-pi3+pi2/np.sqrt(3))*((2*J1+J2)/3+pi3-pi2/np.sqrt(3))
-        # print('SU(3) color charges ', numA, ' ', numB)
-        # A = np.sqrt(numA)/(2*pi3)
-        # B = np.sqrt(numB)/(2*pi3)
 
         pip, pim = np.sqrt(pi3+pi1), np.sqrt(pi3-pi1)
         Cpp, Cpm, Cmp, Cmm = np.cos((phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((phi1+np.sqrt(3)*phi2-phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2-phi3)/2)

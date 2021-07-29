@@ -42,11 +42,12 @@ pT = 0.5    # Initial transverse momentum [GeV]
 ntp = 10   # Number of test particles
 
 # Other numerical parameters
-nevents = 1    # Number of Glasma events
+nevents = 10    # Number of Glasma events
+evoffset = 0
 solveq = 'wilson_lines'     # Solve the equation for the color charge with Wilson lines or gauge potentials
 frame = 'milne'
-NUM_CHECKS = True
-FORCE_CORR = True
+NUM_CHECKS = False
+FORCE_CORR = False
 
 
 """
@@ -80,9 +81,10 @@ p = {
 
     # Numerical parameters
     'NEVENTS': nevents,     # number of Glasma events
+    'EVOFFEST': evoffset,     
     'SOLVEQ': solveq,       # method used to solve the equation for color charge
     'FRAME': frame,         # laboratory of Milne frame
-    'NUM_CHECK': NUM_CHECKS,    # perform numerical checks
+    'NUM_CHECKS': NUM_CHECKS,    # perform numerical checks
     'FORCE_CORR': FORCE_CORR,   # compute correlator of Lorentz force
 }
 
@@ -112,10 +114,11 @@ parser.add_argument('-NQ', type=int, help="Number of heavy quarks", default=nq)
 parser.add_argument('-NTP', type=int, help="Number of test particles", default=ntp)
 
 parser.add_argument('-NEVENTS', type=int, help="Number of events", default=nevents)
+parser.add_argument('-EVOFFSET', type=int, help="Offset in events number", default=evoffset)
 parser.add_argument('-SOLVEQ', type=str, help="Method to evolve color charge.", default=solveq)
 parser.add_argument('-FRAME', type=str, help="Laboratory or Milne frame.", default=frame)
-parser.add_argument('-NUM_CHECKS', type=bool, help="Perform numerical checks.", default=NUM_CHECKS)
-parser.add_argument('-FORCE_CORR', type=bool, help="Compute correlator of Lorentz force.", default=FORCE_CORR)
+parser.add_argument('-NUM_CHECKS', help="Perform numerical checks.", action='store_true')
+parser.add_argument('-FORCE_CORR', help="Compute correlator of Lorentz force.", action='store_true')
 
 
 # Parse argumentss and update parameters dictionary
@@ -149,9 +152,9 @@ from curraun.numba_target import use_cuda
 if use_cuda:
     from numba import cuda
 if p['FRAME']=='milne':
-    from curraun.wong_hq_batch import initial_coords, initial_momenta, initial_charge, initial_wong, solve_wong
+    from curraun.wong_hq_batch import initial_coords, initial_momenta, initial_charge, solve_wong
 elif p['FRAME']=='lab':
-    from curraun.wong_hq_lab import initial_coords, initial_momenta, initial_charge, initial_wong, solve_wong
+    from curraun.wong_hq_lab import initial_coords, initial_momenta, initial_charge, solve_wong
 
 # Define hbar * c in units of GeV * fm
 hbarc = 0.197326 
@@ -202,8 +205,8 @@ def simulate(p, ev, inner_loop):
             for q in range(p['NQ']):
                 for tp in range(p['NTP']):
 
-                    tagq = 'ev_' + str(ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1)
-                    tagaq = 'ev_' + str(ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1)
+                    tagq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1)
+                    tagaq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1)
 
                     if t==formt:
                         # Initialize quark
@@ -236,33 +239,34 @@ def simulate(p, ev, inner_loop):
     for q in range(p['NQ']):
         for tp  in range(p['NTP']):
             output = {}
-            tagq = 'ev_' + str(ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1)
+            tagq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1)
             output['xmu'], output['pmu'] = xmu[tagq], pmu[tagq]
-            if NUM_CHECKS:
+            if p['NUM_CHECKS']:
                 output['constraint'], output['casimirs'] = constraint[tagq], casimirs[tagq]
-            output['correlators'] = {}
-            if FORCE_CORR:
+            if p['FORCE_CORR']:
+                output['correlators'] = {}
                 types_corr = ['EformE', 'FformF']
                 tags_corr = ['naive', 'transported']
                 for type_corr in types_corr:
                     output['correlators'][type_corr] = {}
                     for tag_corr in tags_corr:
-                        output['correlators'][type_corr][tag_corr] = {}
-                        output['correlators'][type_corr][tag_corr] = correlators[type_corr][tag_corr][tagq]                
+                        output['correlators'][type_corr][tag_corr] = correlators[type_corr][tag_corr][tagq]    
 
             filename = tagq + '.pickle'
             with open(filename, 'wb') as handle:
                 pickle.dump(output, handle)
 
-            # output = {}
-            tagaq = 'ev_' + str(ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1)
+            output = {}
+            tagaq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1)
             output['xmu'], output['pmu'] = xmu[tagaq], pmu[tagaq]
-            if NUM_CHECKS:
+            if p['NUM_CHECKS']:
                 output['constraint'], output['casimirs'] = constraint[tagaq], casimirs[tagaq]
-            if FORCE_CORR:
+            if p['FORCE_CORR']:
+                output['correlators'] = {}
                 types_corr = ['EformE', 'FformF']
                 tags_corr = ['naive', 'transported']
                 for type_corr in types_corr:
+                    output['correlators'][type_corr] = {}
                     for tag_corr in tags_corr:
                         output['correlators'][type_corr][tag_corr] = correlators[type_corr][tag_corr][tagq]   
 
