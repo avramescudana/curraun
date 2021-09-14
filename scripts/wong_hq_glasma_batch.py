@@ -15,6 +15,7 @@ logging.basicConfig(stream=sys.stderr, level=logging.WARNING, format='%(message)
 
 # General parameters
 su_group = 'su2'        # Gauge group
+system = 'PbPb'         # Pb-Pb or pPb
 folder = 'pb+pb_5020gev_su2_interp_pT_0.5'      # Results folder
 
 # Simulation box parameters
@@ -35,17 +36,19 @@ m = 0.1 * g**2 * mu         # Infrared regulator [GeV]
 uv = 10.0           # Ultraviolet regulator [GeV]
 
 # Heavy quark related parameters, chosen here for a charm quark
+quark = 'charm'
 mass = 1.5      # Heavy quark mass [GeV]
 tau_form = 0.06     # Formation time [fm/c]
 nq = 15     # Number of heavy quark antiquark pairs
 pT = 0.5    # Initial transverse momentum [GeV]
 ntp = 10   # Number of test particles
+FONLL = False
 
 # Other numerical parameters
 nevents = 10    # Number of Glasma events
 evoffset = 0
 solveq = 'wilson_lines'     # Solve the equation for the color charge with Wilson lines or gauge potentials
-frame = 'milne'
+frame = 'milne'         # Milne coordinates or laboratory frame
 NUM_CHECKS = False
 FORCE_CORR = False
 
@@ -58,6 +61,7 @@ p = {
     # General parameters
     'GROUP':    su_group,       # SU(2) or SU(3) group
     'FOLDER':   folder,         # results folder
+    'SYSTEM':   system,         # collision system
 
     # Parameters for simulation box
     'L':    L,           # transverse size [fm]
@@ -78,6 +82,7 @@ p = {
     'PT': pT,           # transverse momentum of HQs [GeV]
     'NQ': nq,         # number of heavy quarks
     'NTP': ntp,         # number of test particles
+    'FONLL': FONLL,     
 
     # Numerical parameters
     'NEVENTS': nevents,     # number of Glasma events
@@ -96,6 +101,7 @@ parser = argparse.ArgumentParser(description='Compute momentum broadening of HQs
 
 parser.add_argument('-GROUP', type=str, help="Gauge group", default=su_group)
 parser.add_argument('-FOLDER', type=str, help="Folder in which results are saved", default=folder)
+parser.add_argument('-SYSTEM', type=str, help="Collision system", default=system)
 
 parser.add_argument('-L', type=float, help="Transverse lattice size [fm]", default=L)
 parser.add_argument('-N', type=int, help="Number of lattice sites", default=N)
@@ -107,11 +113,13 @@ parser.add_argument('-M', type=float, help="IR regulator [GeV]", default=m)
 parser.add_argument('-UV', type=float, help="UV regulator [GeV]", default=uv)
 parser.add_argument('-NS', type=int, help="Number of color sheets", default=ns)
 
+parser.add_argument('-QUARK', type=str, help="Heavy quark type.", default=quark)
 parser.add_argument('-MASS', type=float, help="Mass of heavy quark [GeV]", default=mass)
 parser.add_argument('-TFORM', type=float, help="Formation time of heavy quark [fm/c]", default=tau_form)
 parser.add_argument('-PT', type=float, help="Initial transverse momentum [GeV]", default=pT)
 parser.add_argument('-NQ', type=int, help="Number of heavy quarks", default=nq)
 parser.add_argument('-NTP', type=int, help="Number of test particles", default=ntp)
+parser.add_argument('-FONLL', help="FONLL pQCD initial distribution.", action='store_true')
 
 parser.add_argument('-NEVENTS', type=int, help="Number of events", default=nevents)
 parser.add_argument('-EVOFFSET', type=int, help="Offset in events number", default=evoffset)
@@ -132,6 +140,13 @@ for d in data:
 if p['FRAME']=='lab':
     p['SOLVEQ']='wilson lines'
     p['FORCE_CORR']=False
+    p['FONLL']=False
+
+if p['SYSTEM']=='pPb':
+    Qsp = np.sqrt(0.13 * sqrts**0.25)         # Saturation momentum [GeV]	
+    gp = np.pi * np.sqrt(1 / np.log(Qs / 0.2))           # Running coupling constant		
+    mup = Qs / (gp**2 * factor)           # MV model parameter	
+    mp = 0.1 * gp**2 * mup         # Infrared regulator [GeV]
    
 # Set environment variables 
 import os
@@ -152,7 +167,7 @@ from curraun.numba_target import use_cuda
 if use_cuda:
     from numba import cuda
 if p['FRAME']=='milne':
-    from curraun.wong_hq_batch import initial_coords, initial_momenta, initial_charge, solve_wong
+    from curraun.wong_hq_batch import initial_coords, initial_momenta, initial_charge, solve_wong, initial_momenta_fonll
 elif p['FRAME']=='lab':
     from curraun.wong_hq_lab import initial_coords, initial_momenta, initial_charge, solve_wong
 
@@ -190,7 +205,10 @@ def simulate(p, ev, inner_loop):
     logging.info('Initializating ...')
 
     s = core.Simulation(p['N'], DT, p['G'])
-    va = mv.wilson(s, mu=p['MU'] / E0, m=p['M'] / E0, uv=p['UV'] / E0, num_sheets=p['NS'])
+    if system=='PbPb':
+        va = mv.wilson(s, mu=p['MU'] / E0, m=p['M'] / E0, uv=p['UV'] / E0, num_sheets=p['NS'])
+    elif system=='pPb':
+        va = mv.wilson(s, mu=p['MU'] / E0, m=p['M'] / E0, uv=p['UV'] / E0, num_sheets=p['NS'])
     vb = mv.wilson(s, mu=p['MU'] / E0, m=p['M'] / E0, uv=p['UV'] / E0, num_sheets=p['NS'])
     initial.init(s, va, vb)
 
@@ -202,33 +220,63 @@ def simulate(p, ev, inner_loop):
         core.evolve_leapfrog(s)
 
         if t>=formt:  
-            for q in range(p['NQ']):
-                for tp in range(p['NTP']):
+            if p['FONLL']:
+                initial_momenta_fonll(p)
+                pt, N = p['PTFONLL'], p['NFONLL']
+                for ipt in range(len(pt)):
+                    p['PT'] = pt[ipt]
+                    for ip in range(N[ipt]):
+                        tagq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_q_' + str(ipt+1) + '_n_' + str(ip+1)
+                        tagaq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_aq_' + str(ipt+1) + '_n_' + str(ip+1)
+                        tags = [tagq, tagaq]
 
-                    tagq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1)
-                    tagaq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1)
+                        if t==formt:
+                            # Initialize quark
+                            xmu0[tagq] = initial_coords(p)
+                            pmu0[tagq] = initial_momenta(p)
+                            q0[tagq] = initial_charge(p)
 
-                    if t==formt:
-                        # Initialize quark
-                        xmu0[tagq] = initial_coords(p)
-                        pmu0[tagq] = initial_momenta(p)
-                        q0[tagq] = initial_charge(p)
-                        solve_wong(s, p, t, xmu0[tagq], pmu0[tagq], q0[tagq], xmu, pmu, fields, charge, tagq, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators)
+                            # Initialize antiquark
+                            xmu0[tagaq] = xmu0[tagq]
+                            pmu0[tagaq] = [pmu0[tagq][0], -pmu0[tagq][1], -pmu0[tagq][2], pmu0[tagq][3]]
+                            q0[tagaq] = initial_charge(p)
 
-                        # Initialize antiquark
-                        xmu0[tagaq] = xmu0[tagq]
-                        pmu0[tagaq] = [pmu0[tagq][0], -pmu0[tagq][1], -pmu0[tagq][2], pmu0[tagq][3]]
-                        q0[tagaq] = initial_charge(p)
-                        solve_wong(s, p, t, xmu0[tagaq], pmu0[tagaq], q0[tagaq], xmu, pmu, fields, charge, tagaq, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators)
+                            for tag in tags:
+                                solve_wong(s, p, t, xmu0[tag], pmu0[tag], q0[tag], xmu, pmu, fields, charge, tag, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators)
 
-                    elif t>formt:
-                        xmu1[tagq], pmu1[tagq], q1[tagq] = solve_wong(s, p, t, xmu0[tagq], pmu0[tagq], q0[tagq], xmu, pmu, fields, charge, tagq, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators)
-                        # Swap x, p, q for next time step
-                        xmu0[tagq], pmu0[tagq], q0[tagq] = xmu1[tagq], pmu1[tagq], q1[tagq]
+                        elif t>formt:
+                            for tag in tags:
+                                xmu1[tag], pmu1[tag], q1[tag] = solve_wong(s, p, t, xmu0[tag], pmu0[tag], q0[tag], xmu, pmu, fields, charge, tag, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators)
+                                # Swap x, p, q for next time step
+                                xmu0[tag], pmu0[tag], q0[tag] = xmu1[tag], pmu1[tag], q1[tag]
 
-                        xmu1[tagaq], pmu1[tagaq], q1[tagaq] = solve_wong(s, p, t, xmu0[tagaq], pmu0[tagaq], q0[tagaq], xmu, pmu, fields, charge, tagaq, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators)
-                        # Swap x, p, q for next time step
-                        xmu0[tagaq], pmu0[tagaq], q0[tagaq] = xmu1[tagaq], pmu1[tagaq], q1[tagaq]
+            else:
+                for q in range(p['NQ']):
+                    for tp in range(p['NTP']):
+
+                        tagq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1)
+                        tagaq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1)
+                        tags = [tagq, tagaq]
+
+                        if t==formt:
+                            # Initialize quark
+                            xmu0[tagq] = initial_coords(p)
+                            pmu0[tagq] = initial_momenta(p)
+                            q0[tagq] = initial_charge(p)
+
+                            # Initialize antiquark
+                            xmu0[tagaq] = xmu0[tagq]
+                            pmu0[tagaq] = [pmu0[tagq][0], -pmu0[tagq][1], -pmu0[tagq][2], pmu0[tagq][3]]
+                            q0[tagaq] = initial_charge(p)
+
+                            for tag in tags:
+                                solve_wong(s, p, t, xmu0[tag], pmu0[tag], q0[tag], xmu, pmu, fields, charge, tag, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators)
+
+                        elif t>formt:
+                            for tag in tags:
+                                xmu1[tag], pmu1[tag], q1[tag] = solve_wong(s, p, t, xmu0[tag], pmu0[tag], q0[tag], xmu, pmu, fields, charge, tag, constraint, casimirs, correlators, fieldsform, electric_fields, lorentz_force, force_correlators)
+                                # Swap x, p, q for next time step
+                                xmu0[tag], pmu0[tag], q0[tag] = xmu1[tag], pmu1[tag], q1[tag]
 
         inner_loop.update()
 
@@ -236,43 +284,59 @@ def simulate(p, ev, inner_loop):
         s.copy_to_host()
         cuda.current_context().deallocations.clear()
 
-    for q in range(p['NQ']):
-        for tp  in range(p['NTP']):
-            output = {}
-            tagq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1)
-            output['xmu'], output['pmu'] = xmu[tagq], pmu[tagq]
-            if p['NUM_CHECKS']:
-                output['constraint'], output['casimirs'] = constraint[tagq], casimirs[tagq]
-            if p['FORCE_CORR']:
-                output['correlators'] = {}
-                types_corr = ['EformE', 'FformF']
-                tags_corr = ['naive', 'transported']
-                for type_corr in types_corr:
-                    output['correlators'][type_corr] = {}
-                    for tag_corr in tags_corr:
-                        output['correlators'][type_corr][tag_corr] = correlators[type_corr][tag_corr][tagq]    
+    if p['FONLL']:
+        for ipt in range(len(pt)):
+            for ip in range(N[ipt]):
+                tagq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_q_' + str(ipt+1) + '_n_' + str(ip+1)
+                tagaq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_aq_' + str(ipt+1) + '_n_' + str(ip+1)
+                tags = [tagq, tagaq]
 
-            filename = tagq + '.pickle'
-            with open(filename, 'wb') as handle:
-                pickle.dump(output, handle)
+                for tag in tags:
+                    output = {}
+                    output['xmu'], output['pmu'] = xmu[tag], pmu[tag]
+                    if p['NUM_CHECKS']:
+                        output['constraint'], output['casimirs'] = constraint[tag], casimirs[tag]
+                    if p['FORCE_CORR']:
+                        output['correlators'] = {}
+                        types_corr = ['EformE', 'FformF']
+                        tags_corr = ['naive', 'transported']
+                        for type_corr in types_corr:
+                            output['correlators'][type_corr] = {}
+                            for tag_corr in tags_corr:
+                                output['correlators'][type_corr][tag_corr] = correlators[type_corr][tag_corr][tag]    
 
-            output = {}
-            tagaq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1)
-            output['xmu'], output['pmu'] = xmu[tagaq], pmu[tagaq]
-            if p['NUM_CHECKS']:
-                output['constraint'], output['casimirs'] = constraint[tagaq], casimirs[tagaq]
-            if p['FORCE_CORR']:
-                output['correlators'] = {}
-                types_corr = ['EformE', 'FformF']
-                tags_corr = ['naive', 'transported']
-                for type_corr in types_corr:
-                    output['correlators'][type_corr] = {}
-                    for tag_corr in tags_corr:
-                        output['correlators'][type_corr][tag_corr] = correlators[type_corr][tag_corr][tagq]   
+                    filename = tag + '.pickle'
+                    with open(filename, 'wb') as handle:
+                        pickle.dump(output, handle)
 
-            filename = tagaq + '.pickle'
-            with open(filename, 'wb') as handle:
-                pickle.dump(output, handle)
+    else:
+        for q in range(p['NQ']):
+            for tp  in range(p['NTP']):
+                tagq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_q_' + str(q+1) + '_tp_' + str(tp+1)
+                tagaq = 'ev_' + str(p['EVOFFSET']+ev+1) + '_aq_' + str(q+1) + '_tp_' + str(tp+1)
+                tags = [tagq, tagaq]
+
+                for tag in tags:
+                    output = {}
+                    output['xmu'], output['pmu'] = xmu[tag], pmu[tag]
+                    if p['NUM_CHECKS']:
+                        output['constraint'], output['casimirs'] = constraint[tag], casimirs[tag]
+                    if p['FORCE_CORR']:
+                        output['correlators'] = {}
+                        types_corr = ['EformE', 'FformF']
+                        tags_corr = ['naive', 'transported']
+                        for type_corr in types_corr:
+                            output['correlators'][type_corr] = {}
+                            for tag_corr in tags_corr:
+                                output['correlators'][type_corr][tag_corr] = correlators[type_corr][tag_corr][tag]    
+
+                    output['parameters'] = p
+                    filename = tag + '.pickle'
+                    with open(filename, 'wb') as handle:
+                        pickle.dump(output, handle)
+
+    with open('parameters.pickle', 'wb') as handle:
+        pickle.dump(p, handle)
 
     logging.info("Simulation complete!")
 

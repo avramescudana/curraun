@@ -333,7 +333,6 @@ def initial_coords(p):
     xmu0 = [tau0, x0, y0, eta0]
     return xmu0
 
-# TODO: Initialise with FONLL pQCD distribution in momentum of HQs
 def initial_momenta(p):
     pT = p['PT']
     tau_form = p['TFORM']
@@ -344,6 +343,28 @@ def initial_momenta(p):
     ptau0 = np.sqrt(px0 ** 2 + py0 ** 2 + (tau_form * peta0) ** 2 + mass ** 2)
     pmu0 = [ptau0, px0, py0, peta0]
     return pmu0
+
+def fonll(p, pt):
+    quark = p['QUARK']
+    if quark=='charm':
+        x0, x1, x2, x3 = 20.2837, 1.95061, 3.13695, 0.0751663
+    elif quark=='beauty':
+        x0, x1, x2, x3 = 0.467997, 1.83805, 3.07569, 0.0301554
+
+    fonll = 2*np.pi*x0/(1+x3*pt**x1)**x2
+    return fonll
+
+def initial_momenta_fonll(p):
+    nq, ntp = p['NQ'], p['NTP']
+    Npairs = nq * ntp
+    ptbins, ptmax = 20, 12
+    pt = np.linspace(0, ptmax, ptbins)
+    fonll_pt = fonll(p, pt)
+    prob_pt = fonll_pt/sum(fonll_pt)
+    N = []
+    for prob in prob_pt:
+        N.append(int(round(Npairs*prob)))
+    p['PTFONLL'], p['NFONLL'] = pt, N
 
 def initial_charge(p):
     su_group = p['GROUP']
