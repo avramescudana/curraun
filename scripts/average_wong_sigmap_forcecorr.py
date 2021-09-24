@@ -60,8 +60,9 @@ def average(wong_path):
         sigmaxt.append(((np.array(x)[:, i]-np.array(x)[:, 0]) ** 2+(np.array(y)[:, i]-np.array(y)[:, 0]) ** 2)/2)
         sigmapt.append(((np.array(px)[:, i]-np.array(px)[:, 0]) ** 2+(np.array(py)[:, i]-np.array(py)[:, 0]) ** 2)/2)
 
-    average['sigmaxt_mean'], average['sigmaxt_std'] = np.mean(sigmaxt, axis=1), np.std(sigmaxt, axis=1)
-    average['sigmapt_mean'], average['sigmapt_std'] = np.mean(sigmapt, axis=1), np.std(sigmapt, axis=1)
+    nsamples = np.array(sigmapt).shape[1]
+    average['sigmaxt_mean'], average['sigmaxt_std'] = np.mean(sigmaxt, axis=1), np.std(sigmaxt, axis=1) / np.sqrt(nsamples)
+    average['sigmapt_mean'], average['sigmapt_std'] = np.mean(sigmapt, axis=1), np.std(sigmapt, axis=1) / np.sqrt(nsamples)
 
     if force_corr:
         average['mean_EformE'], average['std_EformE'], average['mean_FformF'], average['std_FformF'] = {}, {}, {}, {}

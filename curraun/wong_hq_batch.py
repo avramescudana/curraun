@@ -10,6 +10,7 @@ if use_cuda:
 from curraun.wong_force_correlators import ElectricFields, LorentzForce, ForceCorrelators
 import numpy as np
 import logging, sys
+# from scipy.stats import unitary_group
 # Supress Numba warnings
 numba_logger = logging.getLogger('numba')
 numba_logger.setLevel(logging.WARNING)
@@ -366,12 +367,27 @@ def initial_momenta_fonll(p):
         N.append(int(round(Npairs*prob)))
     p['PTFONLL'], p['NFONLL'] = pt, N
 
+# gell-mann matrices
+# gm = [
+#     [[0, 1, 0], [1, 0, 0], [0, 0, 0]],
+#     [[0, -1j, 0], [1j, 0, 0], [0, 0, 0]],
+#     [[1, 0, 0], [0, -1, 0], [0, 0, 0]],
+#     [[0, 0, 1], [0, 0, 0], [1, 0, 0]],
+#     [[0, 0, -1j], [0, 0, 0], [1j, 0, 0]],
+#     [[0, 0, 0], [0, 0, 1], [0, 1, 0]],
+#     [[0, 0, 0], [0, 0, -1j], [0, 1j, 0]],
+#     [[1/ np.sqrt(3), 0, 0], [0, 1/ np.sqrt(3), 0], [0, 0, -2/ np.sqrt(3)]]
+# ]
+
+# T = np.array(gm) / 2.0
+
 def initial_charge(p):
     su_group = p['GROUP']
     if su_group=='su3':
         # Values used to compute the SU(3) Casimirs
         # J1, J2 = 1, 0
         J1, J2 = 2.84801, 1.00841
+        # J1, J2 = 2, 2
         K1, K2 = (2*J1+J2)/3, (2*J2+J1)/3
         x, y = np.random.uniform(K2-K1, K1), np.random.uniform(K1-K2, K2)
         A1, A2, A3 = K1-K2+x, K2+x, K1-x
@@ -400,6 +416,30 @@ def initial_charge(p):
         Q7 = Smp * pim * A - Smm * pip * B
         Q8 = pi2
         q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
+
+        # """
+        #     New step 1: specific random color vector
+        # """
+        # q = [0., 0., 0., 0., -1.69469, 0., 0., -1.06209]
+        # Q0 = np.einsum('ijk,i', T, q)
+        
+        
+        
+        # """
+        #     Step 2: create a random SU(3) matrix to rotate Q.
+        # """
+        # V = unitary_group.rvs(3)
+        # detV = np.linalg.det(V)
+        # U = V / detV ** (1/3)
+        # Ud = np.conj(U).T
+        
+        # Q = np.einsum('ab,bc,cd', U, Q0, Ud)
+        
+        # """
+        #     Step 3: Project onto color components
+        # """
+        
+        # q0 = 2*np.einsum('ijk,kj', T, Q)
 
     elif su_group=='su2':
         J = np.sqrt(1.5)

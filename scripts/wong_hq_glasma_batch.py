@@ -46,7 +46,7 @@ FONLL = False
 
 # Other numerical parameters
 nevents = 10    # Number of Glasma events
-evoffset = 0
+evoffset = 0        # Event offset
 solveq = 'wilson_lines'     # Solve the equation for the color charge with Wilson lines or gauge potentials
 frame = 'milne'         # Milne coordinates or laboratory frame
 NUM_CHECKS = False
@@ -142,7 +142,9 @@ if p['FRAME']=='lab':
     p['FORCE_CORR']=False
     p['FONLL']=False
 
+#TODO
 if p['SYSTEM']=='pPb':
+    # Parameters for proton
     Qsp = np.sqrt(0.13 * sqrts**0.25)         # Saturation momentum [GeV]	
     gp = np.pi * np.sqrt(1 / np.log(Qs / 0.2))           # Running coupling constant		
     mup = Qs / (gp**2 * factor)           # MV model parameter	
@@ -207,8 +209,8 @@ def simulate(p, ev, inner_loop):
     s = core.Simulation(p['N'], DT, p['G'])
     if system=='PbPb':
         va = mv.wilson(s, mu=p['MU'] / E0, m=p['M'] / E0, uv=p['UV'] / E0, num_sheets=p['NS'])
-    elif system=='pPb':
-        va = mv.wilson(s, mu=p['MU'] / E0, m=p['M'] / E0, uv=p['UV'] / E0, num_sheets=p['NS'])
+    #TODO
+    # elif system=='pPb':
     vb = mv.wilson(s, mu=p['MU'] / E0, m=p['M'] / E0, uv=p['UV'] / E0, num_sheets=p['NS'])
     initial.init(s, va, vb)
 
