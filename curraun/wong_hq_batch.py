@@ -10,7 +10,7 @@ if use_cuda:
 from curraun.wong_force_correlators import ElectricFields, LorentzForce, ForceCorrelators
 import numpy as np
 import logging, sys
-# from scipy.stats import unitary_group
+from scipy.stats import unitary_group
 # Supress Numba warnings
 numba_logger = logging.getLogger('numba')
 numba_logger.setLevel(logging.WARNING)
@@ -368,26 +368,28 @@ def initial_momenta_fonll(p):
     p['PTFONLL'], p['NFONLL'] = pt, N
 
 # gell-mann matrices
-# gm = [
-#     [[0, 1, 0], [1, 0, 0], [0, 0, 0]],
-#     [[0, -1j, 0], [1j, 0, 0], [0, 0, 0]],
-#     [[1, 0, 0], [0, -1, 0], [0, 0, 0]],
-#     [[0, 0, 1], [0, 0, 0], [1, 0, 0]],
-#     [[0, 0, -1j], [0, 0, 0], [1j, 0, 0]],
-#     [[0, 0, 0], [0, 0, 1], [0, 1, 0]],
-#     [[0, 0, 0], [0, 0, -1j], [0, 1j, 0]],
-#     [[1/ np.sqrt(3), 0, 0], [0, 1/ np.sqrt(3), 0], [0, 0, -2/ np.sqrt(3)]]
-# ]
+gm = [
+    [[0, 1, 0], [1, 0, 0], [0, 0, 0]],
+    [[0, -1j, 0], [1j, 0, 0], [0, 0, 0]],
+    [[1, 0, 0], [0, -1, 0], [0, 0, 0]],
+    [[0, 0, 1], [0, 0, 0], [1, 0, 0]],
+    [[0, 0, -1j], [0, 0, 0], [1j, 0, 0]],
+    [[0, 0, 0], [0, 0, 1], [0, 1, 0]],
+    [[0, 0, 0], [0, 0, -1j], [0, 1j, 0]],
+    [[1/ np.sqrt(3), 0, 0], [0, 1/ np.sqrt(3), 0], [0, 0, -2/ np.sqrt(3)]]
+]
 
-# T = np.array(gm) / 2.0
+T = np.array(gm) / 2.0
 
 def initial_charge(p):
     su_group = p['GROUP']
     if su_group=='su3':
-        # Values used to compute the SU(3) Casimirs
-        # J1, J2 = 1, 0
-        J1, J2 = 2.84801, 1.00841
-        # J1, J2 = 2, 2
+        """
+        Step 1: create a random SU(3) charge with the correct q2 and q3 values.
+        Note: This method is biased and leads to <Q> != 0.
+        """
+        # J1, J2 = 2.84801, 1.00841
+        J1, J2 = 3, 3
         K1, K2 = (2*J1+J2)/3, (2*J2+J1)/3
         x, y = np.random.uniform(K2-K1, K1), np.random.uniform(K1-K2, K2)
         A1, A2, A3 = K1-K2+x, K2+x, K1-x
@@ -403,8 +405,10 @@ def initial_charge(p):
         phi1, phi2, phi3 = np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi)
 
         pip, pim = np.sqrt(pi3+pi1), np.sqrt(pi3-pi1)
-        Cpp, Cpm, Cmp, Cmm = np.cos((phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((phi1+np.sqrt(3)*phi2-phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2-phi3)/2)
-        Spp, Spm, Smp, Smm = np.sin((phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((phi1+np.sqrt(3)*phi2-phi3)/2), np.sin((-phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((-phi1+np.sqrt(3)*phi2-phi3)/2)
+        Cpp, Cpm, Cmp, Cmm = np.cos((+phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((+phi1+np.sqrt(3)*phi2-phi3)/2), \
+                            np.cos((-phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2-phi3)/2)
+        Spp, Spm, Smp, Smm = np.sin((+phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((+phi1+np.sqrt(3)*phi2-phi3)/2), \
+                            np.sin((-phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((-phi1+np.sqrt(3)*phi2-phi3)/2)
 
         # Color charges
         Q1 = np.cos(phi1) * pip * pim
@@ -416,6 +420,27 @@ def initial_charge(p):
         Q7 = Smp * pim * A - Smm * pip * B
         Q8 = pi2
         q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
+        
+        # convert to matrix
+        Q0 = np.einsum('ijk,i', T, q0)
+        
+        
+        """
+            Step 2: create a random SU(3) matrix to rotate Q.
+        """
+        V = unitary_group.rvs(3)
+        detV = np.linalg.det(V)
+        U = V / detV ** (1/3)
+        Ud = np.conj(U).T
+        
+        Q = np.einsum('ab,bc,cd', U, Q0, Ud)
+        
+        """
+            Step 3: Project onto color components
+        """
+        
+        q = 2*np.einsum('ijk,kj', T, Q)
+        q0 = np.real(q)
 
         # """
         #     New step 1: specific random color vector
