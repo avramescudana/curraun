@@ -109,5 +109,17 @@ venv.bak/
 *.html
 .idea/
 
-# Simulation data
+# Simulation data files
 *.dat
+*.pickle
+*.npz
+
+# VSCode files
+.vscode/
+
+# Results
+results/
+
+# Plots
+*.png
+plots/

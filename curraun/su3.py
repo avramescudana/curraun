@@ -14,7 +14,7 @@ import numpy as np
 N_C = 3  # Number of colors
 ALGEBRA_ELEMENTS = 8
 GROUP_ELEMENTS = 9
-
+CASIMIRS = 2
 
 zero_algebra = (0,0,0,0,0,0,0,0)
 
@@ -173,6 +173,36 @@ def mexp(a):
     else:
         # print("Exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
         print("Exponential did not reach desired accuracy")  # TODO: remove debugging code
+    return res
+
+LOG_MIN_TERMS = -1 # minimum number of terms in Taylor series
+LOG_MAX_TERMS = 100 # maximum number of terms in Taylor series
+LOG_ACCURACY_SQUARED = 1.e-32 # 1.e-32 # accuracy
+
+# logarithm map
+@myjit
+def mlog(a):
+    """
+    Computes logarithm of a matrix using Taylor series
+
+    mlog(a) = (a-id0) - (a-id0)^2 / 2 + (a-id0)^3 / 3 - (a-id0)^4 / 4 + ...
+
+    Works for matrices close to identity (for example gauge links)
+    """
+    res = add(a, mul_s(id0, -1))
+    t = add(a, mul_s(id0, -1))
+    sign = -1
+    for i in range(1, LOG_MAX_TERMS):
+        t = mul(t, add(a, mul_s(id0, -1)))
+        buff = mul_s(t, sign/(i+1))
+        res = add(res, buff)
+        sign = sign * (-1)
+        n = sq(t) 
+        if (i > LOG_MIN_TERMS) and (math.fabs(n.real) < LOG_ACCURACY_SQUARED):
+            break
+        # else:
+            # print("Logarithm did not reach desired accuracy") 
+
     return res
 
 
@@ -473,6 +503,15 @@ def proj(g, i, j):
     b = mul(slist[i], mul(g, slist[j]))
     return GROUP_TYPE_REAL(0.5 * tr(b).real)
 
+@myjit
+def casimir(Q):
+    """
+    Computes the quadratic and cubic Casimirs C_2 and C_3. 
+    Notice that Tr{Q^2}=T(R)C_2 and Tr{Q^3}=[T(R)]^2C_3, with T(R)=1/2 for R=F.
+    """
+    c0 = sq(Q).real * 2 / N_C
+    c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag * 4 / N_C
+    return c0, c1
 
 """
     DocTest

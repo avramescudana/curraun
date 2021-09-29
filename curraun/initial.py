@@ -3,10 +3,13 @@ import numpy as np
 import curraun.lattice as l
 import curraun.su as su
 from curraun.initial_su3 import init_kernel_2_su3_cuda, init_kernel_2_su3_numba
+from curraun.initial_su2 import init_kernel_2_su2_cuda, init_kernel_2_su2_numba
 from time import time
 
 DEBUG = False
 
+import os
+su_group = os.environ.get('GAUGE_GROUP')
 
 def init(s, w1, w2):
     u0 = s.u0
@@ -35,9 +38,14 @@ def init(s, w1, w2):
     my_parallel_loop(init_kernel_1, n ** 2, v1, v2, n, ua, ub)
     debug_print("Init: temporary transverse gauge links ({:3.2f}s)".format(time() - t))
     t = time()
-    if su.N_C == 2:
+    if su_group == 'su2':
         my_parallel_loop(init_kernel_2, n ** 2, u0, u1, ua, ub)
-    elif su.N_C == 3:
+    elif su_group == 'su2_complex':
+        if use_cuda:
+            my_parallel_loop(init_kernel_2_su2_cuda, n ** 2, u0, u1, ua, ub)
+        else:
+            my_parallel_loop(init_kernel_2_su2_numba, n ** 2, u0, u1, ua, ub)
+    elif su_group == 'su3':
         if use_cuda:
             my_parallel_loop(init_kernel_2_su3_cuda, n ** 2, u0, u1, ua, ub)
         else:

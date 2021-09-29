@@ -15,6 +15,14 @@ color sheets ("rapidity slices") and transverse shapes (finite radii)
 * Calculation of kappa and q-hat
 * Landau matching for hydrodynamical simulations
 
+# Papers
+
+This code has been used in the following works:
+
+- "Jet momentum broadening in the pre-equilibrium Glasma", Andreas Ipp, David I. Müller, Daniel Schuh, [Phys.Lett.B 810 (2020) 135810](https://doi.org/10.1016/j.physletb.2020.135810), [arXiv:2009.14206](https://arxiv.org/abs/2009.14206) [hep-ph]
+- "Anisotropic momentum broadening in the 2+1D Glasma: analytic weak field approximation and lattice simulations", Andreas Ipp, David I. Müller, Daniel Schuh, [Phys.Rev.D 102 (2020) 7, 074001](https://doi.org/10.1103/PhysRevD.102.074001), [arXiv:2001.10001](https://arxiv.org/abs/2001.10001) [hep-ph] 
+- "Simulations of the Glasma in 3+1D", David I. Müller, PhD thesis (2019), [arXiv:1904.04267](https://arxiv.org/abs/1904.04267) [hep-ph]
+
 # Installation
 You can install all dependencies with [Anaconda](https://www.anaconda.com/distribution/):
 
