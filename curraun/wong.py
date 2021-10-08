@@ -10,7 +10,10 @@ if use_cuda:
 import numpy as np
 from scipy.stats import unitary_group
 from math import sqrt
+DEBUG = True
 
+import os
+su_group = os.environ["GAUGE_GROUP"]
 
 class WongSolver:
     def __init__(self, s, n_particles):
@@ -34,8 +37,19 @@ class WongSolver:
         # particle properties (mass)
         self.m = np.zeros(n_particles, dtype=su.GROUP_TYPE_REAL)
 
-        # additional quantities of interest (wilson line for each charge?)
-        # TODO
+        # wilson line for each charge
+        self.w = np.zeros((n_particles, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+
+        # color lorentz force for each particle
+        # force layouy (f): x,y,eta
+        self.f = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+
+        # lorentz force correlator
+        self.corr = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE)
+
+        # casimirs
+        if DEBUG:
+            self.c = np.zeros((n_particles, su.CASIMIRS), dtype=su.GROUP_TYPE_REAL)
 
         # set-up device pointers
         self.d_x0 = self.x0
@@ -43,6 +57,13 @@ class WongSolver:
         self.d_p = self.p
         self.d_q = self.q
         self.d_m = self.m
+
+        self.d_w = self.w
+        self.d_f = self.f
+        self.d_corr = self.corr
+
+        if DEBUG:
+            self.d_c = self.c
 
         # move data to GPU
         if use_cuda:
@@ -57,6 +78,13 @@ class WongSolver:
         self.d_q = cuda.to_device(self.q)
         self.d_m = cuda.to_device(self.m)
 
+        if DEBUG:
+            self.d_c = cuda.to_device(self.c)
+
+        self.d_w = cuda.to_device(self.w)
+        self.d_f = cuda.to_device(self.f)
+        self.d_corr = cuda.to_device(self.corr)
+
     def copy_to_host(self):
         self.d_x0.copy_to_host(self.x0)
         self.d_x1.copy_to_host(self.x1)
@@ -64,27 +92,46 @@ class WongSolver:
         self.d_q.copy_to_host(self.q)
         self.d_m.copy_to_host(self.m)
 
+        if DEBUG:
+            self.d_c.copy_to_host(self.c)
+
+        self.d_w.copy_to_host(self.w)
+        self.d_f.copy_to_host(self.f)
+        self.d_corr.copy_to_host(self.corr)
+
     def init(self):
         if use_cuda:
             self.copy_to_device()
 
-        my_parallel_loop(init_momenta_kernel, self.allocated,
+        my_parallel_loop(init_momenta_kernel, self.n_particles,
                          self.d_p, self.d_m, self.s.t)
 
         self.initialized = True
 
-    def add_particle(self, x0, p0, q0, m):
-        i = self.allocated
-        if i < self.n_particles:
-            self.x0[i, :] = x0[:]
-            self.x1[i, :] = x0[:]
-            self.p[i, :] = p0[:]
-            q0_algebra = su.get_algebra_element(q0)
-            self.q[i, :] = q0_algebra[:]
-            self.m[i] = m
-            self.allocated += 1
-        else:
-            raise Exception("Maximum number of particles reached.")
+    # def add_particle(self, x0, p0, q0, m):
+    #     i = self.allocated
+    #     if i < self.n_particles:
+    #         self.x0[i, :] = x0[:]
+    #         self.x1[i, :] = x0[:]
+    #         self.p[i, :] = p0[:]
+    #         q0_algebra = su.get_algebra_element(q0)
+    #         self.q[i, :] = q0_algebra[:]
+
+    #         self.m[i] = m
+    #         self.allocated += 1
+    #     else:
+    #         raise Exception("Maximum number of particles reached.")
+
+    def initialize(self, x0s, p0s, q0s, masses):
+
+        self.x0[:, :] = x0s[:, :]
+        self.x1[:, :] = x0s[:, :]
+        self.p[:, :] = p0s[:, :]
+        self.m[:] = masses[:]
+
+        my_parallel_loop(init_charge_kernel, self.n_particles, self.q, q0s)
+        my_parallel_loop(init_wilson_lines_kernel, self.n_particles, self.w)
+
 
     def evolve(self):
         if not self.initialized:
@@ -92,93 +139,56 @@ class WongSolver:
 
         # update positions and perform parallel transport
 
-        my_parallel_loop(update_coordinates_kernel, self.allocated,
+        my_parallel_loop(update_coordinates_kernel, self.n_particles,
                          self.d_x0, self.d_x1, self.d_p, self.d_q,
-                         self.s.dt, self.s.d_u0, self.s.d_aeta0, self.s.n)
+                         self.s.dt, self.s.d_u0, self.s.d_aeta0, self.s.n, self.d_w)
 
         # update momenta
-        my_parallel_loop(update_momenta_kernel, self.allocated,
-                         self.d_x0, self.d_x1, self.d_p, self.d_q, self.d_m,
+
+        my_parallel_loop(update_momenta_kernel, self.n_particles,
+                         self.d_x1, self.d_p, self.d_q, self.d_m,
                          self.s.t, self.s.dt, self.s.d_u0, self.s.d_pt0, self.s.d_pt1,
                          self.s.aeta0, self.s.peta0, self.s.peta1,
                          self.s.n)
 
+
         # swap variables
         self.d_x0, self.d_x1 = self.d_x1, self.d_x0
 
+        if use_cuda:
+            self.copy_to_host()
 
-@myjit
-def ngp(x):
-    """
-        Computes the nearest grid point of a particle position
-    """
-    return int(round(x[0])), int(round(x[1]))
+    def compute_casimirs(self):
+        my_parallel_loop(compute_casimirs_kernel, self.n_particles, self.d_q, self.d_c)
 
+        if use_cuda:
+            self.copy_to_host()
 
-@myjit
-def init_momenta_kernel(index, p, m, tau):
-    """
-        Initializes the tau component of the momentum vectors
-    """
-    # TODO: check tau factor
-    p[index, 0] = sqrt(p[index, 1] ** 2 + p[index, 2] ** 2 + (tau * p[index, 3]) ** 2 + m[index] ** 2)
+    def compute_lorentz_force(self):
+        my_parallel_loop(compute_lorentz_force_kernel, self.n_particles, self.d_f, self.d_x0, self.d_p, self.s.d_pt0, 
+        self.s.d_pt1, self.s.d_u0, self.s.peta0, self.s.peta1, self.s.aeta0, self.s.n, self.s.t)
 
+        if use_cuda:
+            self.copy_to_host()
 
-@myjit
-def update_coordinates_kernel(index, x0, x1, p, q, dt, u0, aeta0, n):
-    """
-        Solve coordinate and charge equations
-    """
-    # x, y update
-    ptau = p[index, 0]
-    for d in range(2):
-        x1[index, d] = x0[index, d] + p[index, d+1] / ptau * dt
-    # eta update
-    x1[index, 2] = x0[index, 2] + p[index, 3] / ptau * dt
+    def compute_lorentz_force_correlator(self, f0, f):
+         my_parallel_loop(compute_force_correlator_kernel, self.n_particles, f0, f, self.d_w, self.d_corr)
 
-
-    # check boundary conditions
-    # actually don't check them, it's easier to leave x0 and x1 unbounded
-
-    # check for nearest-grid-point changes and update charge accordingly
-    ngp0 = ngp(x0[index, :2])
-    ngp1 = ngp(x1[index, :2])
-    ngp0_index = l.get_index(ngp0[0], ngp0[1], n)  # this takes care of bounds
-    ngp1_index = l.get_index(ngp1[0], ngp0[1], n)  # ...
-
-    for d in range(2):
-        delta_ngp = ngp1[d] - ngp0[d]
-        if delta_ngp == 1:
-            U = u0[ngp0_index, d]
-            q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
-            q[index, :] = q1[:]
-
-        if delta_ngp == -1:
-            U = su.dagger(u0[ngp1_index, d])
-            q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
-            q[index, :] = q1[:]
-
-    # parallel transport charge along eta
-    delta_eta = x1[index, 2] - x0[index, 2]
-    U = su.mexp(su.mul_s(aeta0[ngp0_index], delta_eta))
-    q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
-    q[index, :] = q1[:]
+         if use_cuda:
+            self.copy_to_host()
 
 
 @myjit
-def update_momenta_kernel(index, x0, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0, peta1, n):
-    """
-        Computes force acting on particle and updates momenta accordingly
-    """
-    # TODO: What is the right position here?
-    ngp_pos = ngp(x1[index, :2])
-    ngp_index = l.get_index(ngp_pos[0], ngp_pos[1], n)
+def init_charge_kernel(index, q, q0s):
+    q0_algebra = su.get_algebra_element(q0s[index, :])
+    q[index, :] = q0_algebra[:]
 
-    """
-        Compute tr(QE) and tr(QB)
-    """
-    # TODO: Check these formulas
+@myjit
+def init_wilson_lines_kernel(index, w):
+    w[index, :] = su.unit()
 
+@myjit
+def compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t):
     # Electric fields
     Ex = su.zero()
     Ex = su.add(Ex, pt1[ngp_index, 0, :])
@@ -204,6 +214,10 @@ def update_momenta_kernel(index, x0, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, pe
     Eeta = l.add_mul(Eeta, peta1[ngp_index, :], 0.5)
     Eeta = l.add_mul(Eeta, peta0[ngp_index, :], 0.5)
 
+    return Ex, Ey, Eeta
+
+@myjit
+def compute_magnetic_field(ngp_index, aeta0, u0, n, t):
     # Magnetic fields
     b1 = l.transport(aeta0, u0, ngp_index, 1, +1, n)
     b2 = l.transport(aeta0, u0, ngp_index, 1, -1, n)
@@ -232,6 +246,117 @@ def update_momenta_kernel(index, x0, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, pe
     b2 = su.ah(b1)
     Beta = l.add_mul(bf1, b2, +0.25)
 
+    return Bx, By, Beta
+
+@myjit
+def compute_lorentz_force_kernel(index, f, x0, p, pt0, pt1, u0, peta0, peta1, aeta0, n, t):
+    ngp_pos = ngp(x0[index, :2])
+    ngp_index = l.get_index(ngp_pos[0], ngp_pos[1], n)
+    Ex, Ey, Eeta = compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t)
+    Bx, By, Beta = compute_magnetic_field(ngp_index, aeta0, u0, n, t)
+
+    b1 = su.mul_s(Beta, p[index, 2]/p[index, 0])
+    b2 = su.add(Ex, b1)
+    b3 = su.mul_s(By, -t*p[index, 3]/p[index, 0])
+    f[index, 0, :] = su.add(b2, b3)
+
+    b1 = su.mul_s(Beta, -p[index, 1]/p[index, 0])
+    b2 = su.add(Ey, b1)
+    b3 = su.mul_s(Bx, t*p[index, 3]/p[index, 0])
+    f[index, 1, :] = su.add(b2, b3)
+
+    b1 = su.mul_s(By, p[index, 1]/p[index, 0])
+    b2 = su.add(Eeta, b1)
+    b3 = su.mul_s(Bx, -p[index, 2]/p[index, 0])
+    f[index, 2, :] = su.add(b2, b3)
+
+@myjit
+def compute_force_correlator_kernel(index, f0, f, w, corr):
+    for d in range(3):
+        buf1 = l.act(w[index, :], f0[index, d, :])
+        buf2 = su.mul(f[index, d, :], su.dagger(buf1))
+        corr[index, d] = su.tr(buf2).real
+
+@myjit
+def ngp(x):
+    """
+        Computes the nearest grid point of a particle position
+    """
+    return int(round(x[0])), int(round(x[1]))
+
+
+@myjit
+def init_momenta_kernel(index, p, m, tau):
+    """
+        Initializes the tau component of the momentum vectors
+    """
+    # TODO: check tau factor
+    p[index, 0] = sqrt(p[index, 1] ** 2 + p[index, 2] ** 2 + (tau * p[index, 3]) ** 2 + m[index] ** 2)
+
+
+@myjit
+def update_coordinates_kernel(index, x0, x1, p, q, dt, u0, aeta0, n, w):
+    """
+        Solve coordinate and charge equations
+    """
+    # x, y update
+    ptau = p[index, 0]
+    for d in range(2):
+        x1[index, d] = x0[index, d] + p[index, d+1] / ptau * dt
+    # eta update
+    x1[index, 2] = x0[index, 2] + p[index, 3] / ptau * dt
+
+
+    # check boundary conditions
+    # actually don't check them, it's easier to leave x0 and x1 unbounded
+
+    # check for nearest-grid-point changes and update charge accordingly
+    ngp0 = ngp(x0[index, :2])
+    ngp1 = ngp(x1[index, :2])
+    ngp0_index = l.get_index(ngp0[0], ngp0[1], n)  # this takes care of bounds
+    ngp1_index = l.get_index(ngp1[0], ngp0[1], n)  # ...
+
+    for d in range(2):
+        delta_ngp = ngp1[d] - ngp0[d]
+        if delta_ngp == 1:
+            # U = u0[ngp0_index, d]
+            # q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
+            w[index, :] = su.mul(w[index, :], u0[ngp0_index, d])
+
+        if delta_ngp == -1:
+            # U = su.dagger(u0[ngp1_index, d])
+            # q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
+            w[index, :] = su.mul(w[index, :], su.dagger(u0[ngp1_index, d]))
+
+    # parallel transport charge along eta
+    delta_eta = x1[index, 2] - x0[index, 2]
+    U = su.mexp(su.mul_s(aeta0[ngp0_index], delta_eta))
+    w[index, :] = su.mul(w[index, :], U)
+
+    # apply the wilson lines to the color charge
+    q1 = su.mul(su.mul(w[index, :], q[index]), su.dagger(w[index, :]))
+    q[index, :] = q1[:]
+
+
+@myjit
+# def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0, peta1, n):
+def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0, peta1, n):
+
+    """
+        Computes force acting on particle and updates momenta accordingly
+    """
+    # TODO: What is the right position here?
+    ngp_pos = ngp(x1[index, :2])
+    ngp_index = l.get_index(ngp_pos[0], ngp_pos[1], n)
+
+    """
+        Compute tr(QE) and tr(QB)
+    """
+    # TODO: Check these formulas
+
+    Ex, Ey, Eeta = compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t)
+    Bx, By, Beta = compute_magnetic_field(ngp_index, aeta0, u0, n, t)
+
     Q0 = q[index]
 
     trQE = su.tr(su.mul(Q0, Ex)).real, su.tr(su.mul(Q0, Ey)).real, su.tr(su.mul(Q0, Eeta)).real
@@ -255,3 +380,66 @@ def update_momenta_kernel(index, x0, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, pe
     p[index, 1] = px1
     p[index, 2] = py1
     p[index, 3] = peta1
+
+
+@myjit
+def compute_casimirs_kernel(index, q, c):
+    c[index, :] = su.casimir(q[index, :])
+
+# gell-mann matrices
+
+gm = [
+    [[0, 1, 0], [1, 0, 0], [0, 0, 0]],
+    [[0, -1j, 0], [1j, 0, 0], [0, 0, 0]],
+    [[1, 0, 0], [0, -1, 0], [0, 0, 0]],
+    [[0, 0, 1], [0, 0, 0], [1, 0, 0]],
+    [[0, 0, -1j], [0, 0, 0], [1j, 0, 0]],
+    [[0, 0, 0], [0, 0, 1], [0, 1, 0]],
+    [[0, 0, 0], [0, 0, -1j], [0, 1j, 0]],
+    [[1/ np.sqrt(3), 0, 0], [0, 1/ np.sqrt(3), 0], [0, 0, -2/ np.sqrt(3)]]
+]
+
+T = np.array(gm) / 2.0
+
+def init_charge():
+    if su_group=='su2':
+
+        """
+            Random color charges uniformly distributed on sphere of fixed radius
+        """
+
+        J = np.sqrt(1.5)
+        #TODO fix J for adjoint representation
+        phi, pi = np.random.uniform(0, 2*np.pi), np.random.uniform(-J, J)
+        Q1 = np.cos(phi) * np.sqrt(J**2 - pi**2)
+        Q2 = np.sin(phi) * np.sqrt(J**2 - pi**2)
+        Q3 = pi
+        q0 = np.array([Q1, Q2, Q3])
+        return q0
+    elif su_group=='su3':
+        
+        """
+            New step 1: specific random color vector
+        """
+        #TODO find q0 for adjoint representation
+        q0 = [0., 0., 0., 0., -1.69469, 0., 0., -1.06209]
+        Q0 = np.einsum('ijk,i', T, q0)
+        
+        
+        
+        """
+            Step 2: create a random SU(3) matrix to rotate Q.
+        """
+        V = unitary_group.rvs(3)
+        detV = np.linalg.det(V)
+        U = V / detV ** (1/3)
+        Ud = np.conj(U).T
+        
+        Q = np.einsum('ab,bc,cd', U, Q0, Ud)
+        
+        """
+            Step 3: Project onto color components
+        """
+        
+        q = 2*np.einsum('ijk,kj', T, Q)
+        return np.real(q)
