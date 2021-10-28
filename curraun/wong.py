@@ -14,6 +14,7 @@ DEBUG = True
 
 import os
 su_group = os.environ["GAUGE_GROUP"]
+boundary = os.environ["BOUNDARY"]
 
 class WongSolver:
     def __init__(self, s, n_particles):
@@ -37,15 +38,11 @@ class WongSolver:
         # particle properties (mass)
         self.m = np.zeros(n_particles, dtype=su.GROUP_TYPE_REAL)
 
+        # active or deactivated particles
+        self.active = np.ones(n_particles, dtype=np.int64)
+
         # wilson line for each charge
         self.w = np.zeros((n_particles, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-
-        # color lorentz force for each particle
-        # force layouy (f): x,y,eta
-        self.f = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-
-        # lorentz force correlator
-        self.corr = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE)
 
         # casimirs
         if DEBUG:
@@ -57,10 +54,8 @@ class WongSolver:
         self.d_p = self.p
         self.d_q = self.q
         self.d_m = self.m
-
+        self.d_active = self.active
         self.d_w = self.w
-        self.d_f = self.f
-        self.d_corr = self.corr
 
         if DEBUG:
             self.d_c = self.c
@@ -77,13 +72,11 @@ class WongSolver:
         self.d_p = cuda.to_device(self.p)
         self.d_q = cuda.to_device(self.q)
         self.d_m = cuda.to_device(self.m)
+        self.d_active = cuda.to_device(self.active)
+        self.d_w = cuda.to_device(self.w)
 
         if DEBUG:
             self.d_c = cuda.to_device(self.c)
-
-        self.d_w = cuda.to_device(self.w)
-        self.d_f = cuda.to_device(self.f)
-        self.d_corr = cuda.to_device(self.corr)
 
     def copy_to_host(self):
         self.d_x0.copy_to_host(self.x0)
@@ -91,13 +84,11 @@ class WongSolver:
         self.d_p.copy_to_host(self.p)
         self.d_q.copy_to_host(self.q)
         self.d_m.copy_to_host(self.m)
+        self.d_active.copy_to_host(self.active)
+        self.d_w.copy_to_host(self.w)
 
         if DEBUG:
             self.d_c.copy_to_host(self.c)
-
-        self.d_w.copy_to_host(self.w)
-        self.d_f.copy_to_host(self.f)
-        self.d_corr.copy_to_host(self.corr)
 
     def init(self):
         if use_cuda:
@@ -141,7 +132,7 @@ class WongSolver:
 
         my_parallel_loop(update_coordinates_kernel, self.n_particles,
                          self.d_x0, self.d_x1, self.d_p, self.d_q,
-                         self.s.dt, self.s.d_u0, self.s.d_aeta0, self.s.n, self.d_w)
+                         self.s.dt, self.s.d_u0, self.s.d_aeta0, self.s.n, self.d_w, self.d_active)
 
         # update momenta
 
@@ -149,11 +140,12 @@ class WongSolver:
                          self.d_x1, self.d_p, self.d_q, self.d_m,
                          self.s.t, self.s.dt, self.s.d_u0, self.s.d_pt0, self.s.d_pt1,
                          self.s.aeta0, self.s.peta0, self.s.peta1,
-                         self.s.n)
+                         self.s.n, self.d_active)
 
 
         # swap variables
-        self.d_x0, self.d_x1 = self.d_x1, self.d_x0
+        my_parallel_loop(swap_coordinates_kernel, self.n_particles, self.d_x0, self.d_x1, self.d_active)
+        # self.d_x0, self.d_x1 = self.d_x1, self.d_x0
 
         if use_cuda:
             self.copy_to_host()
@@ -164,20 +156,7 @@ class WongSolver:
         if use_cuda:
             self.copy_to_host()
 
-    def compute_lorentz_force(self):
-        my_parallel_loop(compute_lorentz_force_kernel, self.n_particles, self.d_f, self.d_x0, self.d_p, self.s.d_pt0, 
-        self.s.d_pt1, self.s.d_u0, self.s.peta0, self.s.peta1, self.s.aeta0, self.s.n, self.s.t)
-
-        if use_cuda:
-            self.copy_to_host()
-
-    def compute_lorentz_force_correlator(self, f0, f):
-         my_parallel_loop(compute_force_correlator_kernel, self.n_particles, f0, f, self.d_w, self.d_corr)
-
-         if use_cuda:
-            self.copy_to_host()
-
-
+  
 @myjit
 def init_charge_kernel(index, q, q0s):
     q0_algebra = su.get_algebra_element(q0s[index, :])
@@ -248,34 +227,6 @@ def compute_magnetic_field(ngp_index, aeta0, u0, n, t):
 
     return Bx, By, Beta
 
-@myjit
-def compute_lorentz_force_kernel(index, f, x0, p, pt0, pt1, u0, peta0, peta1, aeta0, n, t):
-    ngp_pos = ngp(x0[index, :2])
-    ngp_index = l.get_index(ngp_pos[0], ngp_pos[1], n)
-    Ex, Ey, Eeta = compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t)
-    Bx, By, Beta = compute_magnetic_field(ngp_index, aeta0, u0, n, t)
-
-    b1 = su.mul_s(Beta, p[index, 2]/p[index, 0])
-    b2 = su.add(Ex, b1)
-    b3 = su.mul_s(By, -t*p[index, 3]/p[index, 0])
-    f[index, 0, :] = su.add(b2, b3)
-
-    b1 = su.mul_s(Beta, -p[index, 1]/p[index, 0])
-    b2 = su.add(Ey, b1)
-    b3 = su.mul_s(Bx, t*p[index, 3]/p[index, 0])
-    f[index, 1, :] = su.add(b2, b3)
-
-    b1 = su.mul_s(By, p[index, 1]/p[index, 0])
-    b2 = su.add(Eeta, b1)
-    b3 = su.mul_s(Bx, -p[index, 2]/p[index, 0])
-    f[index, 2, :] = su.add(b2, b3)
-
-@myjit
-def compute_force_correlator_kernel(index, f0, f, w, corr):
-    for d in range(3):
-        buf1 = l.act(w[index, :], f0[index, d, :])
-        buf2 = su.mul(f[index, d, :], su.dagger(buf1))
-        corr[index, d] = su.tr(buf2).real
 
 @myjit
 def ngp(x):
@@ -295,92 +246,104 @@ def init_momenta_kernel(index, p, m, tau):
 
 
 @myjit
-def update_coordinates_kernel(index, x0, x1, p, q, dt, u0, aeta0, n, w):
-    """
-        Solve coordinate and charge equations
-    """
-    # x, y update
-    ptau = p[index, 0]
-    for d in range(2):
-        x1[index, d] = x0[index, d] + p[index, d+1] / ptau * dt
-    # eta update
-    x1[index, 2] = x0[index, 2] + p[index, 3] / ptau * dt
+def update_coordinates_kernel(index, x0, x1, p, q, dt, u0, aeta0, n, w, active):
+    if boundary=='unbounded':
+        for d in range(1):
+            if x0[index, d] < 0 or x0[index, d]>n:
+                active[index] = 0
 
+    if active[index]==1:
+        """
+            Solve coordinate and charge equations
+        """
+        # x, y update
+        ptau = p[index, 0]
+        for d in range(2):
+            x1[index, d] = x0[index, d] + p[index, d+1] / ptau * dt
+        # eta update
+        x1[index, 2] = x0[index, 2] + p[index, 3] / ptau * dt
 
-    # check boundary conditions
-    # actually don't check them, it's easier to leave x0 and x1 unbounded
+        # check for nearest-grid-point changes and update charge accordingly
+        ngp0 = ngp(x0[index, :2])
+        ngp1 = ngp(x1[index, :2])
+        ngp0_index = l.get_index(ngp0[0], ngp0[1], n)  # this takes care of bounds
+        ngp1_index = l.get_index(ngp1[0], ngp0[1], n)  # ...
 
-    # check for nearest-grid-point changes and update charge accordingly
-    ngp0 = ngp(x0[index, :2])
-    ngp1 = ngp(x1[index, :2])
-    ngp0_index = l.get_index(ngp0[0], ngp0[1], n)  # this takes care of bounds
-    ngp1_index = l.get_index(ngp1[0], ngp0[1], n)  # ...
+        for d in range(2):
+            delta_ngp = ngp1[d] - ngp0[d]
+            if delta_ngp == 1:
+                # U = u0[ngp0_index, d]
+                # q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
+                w[index, :] = su.mul(w[index, :], u0[ngp0_index, d])
 
-    for d in range(2):
-        delta_ngp = ngp1[d] - ngp0[d]
-        if delta_ngp == 1:
-            # U = u0[ngp0_index, d]
-            # q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
-            w[index, :] = su.mul(w[index, :], u0[ngp0_index, d])
+            if delta_ngp == -1:
+                # U = su.dagger(u0[ngp1_index, d])
+                # q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
+                w[index, :] = su.mul(w[index, :], su.dagger(u0[ngp1_index, d]))
 
-        if delta_ngp == -1:
-            # U = su.dagger(u0[ngp1_index, d])
-            # q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
-            w[index, :] = su.mul(w[index, :], su.dagger(u0[ngp1_index, d]))
+        # parallel transport charge along eta
+        delta_eta = x1[index, 2] - x0[index, 2]
+        U = su.mexp(su.mul_s(aeta0[ngp0_index], delta_eta))
+        w[index, :] = su.mul(w[index, :], U)
 
-    # parallel transport charge along eta
-    delta_eta = x1[index, 2] - x0[index, 2]
-    U = su.mexp(su.mul_s(aeta0[ngp0_index], delta_eta))
-    w[index, :] = su.mul(w[index, :], U)
-
-    # apply the wilson lines to the color charge
-    q1 = su.mul(su.mul(w[index, :], q[index]), su.dagger(w[index, :]))
-    q[index, :] = q1[:]
+        # apply the wilson lines to the color charge
+        q1 = su.mul(su.mul(w[index, :], q[index]), su.dagger(w[index, :]))
+        q[index, :] = q1[:]
 
 
 @myjit
-# def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0, peta1, n):
-def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0, peta1, n):
+def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0, peta1, n, active):
 
-    """
-        Computes force acting on particle and updates momenta accordingly
-    """
-    # TODO: What is the right position here?
-    ngp_pos = ngp(x1[index, :2])
-    ngp_index = l.get_index(ngp_pos[0], ngp_pos[1], n)
+    if active[index]==1:
+        """
+            Computes force acting on particle and updates momenta accordingly
+        """
+        # TODO: What is the right position here?
+        ngp_pos = ngp(x1[index, :2])
+        ngp_index = l.get_index(ngp_pos[0], ngp_pos[1], n)
 
-    """
-        Compute tr(QE) and tr(QB)
-    """
-    # TODO: Check these formulas
+        """
+            Compute tr(QE) and tr(QB)
+        """
+        # TODO: Check these formulas
 
-    Ex, Ey, Eeta = compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t)
-    Bx, By, Beta = compute_magnetic_field(ngp_index, aeta0, u0, n, t)
+        Ex, Ey, Eeta = compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t)
+        Bx, By, Beta = compute_magnetic_field(ngp_index, aeta0, u0, n, t)
 
-    Q0 = q[index]
+        Q0 = q[index]
 
-    trQE = su.tr(su.mul(Q0, Ex)).real, su.tr(su.mul(Q0, Ey)).real, su.tr(su.mul(Q0, Eeta)).real
-    trQB = su.tr(su.mul(Q0, Bx)).real, su.tr(su.mul(Q0, By)).real, su.tr(su.mul(Q0, Beta)).real
+        trQE = su.tr(su.mul(Q0, Ex)).real, su.tr(su.mul(Q0, Ey)).real, su.tr(su.mul(Q0, Eeta)).real
+        trQB = su.tr(su.mul(Q0, Bx)).real, su.tr(su.mul(Q0, By)).real, su.tr(su.mul(Q0, Beta)).real
 
-    """
-        Force computation and momentum update
-    """
-    # TODO: Check these formulas
+        """
+            Force computation and momentum update
+        """
+        # TODO: Check these formulas
 
-    tr = -1/2
+        tr = -1/2
 
-    ptau0, px0, py0, peta0 = p[index, 0], p[index, 1], p[index, 2], p[index, 3]
-    mass = m[index]
-    px1 = px0 + dt / tr * (trQE[0] + trQB[2] * py0 / ptau0 - trQB[1] * peta0 * t / ptau0)
-    py1 = py0 + dt / tr * (trQE[1] - trQB[2] * px0 / ptau0 + trQB[0] * peta0 * t / ptau0)
-    peta1 = peta0 + dt * ((trQE[2] * ptau0 - trQB[0] * py0 + trQB[1] * px0) / tr - 2 * peta0 * ptau0) / (t * ptau0)
-    ptau1 = sqrt(px1 ** 2 + py1 ** 2 + (t * peta1) ** 2 + mass ** 2)
+        ptau0, px0, py0, peeta0 = p[index, 0], p[index, 1], p[index, 2], p[index, 3]
+        mass = m[index]
+        px1 = px0 + dt / tr * (trQE[0] + trQB[2] * py0 / ptau0 - trQB[1] * peeta0 * t / ptau0)
+        py1 = py0 + dt / tr * (trQE[1] - trQB[2] * px0 / ptau0 + trQB[0] * peeta0 * t / ptau0)
+        peeta1 = peeta0 + dt * ((trQE[2] * ptau0 - trQB[0] * py0 + trQB[1] * px0) / tr - 2 * peeta0 * ptau0) / (t * ptau0)
+        # peeta1 = peeta0 + dt * ((trQE[2] * ptau0 - trQB[0] * py0 + trQB[1] * px0) / tr - peeta0 * ptau0) / (t * ptau0)
+        # pz0 = peeta0 * t
+        # pz1 = pz0 + dt / tr * (trQE[2] - trQB[0] * py0 / ptau0 + trQB[1] * px0 * t / ptau0)
+        # peeta1 = pz1 / t
 
-    p[index, 0] = ptau1
-    p[index, 1] = px1
-    p[index, 2] = py1
-    p[index, 3] = peta1
+        ptau1 = sqrt(px1 ** 2 + py1 ** 2 + (t * peeta1) ** 2 + mass ** 2)
 
+        p[index, 0] = ptau1
+        p[index, 1] = px1
+        p[index, 2] = py1
+        p[index, 3] = peeta1
+
+@myjit
+def swap_coordinates_kernel(index, x0, x1, active):
+    if active[index]==1:
+        for d in range(3):
+            x0[index, d], x1[index, d] = x1[index, d], x0[index, d]
 
 @myjit
 def compute_casimirs_kernel(index, q, c):
