@@ -247,7 +247,7 @@ def init_momenta_kernel(index, p, m, tau):
 
 @myjit
 def update_coordinates_kernel(index, x0, x1, p, q, dt, u0, aeta0, n, w, active):
-    if boundary=='unbounded':
+    if boundary=='frozen':
         for d in range(1):
             if x0[index, d] < 0 or x0[index, d]>n:
                 active[index] = 0

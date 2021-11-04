@@ -54,10 +54,13 @@ class ForceCorrelators:
         if use_cuda:
             self.copy_to_host()
 
-    def compute_lorentz_force_correlator(self, f0, f, w):
-         my_parallel_loop(compute_force_correlator_kernel, self.n_particles, f0, f, w, self.d_corr)
+    def compute_force_correlator(self, f0, f, w, tag):
+        if tag=='transported':
+            my_parallel_loop(compute_force_correlator_transported_kernel, self.n_particles, f0, f, w, self.d_corr)
+        elif tag=='naive':
+            my_parallel_loop(compute_force_correlator_naive_kernel, self.n_particles, f0, f, self.d_corr)
 
-         if use_cuda:
+        if use_cuda:
             self.copy_to_host()
     
     # def compute_lorentz_force_autocorrelator(self, f0, f1, w0, w1):
@@ -158,10 +161,17 @@ def compute_lorentz_force_kernel(index, f, x0, p, pt0, pt1, u0, peta0, peta1, ae
     f[index, 2, :] = su.add(b2, b3)
 
 @myjit
-def compute_force_correlator_kernel(index, f0, f, w, corr):
+def compute_force_correlator_transported_kernel(index, f0, f, w, corr):
     for d in range(3):
         buf1 = l.act(w[index, :], f0[index, d, :])
         buf2 = su.mul(f[index, d, :], su.dagger(buf1))
+        corr[index, d] = su.tr(buf2).real
+
+@myjit
+def compute_force_correlator_naive_kernel(index, f0, f, corr):
+    for d in range(3):
+        buf1 = su.dagger(f0[index, d, :])
+        buf2 = su.mul(f[index, d, :], buf1)
         corr[index, d] = su.tr(buf2).real
 
 # @myjit
