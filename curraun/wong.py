@@ -327,10 +327,6 @@ def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0,
         px1 = px0 + dt / tr * (trQE[0] + trQB[2] * py0 / ptau0 - trQB[1] * peeta0 * t / ptau0)
         py1 = py0 + dt / tr * (trQE[1] - trQB[2] * px0 / ptau0 + trQB[0] * peeta0 * t / ptau0)
         peeta1 = peeta0 + dt * ((trQE[2] * ptau0 - trQB[0] * py0 + trQB[1] * px0) / tr - 2 * peeta0 * ptau0) / (t * ptau0)
-        # peeta1 = peeta0 + dt * ((trQE[2] * ptau0 - trQB[0] * py0 + trQB[1] * px0) / tr - peeta0 * ptau0) / (t * ptau0)
-        # pz0 = peeta0 * t
-        # pz1 = pz0 + dt / tr * (trQE[2] - trQB[0] * py0 / ptau0 + trQB[1] * px0 * t / ptau0)
-        # peeta1 = pz1 / t
 
         ptau1 = sqrt(px1 ** 2 + py1 ** 2 + (t * peeta1) ** 2 + mass ** 2)
 

@@ -23,12 +23,13 @@ class ForceCorrelators:
         self.corr = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE)
 
         # lorentz force autocorrelator
-        # self.auto_corr = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE)
+        self.auto_corr = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE)
+        # self.auto_corr = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # set-up device pointers
         self.d_f = self.f
         self.d_corr = self.corr
-        # self.d_auto_corr = self.auto_corr
+        self.d_auto_corr = self.auto_corr
 
         # move data to GPU
         if use_cuda:
@@ -38,12 +39,12 @@ class ForceCorrelators:
     def copy_to_device(self):
         self.d_f = cuda.to_device(self.f)
         self.d_corr = cuda.to_device(self.corr)
-        # self.d_auto_corr = cuda.to_device(self.auto_corr)
+        self.d_auto_corr = cuda.to_device(self.auto_corr)
 
     def copy_to_host(self):
         self.d_f.copy_to_host(self.f)
         self.d_corr.copy_to_host(self.corr)
-        # self.d_auto_corr.copy_to_host(self.auto_corr)
+        self.d_auto_corr.copy_to_host(self.auto_corr)
 
 
     def compute_lorentz_force(self):
@@ -63,11 +64,25 @@ class ForceCorrelators:
         if use_cuda:
             self.copy_to_host()
     
-    # def compute_lorentz_force_autocorrelator(self, f0, f1, w0, w1):
-    #      my_parallel_loop(compute_force_autocorrelator_kernel, self.n_particles, f0, f1, w0, w1, self.d_auto_corr)
+    def compute_lorentz_force_autocorrelator(self, f0, f1, w0, w1):
+         my_parallel_loop(compute_force_autocorrelator_kernel, self.n_particles, f0, f1, w0, w1, self.d_auto_corr)
+
+         if use_cuda:
+            self.copy_to_host()
+
+    # def compute_lorentz_force_autocorrelator(self, f0, f1):
+    #      my_parallel_loop(compute_force_autocorrelator_kernel, self.n_particles, f0, f1, self.d_auto_corr)
 
     #      if use_cuda:
     #         self.copy_to_host()
+
+    def compute_lorentz_force_transported(self):
+
+        my_parallel_loop(compute_lorentz_force_transported_kernel, self.n_particles, self.d_f, self.wong.x0, self.wong.p, self.s.d_pt0, 
+        self.s.d_pt1, self.s.d_u0, self.s.peta0, self.s.peta1, self.s.aeta0, self.s.n, self.s.t, self.wong.w)
+
+        if use_cuda:
+            self.copy_to_host()
 
 
 @myjit
@@ -161,6 +176,32 @@ def compute_lorentz_force_kernel(index, f, x0, p, pt0, pt1, u0, peta0, peta1, ae
     f[index, 2, :] = su.add(b2, b3)
 
 @myjit
+def compute_lorentz_force_transported_kernel(index, f, x0, p, pt0, pt1, u0, peta0, peta1, aeta0, n, t, w):
+    ngp_pos = ngp(x0[index, :2])
+    ngp_index = l.get_index(ngp_pos[0], ngp_pos[1], n)
+    Ex, Ey, Eeta = compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t)
+    Bx, By, Beta = compute_magnetic_field(ngp_index, aeta0, u0, n, t)
+
+    b1 = su.mul_s(Beta, p[index, 2]/p[index, 0])
+    b2 = su.add(Ex, b1)
+    b3 = su.mul_s(By, -t*p[index, 3]/p[index, 0])
+    b4  = su.add(b2, b3)
+    f[index, 0, :] = l.act(w[index, :], b4)
+
+    b1 = su.mul_s(Beta, -p[index, 1]/p[index, 0])
+    b2 = su.add(Ey, b1)
+    b3 = su.mul_s(Bx, t*p[index, 3]/p[index, 0])
+    b4 = su.add(b2, b3)
+    f[index, 1, :] = l.act(w[index, :], b4)
+
+    b1 = su.mul_s(By, p[index, 1]/p[index, 0])
+    b2 = su.add(Eeta, b1)
+    b3 = su.mul_s(Bx, -p[index, 2]/p[index, 0])
+    b4 = su.add(b2, b3)
+    f[index, 2, :] = l.act(w[index, :], b4)
+
+
+@myjit
 def compute_force_correlator_transported_kernel(index, f0, f, w, corr):
     for d in range(3):
         buf1 = l.act(w[index, :], f0[index, d, :])
@@ -174,10 +215,17 @@ def compute_force_correlator_naive_kernel(index, f0, f, corr):
         buf2 = su.mul(f[index, d, :], buf1)
         corr[index, d] = su.tr(buf2).real
 
+@myjit
+def compute_force_autocorrelator_kernel(index, f0, f1, w0, w1, auto_corr):
+    for d in range(3):
+        w01 = su.mul(w1[index, :], su.dagger(w0[index, :]))
+        buf1 = l.act(w01, f0[index, d, :])
+        buf2 = su.mul(f1[index, d, :], su.dagger(buf1))
+        auto_corr[index, d] = su.tr(buf2).real
+        # su.store(auto_corr[index, d, :], buf2)
+
 # @myjit
-# def compute_force_autocorrelator_kernel(index, f0, f1, w0, w1, auto_corr):
+# def compute_force_autocorrelator_kernel(index, f0, f1, auto_corr):
 #     for d in range(3):
-#         w01 = su.mul(w1[index, :], su.dagger(w0[index, :]))
-#         buf1 = l.act(w01, f0[index, d, :])
-#         buf2 = su.mul(f1[index, d, :], su.dagger(buf1))
-#         auto_corr[index, d] = su.tr(buf2).real
+#         buf = su.mul(f0[index, d, :], f1[index, d, :])
+#         auto_corr[index, d] = su.tr(buf).real
