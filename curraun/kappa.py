@@ -133,6 +133,8 @@ def compute_f_kernel(xi, n, u0, peta1, peta0, pt1, pt0, f, tau):
     bf = su.add(bf, peta1[xi])
     bf = su.add(bf, peta0[xi])
     bf = su.mul_s(bf, 0.5)
+    # Is this correct? Ez=\tau*E_\eta
+    bf = su.mul_s(bf, 1/tau)
     su.store(f[xi, 2], bf)
 
 
