@@ -159,8 +159,3 @@ def _my_cuda_sum_kernel(array, stride, nmax):
                 array[n2] = 0
         block_stride *= 2
         cuda.syncthreads()
-
-def my_cuda_loop(kernel_function, array, *args):
-    threadsperblock = 256
-    blockspergrid = (array.size + (threadsperblock - 1)) // threadsperblock
-    kernel_function[blockspergrid, threadsperblock](array, *args)

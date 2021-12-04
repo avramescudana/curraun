@@ -50,7 +50,7 @@ class ForceCorrelators:
     def compute_lorentz_force(self):
 
         my_parallel_loop(compute_lorentz_force_kernel, self.n_particles, self.d_f, self.wong.x0, self.wong.p, self.s.d_pt0, 
-        self.s.d_pt1, self.s.d_u0, self.s.peta0, self.s.peta1, self.s.aeta0, self.s.n, self.s.t)
+        self.s.d_pt1, self.s.d_u0, self.s.d_peta0, self.s.d_peta1, self.s.d_aeta0, self.s.n, self.s.t)
 
         if use_cuda:
             self.copy_to_host()
@@ -79,7 +79,7 @@ class ForceCorrelators:
     def compute_lorentz_force_transported(self):
 
         my_parallel_loop(compute_lorentz_force_transported_kernel, self.n_particles, self.d_f, self.wong.x0, self.wong.p, self.s.d_pt0, 
-        self.s.d_pt1, self.s.d_u0, self.s.peta0, self.s.peta1, self.s.aeta0, self.s.n, self.s.t, self.wong.w)
+        self.s.d_pt1, self.s.d_u0, self.s.d_peta0, self.s.d_peta1, self.s.d_aeta0, self.s.n, self.s.t, self.wong.w)
 
         if use_cuda:
             self.copy_to_host()

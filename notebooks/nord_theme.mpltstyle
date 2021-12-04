@@ -1,0 +1,45 @@
+font.size:    18
+
+text.usetex: True
+text.color: D8DEE9
+
+axes.spines.left:   True  
+axes.spines.bottom: True
+axes.spines.top:    False
+axes.spines.right:  False
+axes.prop_cycle: cycler('color', ['8FBCBB', 'B48EAD', 'A3BE8C', 'EBCB8B', '81A1C1', '5E81AC'])
+
+axes.facecolor:     2E3440  
+axes.edgecolor:     D8DEE9
+#axes.linewidth:     0.8     # edge line width
+axes.grid:          False   
+axes.grid.axis:     both    
+axes.grid.which:    major   
+axes.titlecolor:    D8DEE9
+axes.labelcolor:    D8DEE9
+axes.labelsize:     20
+
+xtick.color:    D8DEE9
+xtick.labelsize:     14
+xtick.direction:     in
+xtick.minor.visible:    False
+ytick.color:    D8DEE9
+ytick.labelsize:     14
+ytick.direction:     in
+ytick.minor.visible:    False
+
+grid.color:     D8DEE9 
+grid.linestyle: -       
+grid.linewidth: 1     
+grid.alpha:     0.3     
+
+figure.figsize:     9, 6
+figure.facecolor:   2E3440     
+figure.frameon:     False  
+figure.subplot.wspace: 0.05  
+
+legend.framealpha:    0    
+legend.facecolor:     2E3440 
+legend.edgecolor:     D8DEE9 
+legend.fancybox:      False     
+legend.fontsize:      18

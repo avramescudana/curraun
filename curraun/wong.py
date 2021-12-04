@@ -5,6 +5,7 @@
 from curraun.numba_target import use_cuda, myjit, my_parallel_loop
 import curraun.lattice as l
 import curraun.su as su
+import curraun.kappa as kappa
 
 if use_cuda:
     import numba.cuda as cuda
@@ -12,13 +13,12 @@ import numpy as np
 from scipy.stats import unitary_group
 from math import sqrt
 
-DEBUG = True
-
 import os
-
 su_group = os.environ["GAUGE_GROUP"]
-boundary = os.environ["BOUNDARY"]
 
+
+CASIMIRS = False        # compute Casimir invariants
+BOUNDARY = 'periodic'           # 'periodic' or 'frozen'
 
 class WongSolver:
     def __init__(self, s, n_particles):
@@ -50,8 +50,20 @@ class WongSolver:
         self.w = np.zeros((n_particles, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # casimirs
-        if DEBUG:
+        if CASIMIRS:
             self.c = np.zeros((n_particles, su.CASIMIRS), dtype=su.GROUP_TYPE_REAL)
+
+        # single components
+        self.p_sq_x = np.zeros(n_particles, dtype=np.double)
+        self.p_sq_y = np.zeros(n_particles, dtype=np.double)
+        self.p_sq_eta = np.zeros(n_particles, dtype=np.double)
+
+        # mean values
+        self.p_sq_mean = np.zeros(3, dtype=np.double)
+        if use_cuda:
+            # use pinned memory for asynchronous data transfer
+            self.p_sq_mean = cuda.pinned_array(3, dtype=np.double)
+            self.p_sq_mean[0:3] = 0.0
 
         # set-up device pointers
         self.d_x0 = self.x0
@@ -63,7 +75,12 @@ class WongSolver:
         self.d_active = self.active
         self.d_w = self.w
 
-        if DEBUG:
+        self.d_p_sq_x = self.p_sq_x
+        self.d_p_sq_y = self.p_sq_y
+        self.d_p_sq_eta = self.p_sq_eta
+        self.d_p_sq_mean = self.p_sq_mean
+
+        if CASIMIRS:
             self.d_c = self.c
 
         # move data to GPU
@@ -82,8 +99,13 @@ class WongSolver:
         self.d_active = cuda.to_device(self.active)
         self.d_w = cuda.to_device(self.w)
 
-        if DEBUG:
+        if CASIMIRS:
             self.d_c = cuda.to_device(self.c)
+
+        # self.d_p_sq_x = cuda.to_device(self.p_sq_x)
+        # self.d_p_sq_y = cuda.to_device(self.p_sq_y)
+        # self.d_p_sq_eta = cuda.to_device(self.p_sq_eta)
+        self.d_p_sq_mean = cuda.to_device(self.p_sq_mean)
 
     def copy_to_host(self):
         self.d_x0.copy_to_host(self.x0)
@@ -95,8 +117,19 @@ class WongSolver:
         self.d_active.copy_to_host(self.active)
         self.d_w.copy_to_host(self.w)
 
-        if DEBUG:
+        if CASIMIRS:
             self.d_c.copy_to_host(self.c)
+
+        # self.d_p_sq_x.copy_to_host(self.p_sq_x)
+        # self.d_p_sq_y.copy_to_host(self.p_sq_y)
+        # self.d_p_sq_eta.copy_to_host(self.p_sq_eta)
+        self.d_p_sq_mean.copy_to_host(self.p_sq_mean)
+
+    def copy_mom_broad_to_device(self, stream=None):
+        self.d_p_sq_mean = cuda.to_device(self.p_sq_mean, stream)
+
+    def copy_mom_broad_to_host(self, stream=None):
+        self.d_p_sq_mean.copy_to_host(self.p_sq_mean, stream)
 
     def init(self):
         if use_cuda:
@@ -136,13 +169,11 @@ class WongSolver:
             self.init()
 
         # update positions and perform parallel transport
-
         my_parallel_loop(update_coordinates_kernel, self.n_particles,
                          self.d_x0, self.d_x1, self.d_p, self.d_q, self.d_q0,
                          self.s.dt, self.s.d_u0, self.s.d_aeta0, self.s.n, self.d_w, self.d_active)
 
         # update momenta
-
         my_parallel_loop(update_momenta_kernel, self.n_particles,
                          self.d_x1, self.d_p, self.d_q, self.d_m,
                          self.s.t, self.s.dt, self.s.d_u0, self.s.d_pt0, self.s.d_pt1,
@@ -156,8 +187,18 @@ class WongSolver:
         if use_cuda:
             self.copy_to_host()
 
-    def compute_casimirs(self):
-        my_parallel_loop(compute_casimirs_kernel, self.n_particles, self.d_q, self.d_c)
+    def compute_mom_broad(self, p0s, stream=None):
+        # compute momenta components squared
+        compute_p_sq(self.n_particles, p0s, self.d_p, self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_eta, stream)
+
+        # compute mean
+        kappa.compute_mean(self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_eta, self.d_p_sq_mean, stream)
+
+        if use_cuda:
+            self.copy_mom_broad_to_host()
+
+    def compute_casimirs(self, repr):
+        my_parallel_loop(compute_casimirs_kernel, repr, self.n_particles, self.d_q, self.d_c)
 
         if use_cuda:
             self.copy_to_host()
@@ -261,10 +302,12 @@ def init_momenta_kernel(index, p, m, tau):
 
 @myjit
 def update_coordinates_kernel(index, x0, x1, p, q, q0, dt, u0, aeta0, n, w, active):
-    if boundary == 'frozen':
+    if BOUNDARY == 'frozen':
         for d in range(1):
             if x0[index, d] < 0 or x0[index, d] > n:
                 active[index] = 0
+                # such that they are not affected by swapping x0 with x1 later on
+                x1[index, d] = x0[index, d]
 
     if active[index] == 1:
         """
@@ -347,17 +390,26 @@ def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0,
         p[index, 2] = py1
         p[index, 3] = peeta1
 
+def compute_p_sq(ntp, p0s, p, p_sq_x, p_sq_y, p_sq_eta, stream):
+    my_parallel_loop(compute_p_sq_kernel, ntp, p0s, p, p_sq_x, p_sq_y, p_sq_eta, stream=stream)
 
 @myjit
-def swap_coordinates_kernel(index, x0, x1, active):
-    if active[index] == 1:
-        for d in range(3):
-            x0[index, d], x1[index, d] = x1[index, d], x0[index, d]
+def compute_p_sq_kernel(index, p0s, p, p_sq_x, p_sq_y, p_sq_eta):
+    p_sq_x[index] = (p[index, 1] - p0s[index, 1]) ** 2 
+    p_sq_y[index] = (p[index, 2] - p0s[index, 2]) ** 2 
+    p_sq_eta[index] = (p[index, 3] - p0s[index, 3]) ** 2
+
+
+# @myjit
+# def swap_coordinates_kernel(index, x0, x1, active):
+#     if active[index] == 1:
+#         for d in range(3):
+#             x0[index, d], x1[index, d] = x1[index, d], x0[index, d]
 
 
 @myjit
-def compute_casimirs_kernel(index, q, c):
-    c[index, :] = su.casimir(q[index, :])
+def compute_casimirs_kernel(index, repr, q, c):
+    c[index, :] = su.casimir(q[index, :], repr)
 
 
 # gell-mann matrices
@@ -375,34 +427,65 @@ gm = [
 
 T = np.array(gm) / 2.0
 
+def init_pos(n):
+    """
+        Particles randomly distributed in the transverse plane
+        TODO: Initialize them according to local fluctuations in energy density at formation time
+    """
 
-def init_charge():
+    xT = np.random.rand(2) * n
+    x0 = [xT[0], xT[1], 0.0]
+
+    return x0
+
+def init_mom(pT):
+    """
+        Initialize all particles with the same initial transverse momentum
+        TODO: Add other types of initializations
+    """
+
+    angle = 2*np.pi*np.random.rand(1)
+    p0 = [0.0, pT * np.cos(angle), pT * np.sin(angle), 0.0]
+
+    return p0
+
+def init_charge(representation):
     if su_group == 'su2':
 
         """
             Random color charges uniformly distributed on sphere of fixed radius
         """
 
-        J = np.sqrt(1.5)
-        # TODO fix J for adjoint representation
+        if representation=='fundamental':
+            q2 = 3/2
+        elif representation=='adjoint':
+            q2 = 6
+    
+        J = np.sqrt(q2)
         phi, pi = np.random.uniform(0, 2 * np.pi), np.random.uniform(-J, J)
         Q1 = np.cos(phi) * np.sqrt(J ** 2 - pi ** 2)
         Q2 = np.sin(phi) * np.sqrt(J ** 2 - pi ** 2)
         Q3 = pi
         q0 = np.array([Q1, Q2, Q3])
+
         return q0
+
     elif su_group == 'su3':
 
         """
-            New step 1: specific random color vector
+            Step 1: specific random color vector
         """
-        # TODO find q0 for adjoint representation
-        q0 = [0., 0., 0., 0., -1.69469, 0., 0., -1.06209]
+
+        if representation=='fundamental':
+            q0 = [0., 0., 0., 0., -1.69469, 0., 0., -1.06209]
+        elif representation=='adjoint':
+            q0 = [np.sqrt(24), 0., 0., 0., 0., 0., 0., 0.]
         Q0 = np.einsum('ijk,i', T, q0)
 
         """
             Step 2: create a random SU(3) matrix to rotate Q.
         """
+        
         V = unitary_group.rvs(3)
         detV = np.linalg.det(V)
         U = V / detV ** (1 / 3)
