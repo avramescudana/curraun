@@ -16,9 +16,15 @@ from math import sqrt
 import os
 su_group = os.environ["GAUGE_GROUP"]
 
+import math
 
+WONG_TO_HOST = False       # copy_to_host() all variables from the WongSolver
 CASIMIRS = False        # compute Casimir invariants
+if CASIMIRS:
+    WONG_TO_HOST = True
 BOUNDARY = 'periodic'           # 'periodic' or 'frozen'
+# LIMITING_CASE = True        # for comparison with qhat.py or kappa.py, where \dot{p}_z=f_\eta
+                            # otherwise p_z = \sinh\eta p^\tau + \cosh\eta \tau p^\eta
 
 class WongSolver:
     def __init__(self, s, n_particles):
@@ -36,9 +42,12 @@ class WongSolver:
         # momentum layout (p): tau,x,y,eta
         self.x0 = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE_REAL)
         self.x1 = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE_REAL)
-        self.p = np.zeros((n_particles, 4), dtype=su.GROUP_TYPE_REAL)
+        self.p = np.zeros((n_particles, 5), dtype=su.GROUP_TYPE_REAL)
         self.q0 = np.zeros((n_particles, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)  # initial color charge
         self.q = np.zeros((n_particles, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+
+        # store initial momenta, used in computing momentum broadenings
+        self.p0 = np.zeros((n_particles, 5), dtype=su.GROUP_TYPE_REAL)
 
         # particle properties (mass)
         self.m = np.zeros(n_particles, dtype=su.GROUP_TYPE_REAL)
@@ -53,12 +62,12 @@ class WongSolver:
         if CASIMIRS:
             self.c = np.zeros((n_particles, su.CASIMIRS), dtype=su.GROUP_TYPE_REAL)
 
-        # single components
+        # px^2, py^2 and pz^2 for each particle
         self.p_sq_x = np.zeros(n_particles, dtype=np.double)
         self.p_sq_y = np.zeros(n_particles, dtype=np.double)
-        self.p_sq_eta = np.zeros(n_particles, dtype=np.double)
+        self.p_sq_z = np.zeros(n_particles, dtype=np.double)
 
-        # mean values
+        # pi^2 averaged over all particles, with i=x,y,z
         self.p_sq_mean = np.zeros(3, dtype=np.double)
         if use_cuda:
             # use pinned memory for asynchronous data transfer
@@ -75,9 +84,10 @@ class WongSolver:
         self.d_active = self.active
         self.d_w = self.w
 
+        self.d_p0 = self.p0
         self.d_p_sq_x = self.p_sq_x
         self.d_p_sq_y = self.p_sq_y
-        self.d_p_sq_eta = self.p_sq_eta
+        self.d_p_sq_z = self.p_sq_z
         self.d_p_sq_mean = self.p_sq_mean
 
         if CASIMIRS:
@@ -104,7 +114,7 @@ class WongSolver:
 
         # self.d_p_sq_x = cuda.to_device(self.p_sq_x)
         # self.d_p_sq_y = cuda.to_device(self.p_sq_y)
-        # self.d_p_sq_eta = cuda.to_device(self.p_sq_eta)
+        # self.d_p_sq_z = cuda.to_device(self.p_sq_z)
         self.d_p_sq_mean = cuda.to_device(self.p_sq_mean)
 
     def copy_to_host(self):
@@ -122,7 +132,7 @@ class WongSolver:
 
         # self.d_p_sq_x.copy_to_host(self.p_sq_x)
         # self.d_p_sq_y.copy_to_host(self.p_sq_y)
-        # self.d_p_sq_eta.copy_to_host(self.p_sq_eta)
+        # self.d_p_sq_z.copy_to_host(self.p_sq_z)
         self.d_p_sq_mean.copy_to_host(self.p_sq_mean)
 
     def copy_mom_broad_to_device(self, stream=None):
@@ -136,7 +146,7 @@ class WongSolver:
             self.copy_to_device()
 
         my_parallel_loop(init_momenta_kernel, self.n_particles,
-                         self.d_p, self.d_m, self.s.t)
+                         self.d_p, self.d_p0, self.d_m, self.s.t, self.d_x0)
 
         self.initialized = True
 
@@ -184,15 +194,16 @@ class WongSolver:
         self.d_x0, self.d_x1 = self.d_x1, self.d_x0
         self.x0, self.x1 = self.x1, self.x0
 
-        if use_cuda:
-            self.copy_to_host()
+        if WONG_TO_HOST:
+            if use_cuda:
+                self.copy_to_host()
 
-    def compute_mom_broad(self, p0s, stream=None):
+    def compute_mom_broad(self, stream=None):
         # compute momenta components squared
-        compute_p_sq(self.n_particles, p0s, self.d_p, self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_eta, stream)
+        compute_p_sq(self.n_particles, self.d_p0, self.d_p, self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_z, stream)
 
         # compute mean
-        kappa.compute_mean(self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_eta, self.d_p_sq_mean, stream)
+        kappa.compute_mean(self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_z,  self.d_p_sq_mean, stream)
 
         if use_cuda:
             self.copy_mom_broad_to_host()
@@ -293,17 +304,23 @@ def ngp(x):
 
 
 @myjit
-def init_momenta_kernel(index, p, m, tau):
+def init_momenta_kernel(index, p, p0, m, tau, x0):
     """
-        Initializes the tau component of the momentum vectors
+        Initializes the tau and z component of the momentum vectors
     """
     p[index, 0] = sqrt(p[index, 1] ** 2 + p[index, 2] ** 2 + (tau * p[index, 3]) ** 2 + m[index] ** 2)
+
+    eta = x0[index, 2]
+    p[index, 4] = math.sinh(eta) * p[index, 0] + math.cosh(eta) * tau * p[index, 3]
+
+    for i in range(5):
+        p0[index, i] = p[index, i]
 
 
 @myjit
 def update_coordinates_kernel(index, x0, x1, p, q, q0, dt, u0, aeta0, n, w, active):
     if BOUNDARY == 'frozen':
-        for d in range(1):
+        for d in range(2):
             if x0[index, d] < 0 or x0[index, d] > n:
                 active[index] = 0
                 # such that they are not affected by swapping x0 with x1 later on
@@ -390,15 +407,26 @@ def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0,
         p[index, 2] = py1
         p[index, 3] = peeta1
 
-def compute_p_sq(ntp, p0s, p, p_sq_x, p_sq_y, p_sq_eta, stream):
-    my_parallel_loop(compute_p_sq_kernel, ntp, p0s, p, p_sq_x, p_sq_y, p_sq_eta, stream=stream)
+        # compute pz from peta or from dpz/dt=feta for limiting cases (qhat.py or kappa.py)
+        # if LIMITING_CASE:
+        #     pz0 = p[index, 4]
+        #     pz1 = pz0 + dt * feta
+        # else:
+        #     eta0 = x1[index, 2]
+        #     pz1 = math.sinh(eta0) * ptau0 + math.cosh(eta0) * t * peeta0
+
+        eta0 = x1[index, 2]
+        pz1 = math.sinh(eta0) * ptau0 + math.cosh(eta0) * t * peeta0
+        p[index, 4] = pz1
+
+def compute_p_sq(ntp, p0, p, p_sq_x, p_sq_y,p_sq_z, stream):
+    my_parallel_loop(compute_p_sq_kernel, ntp, p0, p, p_sq_x, p_sq_y, p_sq_z, stream=stream)
 
 @myjit
-def compute_p_sq_kernel(index, p0s, p, p_sq_x, p_sq_y, p_sq_eta):
-    p_sq_x[index] = (p[index, 1] - p0s[index, 1]) ** 2 
-    p_sq_y[index] = (p[index, 2] - p0s[index, 2]) ** 2 
-    p_sq_eta[index] = (p[index, 3] - p0s[index, 3]) ** 2
-
+def compute_p_sq_kernel(index, p0, p, p_sq_x, p_sq_y, p_sq_z):
+    p_sq_x[index] = (p[index, 1] - p0[index, 1]) ** 2 
+    p_sq_y[index] = (p[index, 2] - p0[index, 2]) ** 2 
+    p_sq_z[index] = (p[index, 4] - p0[index, 4]) ** 2
 
 # @myjit
 # def swap_coordinates_kernel(index, x0, x1, active):
@@ -406,11 +434,9 @@ def compute_p_sq_kernel(index, p0s, p, p_sq_x, p_sq_y, p_sq_eta):
 #         for d in range(3):
 #             x0[index, d], x1[index, d] = x1[index, d], x0[index, d]
 
-
 @myjit
 def compute_casimirs_kernel(index, repr, q, c):
     c[index, :] = su.casimir(q[index, :], repr)
-
 
 # gell-mann matrices
 
@@ -438,14 +464,17 @@ def init_pos(n):
 
     return x0
 
-def init_mom(pT):
+def init_mom(type_init, p):
     """
         Initialize all particles with the same initial transverse momentum
-        TODO: Add other types of initializations
+        TODO: Add other types of initializations (FONLL for HQs, for example)
     """
 
-    angle = 2*np.pi*np.random.rand(1)
-    p0 = [0.0, pT * np.cos(angle), pT * np.sin(angle), 0.0]
+    if type_init=='pT':
+        angle = 2*np.pi*np.random.rand(1)
+        p0 = [0.0, p * np.cos(angle), p * np.sin(angle), 0.0, 0.0]
+    elif type_init=='px':
+        p0 = [0.0, p, 0.0, 0.0, 0.0]
 
     return p0
 
