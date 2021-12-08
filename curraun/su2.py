@@ -171,21 +171,31 @@ def normalize(u):
         u[i] = u[i] / norm
 
 @myjit
-def casimir(Q, repr):
-    # Dynkin index and dimension of representation
-    if repr=='fundamental':
-        T_R = 1./2.
-        D_R = N_C
-    elif repr=='adjoint':
-        T_R = N_C
-        D_R = N_C ** 2 - 1
+def casimir_fundamental(Q):
+    # Dynkin index and dimension of fundamental representation
+    T_R = 1./2.
+    D_R = N_C
 
     """
     Computes the quadratic Casimir C_2. 
     Notice that Tr{Q^2}=T(R)C_2 with T(R)=1/2 for R=F.
     """
 
-    # C = sq(Q).real / (T_R * D_R)
     C = tr(mul(Q, dagger(Q))) / (T_R * D_R)
+    
     return C
 
+@myjit
+def casimir_adjoint(Q):
+    # Dynkin index and dimension of adjoint representation
+    T_R = N_C
+    D_R = N_C ** 2 - 1
+
+    """
+    Computes the quadratic Casimir C_2. 
+    Notice that Tr{Q^2}=T(R)C_2 with T(R)=1/2 for R=F.
+    """
+
+    C = tr(mul(Q, dagger(Q))) / (T_R * D_R)
+
+    return C

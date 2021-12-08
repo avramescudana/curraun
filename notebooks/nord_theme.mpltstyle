@@ -17,7 +17,7 @@ axes.grid.axis:     both
 axes.grid.which:    major   
 axes.titlecolor:    D8DEE9
 axes.labelcolor:    D8DEE9
-axes.labelsize:     20
+axes.labelsize:     22
 
 xtick.color:    D8DEE9
 xtick.labelsize:     14

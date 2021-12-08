@@ -20,11 +20,8 @@ import math
 
 WONG_TO_HOST = False       # copy_to_host() all variables from the WongSolver
 CASIMIRS = False        # compute Casimir invariants
-if CASIMIRS:
-    WONG_TO_HOST = True
 BOUNDARY = 'periodic'           # 'periodic' or 'frozen'
-# LIMITING_CASE = True        # for comparison with qhat.py or kappa.py, where \dot{p}_z=f_\eta
-                            # otherwise p_z = \sinh\eta p^\tau + \cosh\eta \tau p^\eta
+NUM_CHECK = False            # checks the p^\tau constaint
 
 class WongSolver:
     def __init__(self, s, n_particles):
@@ -62,6 +59,10 @@ class WongSolver:
         if CASIMIRS:
             self.c = np.zeros((n_particles, su.CASIMIRS), dtype=su.GROUP_TYPE_REAL)
 
+        # p^\tau constaint
+        if NUM_CHECK:
+            self.ptau_constraint = np.zeros((n_particles, 2), dtype=su.GROUP_TYPE_REAL)
+
         # px^2, py^2 and pz^2 for each particle
         self.p_sq_x = np.zeros(n_particles, dtype=np.double)
         self.p_sq_y = np.zeros(n_particles, dtype=np.double)
@@ -93,6 +94,9 @@ class WongSolver:
         if CASIMIRS:
             self.d_c = self.c
 
+        if NUM_CHECK:
+            self.d_ptau_constraint = self.ptau_constraint
+
         # move data to GPU
         if use_cuda:
             self.copy_to_device()
@@ -112,9 +116,12 @@ class WongSolver:
         if CASIMIRS:
             self.d_c = cuda.to_device(self.c)
 
-        # self.d_p_sq_x = cuda.to_device(self.p_sq_x)
-        # self.d_p_sq_y = cuda.to_device(self.p_sq_y)
-        # self.d_p_sq_z = cuda.to_device(self.p_sq_z)
+        if NUM_CHECK:
+            self.d_ptau_constraint = cuda.to_device(self.ptau_constraint)
+
+        self.d_p_sq_x = cuda.to_device(self.p_sq_x)
+        self.d_p_sq_y = cuda.to_device(self.p_sq_y)
+        self.d_p_sq_z = cuda.to_device(self.p_sq_z)
         self.d_p_sq_mean = cuda.to_device(self.p_sq_mean)
 
     def copy_to_host(self):
@@ -130,9 +137,12 @@ class WongSolver:
         if CASIMIRS:
             self.d_c.copy_to_host(self.c)
 
-        # self.d_p_sq_x.copy_to_host(self.p_sq_x)
-        # self.d_p_sq_y.copy_to_host(self.p_sq_y)
-        # self.d_p_sq_z.copy_to_host(self.p_sq_z)
+        if NUM_CHECK:
+            self.d_ptau_constraint.copy_to_host(self.ptau_constraint)
+
+        self.d_p_sq_x.copy_to_host(self.p_sq_x)
+        self.d_p_sq_y.copy_to_host(self.p_sq_y)
+        self.d_p_sq_z.copy_to_host(self.p_sq_z)
         self.d_p_sq_mean.copy_to_host(self.p_sq_mean)
 
     def copy_mom_broad_to_device(self, stream=None):
@@ -209,12 +219,13 @@ class WongSolver:
             self.copy_mom_broad_to_host()
 
     def compute_casimirs(self, repr):
-        my_parallel_loop(compute_casimirs_kernel, repr, self.n_particles, self.d_q, self.d_c)
+        if repr=='fundamental':
+            my_parallel_loop(compute_casimirs_fundamental_kernel, self.n_particles, self.d_q, self.d_c)
+        elif repr=='adjoint':
+            my_parallel_loop(compute_casimirs_adjoint_kernel, self.n_particles, self.d_q, self.d_c)
 
         if use_cuda:
             self.copy_to_host()
-
-
 @myjit
 def init_charge_kernel(index, q0, q0s):
     q0_algebra = su.get_algebra_element(q0s[index, :])
@@ -323,7 +334,7 @@ def update_coordinates_kernel(index, x0, x1, p, q, q0, dt, u0, aeta0, n, w, acti
         for d in range(2):
             if x0[index, d] < 0 or x0[index, d] > n:
                 active[index] = 0
-                # such that they are not affected by swapping x0 with x1 later on
+                # set x1 to x0 such that they are not affected by swapping x0 with x1 later on
                 x1[index, d] = x0[index, d]
 
     if active[index] == 1:
@@ -348,7 +359,8 @@ def update_coordinates_kernel(index, x0, x1, p, q, q0, dt, u0, aeta0, n, w, acti
             if delta_ngp == 1:
                 # U = u0[ngp0_index, d]
                 # q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
-                w[index, :] = su.mul(w[index, :], u0[ngp0_index, d])
+                # w[index, :] = su.mul(w[index, :], u0[ngp0_index, d])
+                w[index, :] = su.mul(w[index, :], u0[ngp1_index, d])
 
             if delta_ngp == -1:
                 # U = su.dagger(u0[ngp1_index, d])
@@ -415,8 +427,8 @@ def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0,
         #     eta0 = x1[index, 2]
         #     pz1 = math.sinh(eta0) * ptau0 + math.cosh(eta0) * t * peeta0
 
-        eta0 = x1[index, 2]
-        pz1 = math.sinh(eta0) * ptau0 + math.cosh(eta0) * t * peeta0
+        eta1 = x1[index, 2]
+        pz1 = math.sinh(eta1) * ptau1 + math.cosh(eta1) * t * peeta1
         p[index, 4] = pz1
 
 def compute_p_sq(ntp, p0, p, p_sq_x, p_sq_y,p_sq_z, stream):
@@ -435,8 +447,12 @@ def compute_p_sq_kernel(index, p0, p, p_sq_x, p_sq_y, p_sq_z):
 #             x0[index, d], x1[index, d] = x1[index, d], x0[index, d]
 
 @myjit
-def compute_casimirs_kernel(index, repr, q, c):
-    c[index, :] = su.casimir(q[index, :], repr)
+def compute_casimirs_fundamental_kernel(index, q, c):
+    c[index, :] = su.casimir_fundamental(q[index, :])
+
+@myjit
+def compute_casimirs_adjoint_kernel(index, q, c):
+    c[index, :] = su.casimir_adjoint(q[index, :])
 
 # gell-mann matrices
 
