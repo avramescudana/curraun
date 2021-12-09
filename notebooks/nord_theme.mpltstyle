@@ -19,6 +19,8 @@ axes.titlecolor:    D8DEE9
 axes.labelcolor:    D8DEE9
 axes.labelsize:     22
 
+axes3d.grid:        False
+
 xtick.color:    D8DEE9
 xtick.labelsize:     14
 xtick.direction:     in

@@ -61,7 +61,7 @@ class WongSolver:
 
         # p^\tau constaint
         if NUM_CHECK:
-            self.ptau_constraint = np.zeros((n_particles, 2), dtype=su.GROUP_TYPE_REAL)
+            self.ptau_constraint = np.zeros(n_particles, dtype=su.GROUP_TYPE_REAL)
 
         # px^2, py^2 and pz^2 for each particle
         self.p_sq_x = np.zeros(n_particles, dtype=np.double)
@@ -134,16 +134,16 @@ class WongSolver:
         self.d_active.copy_to_host(self.active)
         self.d_w.copy_to_host(self.w)
 
+        self.d_p_sq_x.copy_to_host(self.p_sq_x)
+        self.d_p_sq_y.copy_to_host(self.p_sq_y)
+        self.d_p_sq_z.copy_to_host(self.p_sq_z)
+        self.d_p_sq_mean.copy_to_host(self.p_sq_mean)
+
         if CASIMIRS:
             self.d_c.copy_to_host(self.c)
 
         if NUM_CHECK:
             self.d_ptau_constraint.copy_to_host(self.ptau_constraint)
-
-        self.d_p_sq_x.copy_to_host(self.p_sq_x)
-        self.d_p_sq_y.copy_to_host(self.p_sq_y)
-        self.d_p_sq_z.copy_to_host(self.p_sq_z)
-        self.d_p_sq_mean.copy_to_host(self.p_sq_mean)
 
     def copy_mom_broad_to_device(self, stream=None):
         self.d_p_sq_mean = cuda.to_device(self.p_sq_mean, stream)
@@ -224,6 +224,14 @@ class WongSolver:
         elif repr=='adjoint':
             my_parallel_loop(compute_casimirs_adjoint_kernel, self.n_particles, self.d_q, self.d_c)
 
+        if use_cuda:
+            self.copy_to_host()
+
+    def compute_ptau_constraint(self):
+        my_parallel_loop(compute_ptau_constraint_kernel, self.n_particles, self.d_ptau_constraint,
+                         self.d_x1, self.d_p, self.d_q, self.s.t, 
+                         self.s.dt, self.s.d_u0, self.s.d_pt0, self.s.d_pt1,
+                         self.s.d_peta0, self.s.d_peta1, self.s.n, self.d_active)
         if use_cuda:
             self.copy_to_host()
 @myjit
@@ -430,6 +438,33 @@ def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0,
         eta1 = x1[index, 2]
         pz1 = math.sinh(eta1) * ptau1 + math.cosh(eta1) * t * peeta1
         p[index, 4] = pz1
+
+@myjit
+def compute_ptau_constraint_kernel(index, ptau_constraint, x1, p, q, t, dt, u0, pt0, pt1, peta0, peta1, n, active):
+    if active[index] == 1:
+        """
+            Computes force acting on particle and updates momenta accordingly
+        """
+        ngp_pos = ngp(x1[index, :2])
+        ngp_index = l.get_index(ngp_pos[0], ngp_pos[1], n)
+
+        """
+            Compute tr(QE) 
+        """
+        Ex, Ey, Eeta = compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t)
+        Q0 = q[index]
+        trQE = su.tr(su.mul(Q0, Ex)).real, su.tr(su.mul(Q0, Ey)).real, su.tr(su.mul(Q0, Eeta)).real
+
+        """
+            Force computation and momentum update
+        """
+        tr = -1 / 2
+        ptau0, px0, py0, peeta0 = p[index, 0], p[index, 1], p[index, 2], p[index, 3]
+        vx, vy, veta = px0 / ptau0, py0 / ptau0, peeta0 / ptau0
+    
+        ftau = 1.0 / tr * (trQE[0] * vx + trQE[1] * vy + trQE[2] * veta * t)
+        ptau2 = ptau0 + dt * (ftau - t * peeta0 * veta)
+        ptau_constraint[index] = ptau2
 
 def compute_p_sq(ntp, p0, p, p_sq_x, p_sq_y,p_sq_z, stream):
     my_parallel_loop(compute_p_sq_kernel, ntp, p0, p, p_sq_x, p_sq_y, p_sq_z, stream=stream)
