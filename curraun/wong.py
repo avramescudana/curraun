@@ -2,7 +2,7 @@
     A general solver for Wong's equations without back-reaction.
 """
 
-from curraun.numba_target import use_cuda, myjit, my_parallel_loop
+from curraun.numba_target import use_cuda, myjit, my_parallel_loop, my_cuda_sum, mycudajit
 import curraun.lattice as l
 import curraun.su as su
 import curraun.kappa as kappa
@@ -36,7 +36,7 @@ class WongSolver:
 
         # particle degrees of freedom (positions, momenta, charges)
         # position layout (x0, x1): x,y,eta
-        # momentum layout (p): tau,x,y,eta
+        # momentum layout (p): tau,x,y,eta,z
         self.x0 = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE_REAL)
         self.x1 = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE_REAL)
         self.p = np.zeros((n_particles, 5), dtype=su.GROUP_TYPE_REAL)
@@ -55,6 +55,11 @@ class WongSolver:
         # wilson line for each charge
         self.w = np.zeros((n_particles, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
+        # color force and invariant force for each particle
+        # force layout (f): x,y,eta
+        self.fc = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.finv = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE)
+
         # casimirs
         if CASIMIRS:
             self.c = np.zeros((n_particles, su.CASIMIRS), dtype=su.GROUP_TYPE_REAL)
@@ -67,13 +72,14 @@ class WongSolver:
         self.p_sq_x = np.zeros(n_particles, dtype=np.double)
         self.p_sq_y = np.zeros(n_particles, dtype=np.double)
         self.p_sq_z = np.zeros(n_particles, dtype=np.double)
+        self.p_sq_eta = np.zeros(n_particles, dtype=np.double)
 
         # pi^2 averaged over all particles, with i=x,y,z
-        self.p_sq_mean = np.zeros(3, dtype=np.double)
+        self.p_sq_mean = np.zeros(4, dtype=np.double)
         if use_cuda:
             # use pinned memory for asynchronous data transfer
-            self.p_sq_mean = cuda.pinned_array(3, dtype=np.double)
-            self.p_sq_mean[0:3] = 0.0
+            self.p_sq_mean = cuda.pinned_array(4, dtype=np.double)
+            self.p_sq_mean[0:4] = 0.0
 
         # set-up device pointers
         self.d_x0 = self.x0
@@ -85,10 +91,14 @@ class WongSolver:
         self.d_active = self.active
         self.d_w = self.w
 
+        self.d_fc = self.fc
+        self.d_finv = self.finv
+
         self.d_p0 = self.p0
         self.d_p_sq_x = self.p_sq_x
         self.d_p_sq_y = self.p_sq_y
         self.d_p_sq_z = self.p_sq_z
+        self.d_p_sq_eta = self.p_sq_eta
         self.d_p_sq_mean = self.p_sq_mean
 
         if CASIMIRS:
@@ -113,6 +123,9 @@ class WongSolver:
         self.d_active = cuda.to_device(self.active)
         self.d_w = cuda.to_device(self.w)
 
+        self.d_fc = cuda.to_device(self.fc)
+        self.d_finv = cuda.to_device(self.finv)
+
         if CASIMIRS:
             self.d_c = cuda.to_device(self.c)
 
@@ -122,6 +135,7 @@ class WongSolver:
         self.d_p_sq_x = cuda.to_device(self.p_sq_x)
         self.d_p_sq_y = cuda.to_device(self.p_sq_y)
         self.d_p_sq_z = cuda.to_device(self.p_sq_z)
+        self.d_p_sq_eta = cuda.to_device(self.p_sq_eta)
         self.d_p_sq_mean = cuda.to_device(self.p_sq_mean)
 
     def copy_to_host(self):
@@ -134,9 +148,13 @@ class WongSolver:
         self.d_active.copy_to_host(self.active)
         self.d_w.copy_to_host(self.w)
 
+        self.d_fc.copy_to_host(self.fc)
+        self.d_finv.copy_to_host(self.finv)
+
         self.d_p_sq_x.copy_to_host(self.p_sq_x)
         self.d_p_sq_y.copy_to_host(self.p_sq_y)
         self.d_p_sq_z.copy_to_host(self.p_sq_z)
+        self.d_p_sq_eta.copy_to_host(self.p_sq_eta)
         self.d_p_sq_mean.copy_to_host(self.p_sq_mean)
 
         if CASIMIRS:
@@ -198,7 +216,7 @@ class WongSolver:
                          self.d_x1, self.d_p, self.d_q, self.d_m,
                          self.s.t, self.s.dt, self.s.d_u0, self.s.d_pt0, self.s.d_pt1,
                          self.s.d_aeta0, self.s.d_peta0, self.s.d_peta1,
-                         self.s.n, self.d_active)
+                         self.s.n, self.d_active, self.d_fc, self.d_finv)
 
         # swap variables
         self.d_x0, self.d_x1 = self.d_x1, self.d_x0
@@ -210,10 +228,10 @@ class WongSolver:
 
     def compute_mom_broad(self, stream=None):
         # compute momenta components squared
-        compute_p_sq(self.n_particles, self.d_p0, self.d_p, self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_z, stream)
+        compute_p_sq(self.n_particles, self.d_p0, self.d_p, self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_z, self.s.t, self.d_p_sq_eta, stream)
 
         # compute mean
-        kappa.compute_mean(self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_z,  self.d_p_sq_mean, stream)
+        compute_mean(self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_z,  self.d_p_sq_eta, self.d_p_sq_mean, stream)
 
         if use_cuda:
             self.copy_mom_broad_to_host()
@@ -313,6 +331,27 @@ def compute_magnetic_field(ngp_index, aeta0, u0, n, t):
 
     return Bx, By, Beta
 
+@myjit
+def compute_color_lorentz_force(index, Ex, Ey, Eeta, Bx, By, Beta, p, t):
+    b1 = su.mul_s(Beta, p[index, 2]/p[index, 0])
+    b2 = su.add(Ex, b1)
+    b3 = su.mul_s(By, -t*p[index, 3]/p[index, 0])
+    fc_x = su.add(b2, b3)
+
+    b1 = su.mul_s(Beta, -p[index, 1]/p[index, 0])
+    b2 = su.add(Ey, b1)
+    b3 = su.mul_s(Bx, t*p[index, 3]/p[index, 0])
+    fc_y = su.add(b2, b3)
+
+    b1 = su.mul_s(By, p[index, 1]/p[index, 0])
+    b2 = su.add(Eeta, b1)
+    b3 = su.mul_s(Bx, -p[index, 2]/p[index, 0])
+    # fc_eta = su.add(b2, b3)
+    b4 = su.add(b2, b3)
+    fc_eta = su.mul_s(b4, 1/t)
+
+    return fc_x, fc_y, fc_eta
+
 
 @myjit
 def ngp(x):
@@ -386,7 +425,7 @@ def update_coordinates_kernel(index, x0, x1, p, q, q0, dt, u0, aeta0, n, w, acti
 
 
 @myjit
-def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0, peta1, n, active):
+def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0, peta1, n, active, fc, finv):
     if active[index] == 1:
         """
             Computes force acting on particle and updates momenta accordingly
@@ -416,10 +455,10 @@ def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0,
         vx, vy, veta = px0 / ptau0, py0 / ptau0, peeta0 / ptau0
         fx = 1.0 / tr * (trQE[0] + trQB[2] * vy - trQB[1] * veta * t)
         fy = 1.0 / tr * (trQE[1] - trQB[2] * vx + trQB[0] * veta * t)
-        feta = (trQE[2] - trQB[0] * vy + trQB[1] * vx) / tr
+        feta = (trQE[2] - trQB[0] * vy + trQB[1] * vx) / tr / t
         px1 = px0 + dt * fx
         py1 = py0 + dt * fy
-        peeta1 = peeta0 + dt * (feta - 2.0 * peeta0) / t
+        peeta1 = peeta0 + dt * (feta - 2.0 * peeta0 / t)
         ptau1 = sqrt(px1 ** 2 + py1 ** 2 + (t * peeta1) ** 2 + mass ** 2)
 
         p[index, 0] = ptau1
@@ -438,6 +477,13 @@ def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0,
         eta1 = x1[index, 2]
         pz1 = math.sinh(eta1) * ptau1 + math.cosh(eta1) * t * peeta1
         p[index, 4] = pz1
+
+        # Invariant Lorentz force
+        finv[index, 0], finv[index, 1], finv[index, 2] = fx, fy, feta 
+
+        # Color Lorentz force
+        fc_x, fc_y, fc_eta = compute_color_lorentz_force(index, Ex, Ey, Eeta, Bx, By, Beta, p, t)
+        fc[index, 0, :], fc[index, 1, :], fc[index, 2, :] = fc_x, fc_y, fc_eta
 
 @myjit
 def compute_ptau_constraint_kernel(index, ptau_constraint, x1, p, q, t, dt, u0, pt0, pt1, peta0, peta1, n, active):
@@ -466,14 +512,37 @@ def compute_ptau_constraint_kernel(index, ptau_constraint, x1, p, q, t, dt, u0, 
         ptau2 = ptau0 + dt * (ftau - t * peeta0 * veta)
         ptau_constraint[index] = ptau2
 
-def compute_p_sq(ntp, p0, p, p_sq_x, p_sq_y,p_sq_z, stream):
-    my_parallel_loop(compute_p_sq_kernel, ntp, p0, p, p_sq_x, p_sq_y, p_sq_z, stream=stream)
+def compute_p_sq(ntp, p0, p, p_sq_x, p_sq_y,p_sq_z, t, p_sq_eta, stream):
+    my_parallel_loop(compute_p_sq_kernel, ntp, p0, p, p_sq_x, p_sq_y, p_sq_z, t, p_sq_eta, stream=stream)
 
 @myjit
-def compute_p_sq_kernel(index, p0, p, p_sq_x, p_sq_y, p_sq_z):
+def compute_p_sq_kernel(index, p0, p, p_sq_x, p_sq_y, p_sq_z, t, p_sq_eta):
     p_sq_x[index] = (p[index, 1] - p0[index, 1]) ** 2 
     p_sq_y[index] = (p[index, 2] - p0[index, 2]) ** 2 
     p_sq_z[index] = (p[index, 4] - p0[index, 4]) ** 2
+    # usually p^\eta=0 at formation time
+    #TODO more general computation of (p^\eta)^2
+    p_sq_eta[index] = (t * p[index, 3]) ** 2
+
+def compute_mean(p_sq_x, p_sq_y, p_sq_z, p_sq_eta, p_sq_mean, stream):
+    if use_cuda:
+        my_cuda_sum(p_sq_x, stream)
+        my_cuda_sum(p_sq_y, stream)
+        my_cuda_sum(p_sq_z, stream)
+        my_cuda_sum(p_sq_eta, stream)
+        collect_results[1, 1, stream](p_sq_mean, p_sq_x, p_sq_y, p_sq_z, p_sq_eta)
+    else:
+        p_sq_mean[0] = np.mean(p_sq_x)
+        p_sq_mean[1] = np.mean(p_sq_y)
+        p_sq_mean[2] = np.mean(p_sq_z)
+        p_sq_mean[3] = np.mean(p_sq_eta)
+
+@mycudajit  # @cuda.jit
+def collect_results(p_sq_mean, p_sq_x, p_sq_y, p_sq_z, p_sq_eta):
+    p_sq_mean[0] = p_sq_x[0] / p_sq_x.size
+    p_sq_mean[1] = p_sq_y[0] / p_sq_y.size
+    p_sq_mean[2] = p_sq_z[0] / p_sq_z.size
+    p_sq_mean[3] = p_sq_eta[0] / p_sq_eta.size
 
 # @myjit
 # def swap_coordinates_kernel(index, x0, x1, active):

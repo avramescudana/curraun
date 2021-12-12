@@ -16,7 +16,7 @@ class ForceCorrelators:
         self.n_particles = n_particles
 
         # color lorentz force for each particle
-        # force layouy (f): x,y,eta
+        # force layout (f): x,y,eta
         self.f = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # lorentz force correlator

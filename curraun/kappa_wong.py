@@ -2,6 +2,7 @@ from curraun.numba_target import myjit, use_cuda, my_parallel_loop, my_cuda_sum,
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
+import curraun.kappa as kappa
 if use_cuda:
     import numba.cuda as cuda
 
@@ -13,228 +14,164 @@ class TransportedForce:
         self.wong = wong
         self.n_particles = n_particles
 
-        # untransported force
-        self.f = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        # transported color force
+        self.fc_transp = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
-        # integrated force
-        self.fi = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        # integrated color force
+        self.fc_int = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+
+        # integrated invariant force
+        self.finv_int = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE)
 
         # single components
-        self.p_perp_x = np.zeros(n_particles, dtype=np.double)
-        self.p_perp_y = np.zeros(n_particles, dtype=np.double)
-        self.p_perp_z = np.zeros(n_particles, dtype=np.double)
+        self.p_perp_x_fc = np.zeros(n_particles, dtype=np.double)
+        self.p_perp_y_fc = np.zeros(n_particles, dtype=np.double)
+        self.p_perp_eta_fc = np.zeros(n_particles, dtype=np.double)
+
+        self.p_perp_x_finv = np.zeros(n_particles, dtype=np.double)
+        self.p_perp_y_finv = np.zeros(n_particles, dtype=np.double)
+        self.p_perp_eta_finv = np.zeros(n_particles, dtype=np.double)
 
         # mean values
-        self.p_perp_mean = np.zeros(3, dtype=np.double)
+        self.p_perp_mean_fc = np.zeros(3, dtype=np.double)
         if use_cuda:
             # use pinned memory for asynchronous data transfer
-            self.p_perp_mean = cuda.pinned_array(3, dtype=np.double)
-            self.p_perp_mean[0:3] = 0.0
+            self.p_perp_mean_fc = cuda.pinned_array(3, dtype=np.double)
+            self.p_perp_mean_fc[0:3] = 0.0
+
+        self.p_perp_mean_finv = np.zeros(3, dtype=np.double)
+        if use_cuda:
+            # use pinned memory for asynchronous data transfer
+            self.p_perp_mean_finv = cuda.pinned_array(3, dtype=np.double)
+            self.p_perp_mean_finv[0:3] = 0.0
 
         # time counter
         self.t = 0
 
         # Memory on the CUDA device:
-        self.d_f = self.f
-        self.d_fi = self.fi
-        self.d_p_perp_x = self.p_perp_x
-        self.d_p_perp_y = self.p_perp_y
-        self.d_p_perp_z = self.p_perp_z
-        self.d_p_perp_mean = self.p_perp_mean
+        self.d_fc_transp = self.fc_transp
+        self.d_fc_int = self.fc_int
+        self.d_finv_int = self.finv_int
+        self.d_p_perp_x_fc = self.p_perp_x_fc
+        self.d_p_perp_y_fc = self.p_perp_y_fc
+        self.d_p_perp_eta_fc = self.p_perp_eta_fc
+        self.d_p_perp_mean_fc = self.p_perp_mean_fc
+
+        self.d_p_perp_x_finv = self.p_perp_x_finv
+        self.d_p_perp_y_finv = self.p_perp_y_finv
+        self.d_p_perp_eta_finv = self.p_perp_eta_finv
+        self.d_p_perp_mean_finv = self.p_perp_mean_finv
 
     def copy_to_device(self):
-        self.d_f = cuda.to_device(self.f)
-        self.d_fi = cuda.to_device(self.fi)
-        self.d_p_perp_x = cuda.to_device(self.p_perp_x)
-        self.d_p_perp_y = cuda.to_device(self.p_perp_y)
-        self.d_p_perp_z = cuda.to_device(self.p_perp_z)
-        self.d_p_perp_mean = cuda.to_device(self.p_perp_mean)
+        self.d_fc_transp = cuda.to_device(self.fc_transp)
+        self.d_fc_int = cuda.to_device(self.fc_int)
+        self.d_finv_int = cuda.to_device(self.finv_int)
+        self.d_p_perp_x_fc = cuda.to_device(self.p_perp_x_fc)
+        self.d_p_perp_y_fc = cuda.to_device(self.p_perp_y_fc)
+        self.d_p_perp_eta_fc = cuda.to_device(self.p_perp_eta_fc)
+        self.d_p_perp_mean_fc = cuda.to_device(self.p_perp_mean_fc)
+
+        self.d_p_perp_x_finv = cuda.to_device(self.p_perp_x_finv)
+        self.d_p_perp_y_finv = cuda.to_device(self.p_perp_y_finv)
+        self.d_p_perp_eta_finv = cuda.to_device(self.p_perp_eta_finv)
+        self.d_p_perp_mean_finv = cuda.to_device(self.p_perp_mean_finv)
 
     def copy_to_host(self):
-        self.d_f.copy_to_host(self.f)
-        self.d_fi.copy_to_host(self.fi)
-        self.d_p_perp_x.copy_to_host(self.p_perp_x)
-        self.d_p_perp_y.copy_to_host(self.p_perp_y)
-        self.d_p_perp_z.copy_to_host(self.p_perp_z)
-        self.d_p_perp_mean.copy_to_host(self.p_perp_mean)
+        self.d_fc_transp.copy_to_host(self.fc_transp)
+        self.d_fc_int.copy_to_host(self.fc_int)
+        self.d_finv_int.copy_to_host(self.finv_int)
+        self.d_p_perp_x_fc.copy_to_host(self.p_perp_x_fc)
+        self.d_p_perp_y_fc.copy_to_host(self.p_perp_y_fc)
+        self.d_p_perp_eta_fc.copy_to_host(self.p_perp_eta_fc)
+        self.d_p_perp_mean_fc.copy_to_host(self.p_perp_mean_fc)
+
+        self.d_p_perp_x_finv.copy_to_host(self.p_perp_x_finv)
+        self.d_p_perp_y_finv.copy_to_host(self.p_perp_y_finv)
+        self.d_p_perp_eta_finv.copy_to_host(self.p_perp_eta_finv)
+        self.d_p_perp_mean_finv.copy_to_host(self.p_perp_mean_finv)
 
     def copy_mean_to_device(self, stream=None):
-        self.d_p_perp_mean = cuda.to_device(self.p_perp_mean, stream)
+        self.d_p_perp_mean_fc = cuda.to_device(self.p_perp_mean_fc, stream)
+        self.d_p_perp_mean_finv = cuda.to_device(self.p_perp_mean_finv, stream)
 
     def copy_mean_to_host(self, stream=None):
-        self.d_p_perp_mean.copy_to_host(self.p_perp_mean, stream)
+        self.d_p_perp_mean_fc.copy_to_host(self.p_perp_mean_fc, stream)
+        self.d_p_perp_mean_finv.copy_to_host(self.p_perp_mean_finv, stream)
 
     def compute(self, wong, stream=None):
         tint = round(self.s.t / self.s.dt)
         if tint % self.dtstep == 0 and tint >= 1:
-            # compute un-transported f (temporal gauge does not need any transport)
-            compute_f(self.s, wong, self.d_f, self.n_particles, stream)
+            """
+                Momentum broadenings from color Lorentz forces
+            """
+            # apply Wilson lines to color Lorentz force
+            apply_w(wong.d_w, wong.d_fc, self.d_fc_transp, self.n_particles, stream)
 
-            # apply Wilson lines
-            apply_w(wong, self.d_f, self.n_particles, stream)
-
-            # integrate f
-            integrate_f(self.d_f, self.d_fi, self.n_particles, 1.0, stream)
+            # integrate fc
+            integrate_fc(self.d_fc_transp, self.d_fc_int, self.n_particles, 1.0, self.s.t, stream)
 
             # integrate perpendicular momentum
-            compute_p_perp(self.d_fi, self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.n_particles, stream)
+            compute_p_perp_fc(self.d_fc_int, self.d_p_perp_x_fc, self.d_p_perp_y_fc, self.d_p_perp_eta_fc, self.n_particles, self.s.t, stream)
 
             # calculate mean
-            compute_mean(self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.d_p_perp_mean, stream)
+            kappa.compute_mean(self.d_p_perp_x_fc, self.d_p_perp_y_fc, self.d_p_perp_eta_fc, self.d_p_perp_mean_fc, stream)
+
+            """
+                Momentum broadenings from invariant Lorentz forces
+            """
+            # integrate finv 
+            integrate_finv(wong.d_finv,  self.d_finv_int, self.n_particles, 1.0, self.s.t, stream)
+
+            # compute squared momentum
+            compute_p_perp_finv(self.d_finv_int, self.d_p_perp_x_finv, self.d_p_perp_y_finv, self.d_p_perp_eta_finv, self.n_particles, self.s.t, stream)
+
+            # calculate mean
+            kappa.compute_mean(self.d_p_perp_x_finv, self.d_p_perp_y_finv, self.d_p_perp_eta_finv, self.d_p_perp_mean_finv, stream)
+
+def apply_w(w, fc, fc_transp, n_particles, stream):
+    my_parallel_loop(apply_w_kernel, n_particles, fc, w, fc_transp, stream=stream)
 
 @myjit
-def ngp(x):
-    """
-        Computes the nearest grid point of a particle position
-    """
-    return int(round(x[0])), int(round(x[1]))
-
-@myjit
-def compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t):
-    # Electric fields
-    Ex = su.zero()
-    Ex = su.add(Ex, pt1[ngp_index, 0, :])
-    Ex = su.add(Ex, pt0[ngp_index, 0, :])
-    xs = l.shift(ngp_index, 0, -1, n)
-    b1 = l.act(su.dagger(u0[xs, 0, :]), pt1[xs, 0, :])
-    Ex = su.add(Ex, b1)
-    b1 = l.act(su.dagger(u0[xs, 0]), pt0[xs, 0, :])
-    Ex = su.add(Ex, b1)
-    Ex = su.mul_s(Ex, 0.25 / t)
-
-    Ey = su.zero()
-    Ey = su.add(Ey, pt1[ngp_index, 1, :])
-    Ey = su.add(Ey, pt0[ngp_index, 1, :])
-    xs = l.shift(ngp_index, 1, -1, n)
-    b1 = l.act(su.dagger(u0[xs, 1, :]), pt1[xs, 1, :])
-    Ey = su.add(Ey, b1)
-    b1 = l.act(su.dagger(u0[xs, 1, :]), pt0[xs, 1, :])
-    Ey = su.add(Ey, b1)
-    Ey = su.mul_s(Ey, 0.25 / t)
-
-    Eeta = su.zero()
-    Eeta = l.add_mul(Eeta, peta1[ngp_index, :], 0.5)
-    Eeta = l.add_mul(Eeta, peta0[ngp_index, :], 0.5)
-
-    return Ex, Ey, Eeta
-
-@myjit
-def compute_magnetic_field(ngp_index, aeta0, u0, n, t):
-    # Magnetic fields
-    b1 = l.transport(aeta0, u0, ngp_index, 1, +1, n)
-    b2 = l.transport(aeta0, u0, ngp_index, 1, -1, n)
-    b2 = l.add_mul(b1, b2, -1.0)
-    Bx = su.mul_s(b2, -0.5 / t)
-
-    b1 = l.transport(aeta0, u0, ngp_index, 0, +1, n)
-    b2 = l.transport(aeta0, u0, ngp_index, 0, -1, n)
-    b2 = l.add_mul(b1, b2, -1.0)
-    By = su.mul_s(b2, +0.5 / t)
-
-    bf1 = su.zero()
-    b1 = l.plaq(u0, ngp_index, 0, 1, 1, 1, n)
-    b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, -0.25)
-
-    b1 = l.plaq(u0, ngp_index, 0, 1, 1, -1, n)
-    b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, +0.25)
-
-    b1 = l.plaq(u0, ngp_index, 1, 0, 1, -1, n)
-    b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, -0.25)
-
-    b1 = l.plaq(u0, ngp_index, 1, 0, -1, -1, n)
-    b2 = su.ah(b1)
-    Beta = l.add_mul(bf1, b2, +0.25)
-
-    return Bx, By, Beta
-
-
-def compute_f(s, wong, f, n_particles, stream):
-    u0 = s.d_u0
-    pt1 = s.d_pt1
-    aeta0 = s.d_aeta0
-    peta1 = s.d_peta1
-    pt0 = s.d_pt0
-    peta0 = s.d_peta0
-
-    n = s.n
-    t = s.t
-
-    x0 = wong.x0
-    p = wong.p
-
-    my_parallel_loop(compute_f_kernel, n_particles, x0, p, pt0, pt1, u0, peta0, peta1, aeta0, n, t, f, stream=stream)
-    
-
-@myjit
-def compute_f_kernel(index, x0, p, pt0, pt1, u0, peta0, peta1, aeta0, n, t, f):
-    ngp_pos = ngp(x0[index, :2])
-    ngp_index = l.get_index(ngp_pos[0], ngp_pos[1], n)
-    Ex, Ey, Eeta = compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t)
-    Bx, By, Beta = compute_magnetic_field(ngp_index, aeta0, u0, n, t)
-
-    b1 = su.mul_s(Beta, p[index, 2]/p[index, 0])
-    b2 = su.add(Ex, b1)
-    b3 = su.mul_s(By, -t*p[index, 3]/p[index, 0])
-    f[index, 0, :] = su.add(b2, b3)
-
-    b1 = su.mul_s(Beta, -p[index, 1]/p[index, 0])
-    b2 = su.add(Ey, b1)
-    b3 = su.mul_s(Bx, t*p[index, 3]/p[index, 0])
-    f[index, 1, :] = su.add(b2, b3)
-
-    b1 = su.mul_s(By, p[index, 1]/p[index, 0])
-    b2 = su.add(Eeta, b1)
-    b3 = su.mul_s(Bx, -p[index, 2]/p[index, 0])
-    f[index, 2, :] = su.add(b2, b3)
-
-def apply_w(wong, f, n_particles, stream):
-    w = wong.w
-    my_parallel_loop(apply_w_kernel, n_particles, f, w, stream=stream)
-
-
-@myjit
-def apply_w_kernel(index, f, w):
+def apply_w_kernel(index, fc, w, fc_transp):
     for d in range(3):
-        b1 = l.act(w[index], f[index, d])
-        su.store(f[index, d], b1)
+        b1 = l.act(w[index], fc[index, d])
+        su.store(fc_transp[index, d], b1)
 
-def integrate_f(f, fi, n_particles, dt, stream):
-    my_parallel_loop(integrate_f_kernel, n_particles, f, fi, dt, stream=stream)
-
-@myjit
-def integrate_f_kernel(index, f, fi, dt):
-    for d in range(3):
-        bfi = l.add_mul(fi[index, d], f[index, d], dt)
-        su.store(fi[index, d], bfi)
-
-
-def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n_particles, stream):
-    my_parallel_loop(compute_p_perp_kernel, n_particles, fi, p_perp_x, p_perp_y, p_perp_z, stream=stream)
-
+def integrate_fc(fc_transp, fc_int, n_particles, dt, t, stream):
+    my_parallel_loop(integrate_fc_kernel, n_particles, fc_transp, fc_int, dt, t, stream=stream)
 
 @myjit
-def compute_p_perp_kernel(index, fi, p_perp_x, p_perp_y, p_perp_z):
-    p_perp_x[index] = su.sq(fi[index, 0])
-    p_perp_y[index] = su.sq(fi[index, 1])
-    p_perp_z[index] = su.sq(fi[index, 2])
+def integrate_fc_kernel(index, fc_transp, fc_int, dt, t):
+    for d in range(2):
+        bfi = l.add_mul(fc_int[index, d], fc_transp[index, d], dt)
+        su.store(fc_int[index, d], bfi)
+    bfi = l.add_mul(fc_int[index, 2], fc_transp[index, 2], dt * t ** 2)
+    su.store(fc_int[index, 2], bfi)
+
+def integrate_finv(finv, finv_int, n_particles, dt, t, stream):
+    my_parallel_loop(integrate_finv_kernel, n_particles, finv, finv_int, dt, t, stream=stream)
+
+@myjit
+def integrate_finv_kernel(index, finv, finv_int, dt, t):
+    for d in range(2):
+        finv_int[index, d] += finv[index, d] * dt
+    finv_int[index, 2] += finv[index, 2] * dt * t ** 2
 
 
-def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream):
-    if use_cuda:
-        my_cuda_sum(p_perp_x, stream)
-        my_cuda_sum(p_perp_y, stream)
-        my_cuda_sum(p_perp_z, stream)
-        collect_results[1, 1, stream](p_perp_mean, p_perp_x, p_perp_y, p_perp_z)
-    else:
-        p_perp_mean[0] = np.mean(p_perp_x)
-        p_perp_mean[1] = np.mean(p_perp_y)
-        p_perp_mean[2] = np.mean(p_perp_z)
+def compute_p_perp_fc(fc_int, p_perp_x, p_perp_y, p_perp_eta, n_particles, t, stream):
+    my_parallel_loop(compute_p_perp_fc_kernel, n_particles, fc_int, p_perp_x, p_perp_y, p_perp_eta, t, stream=stream)
 
-@mycudajit 
-def collect_results(p_perp_mean, p_perp_x, p_perp_y, p_perp_z):
-    p_perp_mean[0] = p_perp_x[0] / p_perp_x.size
-    p_perp_mean[1] = p_perp_y[0] / p_perp_y.size
-    p_perp_mean[2] = p_perp_z[0] / p_perp_z.size
+@myjit
+def compute_p_perp_fc_kernel(index, fc_int, p_perp_x, p_perp_y, p_perp_eta, t):
+    p_perp_x[index] = su.sq(fc_int[index, 0])
+    p_perp_y[index] = su.sq(fc_int[index, 1])
+    p_perp_eta[index] = su.sq(fc_int[index, 2]) / t ** 2
+
+def compute_p_perp_finv(finv_int, p_perp_x, p_perp_y, p_perp_eta, n_particles, t, stream):
+    my_parallel_loop(compute_p_perp_finv_kernel, n_particles, finv_int, p_perp_x, p_perp_y, p_perp_eta, t, stream=stream)
+
+@myjit
+def compute_p_perp_finv_kernel(index, finv_int, p_perp_x, p_perp_y, p_perp_eta, t):
+    p_perp_x[index] = finv_int[index, 0] ** 2
+    p_perp_y[index] = finv_int[index, 1] ** 2
+    p_perp_eta[index] = finv_int[index, 2] ** 2 / t ** 2
