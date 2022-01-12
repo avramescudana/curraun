@@ -21,7 +21,7 @@ class TransportedForce:
         self.fc_int = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # integrated invariant force
-        self.finv_int = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE)
+        self.finv_int = np.zeros((n_particles, 3), dtype=np.double)
 
         # single components
         self.p_perp_x_fc = np.zeros(n_particles, dtype=np.double)

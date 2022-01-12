@@ -58,7 +58,7 @@ class WongSolver:
         # color force and invariant force for each particle
         # force layout (f): x,y,eta
         self.fc = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        self.finv = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE)
+        self.finv = np.zeros((n_particles, 3), dtype=np.double)
 
         # casimirs
         if CASIMIRS:
@@ -252,6 +252,7 @@ class WongSolver:
                          self.s.d_peta0, self.s.d_peta1, self.s.n, self.d_active)
         if use_cuda:
             self.copy_to_host()
+
 @myjit
 def init_charge_kernel(index, q0, q0s):
     q0_algebra = su.get_algebra_element(q0s[index, :])
@@ -261,7 +262,6 @@ def init_charge_kernel(index, q0, q0s):
 @myjit
 def init_wilson_lines_kernel(index, w):
     w[index, :] = su.unit()
-
 
 @myjit
 def compute_electric_field(ngp_index, pt0, pt1, u0, peta0, peta1, n, t):
@@ -584,7 +584,7 @@ def init_pos(n):
 
     return x0
 
-def init_mom(type_init, p):
+def init_mom_toy(type_init, p):
     """
         Initialize all particles with the same initial transverse momentum
         TODO: Add other types of initializations (FONLL for HQs, for example)
@@ -597,6 +597,33 @@ def init_mom(type_init, p):
         p0 = [0.0, p, 0.0, 0.0, 0.0]
 
     return p0
+
+def fonll(p, pt):
+    quark = p['QUARK']
+    if quark=='charm':
+        x0, x1, x2, x3 = 20.2837, 1.95061, 3.13695, 0.0751663
+    elif quark=='beauty':
+        x0, x1, x2, x3 = 0.467997, 1.83805, 3.07569, 0.0301554
+
+    fonll = 2*np.pi*pt*x0/(1+x3*pt**x1)**x2
+    return fonll
+
+def init_mom_fonll(p):
+    ntp = p['NTP']
+    ptbins, ptmax = 200, 20
+    pt = np.linspace(0, ptmax, ptbins)
+    fonll_pt = fonll(p, pt)
+    prob_pt = fonll_pt/sum(fonll_pt)
+    N = []
+    for prob in prob_pt:
+        N.append(int(round(ntp*prob)))
+    pTs = []
+    for ipt in range(len(pt)):
+        pT = pt[ipt]
+        for ip in range(N[ipt]):
+            pTs.append(pT)
+    npart = np.sum(np.array(N))
+    return pTs, npart
 
 def init_charge(representation):
     if su_group == 'su2':
