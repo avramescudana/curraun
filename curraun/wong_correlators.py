@@ -59,17 +59,28 @@ class ForceCorrelators:
 
 @myjit
 def compute_force_correlator_transported_kernel(index, f0, f, w, corr):
-    for d in range(3):
+    for d in range(2):
         buf1 = l.act(w[index, :], f0[index, d, :])
         buf2 = su.mul(f[index, d, :], su.dagger(buf1))
         corr[index, d] = su.tr(buf2).real
+    # fz, not feta
+    d = 3
+    buf1 = l.act(w[index, :], f0[index, d, :])
+    buf2 = su.mul(f[index, d, :], su.dagger(buf1))
+    corr[index, 2] = su.tr(buf2).real
+
 
 @myjit
 def compute_force_correlator_naive_kernel(index, f0, f, corr):
-    for d in range(3):
+    for d in range(2):
         buf1 = su.dagger(f0[index, d, :])
         buf2 = su.mul(f[index, d, :], buf1)
         corr[index, d] = su.tr(buf2).real
+    # fz, not feta
+    d = 3
+    buf1 = su.dagger(f0[index, d, :])
+    buf2 = su.mul(f[index, d, :], buf1)
+    corr[index, 2] = su.tr(buf2).real
 
 def compute_mean(corr, corr_mean, stream):
     if use_cuda:
@@ -80,7 +91,7 @@ def compute_mean(corr, corr_mean, stream):
         for i in range(3):
             corr_mean[i] = np.mean(corr[:, i])
 
-@mycudajit  # @cuda.jit
+@mycudajit  
 def collect_results(corr_mean, corr):
     for i in range(3):
         corr_mean[i] = corr[0, i] / corr[:, i].size

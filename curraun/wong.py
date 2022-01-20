@@ -56,8 +56,8 @@ class WongSolver:
         self.w = np.zeros((n_particles, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # color force and invariant force for each particle
-        # force layout (f): x,y,eta
-        self.fc = np.zeros((n_particles, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        # force layout (f): x,y,eta,z
+        self.fc = np.zeros((n_particles, 4, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.finv = np.zeros((n_particles, 3), dtype=np.double)
 
         # casimirs
@@ -347,10 +347,10 @@ def compute_color_lorentz_force(index, Ex, Ey, Eeta, Bx, By, Beta, p, t):
     b2 = su.add(Eeta, b1)
     b3 = su.mul_s(Bx, -p[index, 2]/p[index, 0])
     # fc_eta = su.add(b2, b3)
-    b4 = su.add(b2, b3)
-    fc_eta = su.mul_s(b4, 1/t)
+    fc_z = su.add(b2, b3)
+    fc_eta = su.mul_s(fc_z, 1/t)
 
-    return fc_x, fc_y, fc_eta
+    return fc_x, fc_y, fc_eta, fc_z
 
 
 @myjit
@@ -482,8 +482,8 @@ def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0,
         finv[index, 0], finv[index, 1], finv[index, 2] = fx, fy, feta 
 
         # Color Lorentz force
-        fc_x, fc_y, fc_eta = compute_color_lorentz_force(index, Ex, Ey, Eeta, Bx, By, Beta, p, t)
-        fc[index, 0, :], fc[index, 1, :], fc[index, 2, :] = fc_x, fc_y, fc_eta
+        fc_x, fc_y, fc_eta, fc_z = compute_color_lorentz_force(index, Ex, Ey, Eeta, Bx, By, Beta, p, t)
+        fc[index, 0, :], fc[index, 1, :], fc[index, 2, :], fc[index, 3, :] = fc_x, fc_y, fc_eta, fc_z
 
 @myjit
 def compute_ptau_constraint_kernel(index, ptau_constraint, x1, p, q, t, dt, u0, pt0, pt1, peta0, peta1, n, active):
