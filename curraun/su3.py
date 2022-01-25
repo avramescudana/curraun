@@ -519,6 +519,22 @@ def casimir_fundamental(Q):
     c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag / (T_R ** 2 * D_R)
     return c0, c1
 
+
+@myjit
+def casimir_fundamental_brute_force(Q):
+
+    # Dynkin index and dimension of fundamental representation
+    T_R = 1./2.
+
+    """
+    Computes the quadratic and cubic Casimirs C_2 and C_3. 
+    Notice that Tr{Q^2}=T(R)C_2 and Tr{Q^3}=[T(R)]^2C_3, with T(R)=1/2 for R=F.
+    """
+
+    c0 = tr(mul(Q, dagger(Q))).real / T_R 
+    c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag / T_R ** 2
+    return c0, c1
+
 @myjit
 def casimir_adjoint(Q):
 

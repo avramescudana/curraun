@@ -675,3 +675,22 @@ def init_charge(representation):
 
         q = 2 * np.einsum('ijk,kj', T, Q)
         return np.real(q)
+
+def init_charge_brute_force():
+
+    q2 = 4/3
+    # q2 = 1
+
+    r = np.sqrt(q2)
+    phi = np.random.uniform(0, 2 * np.pi, 7)
+    Q1 = r * np.cos(phi[0])
+    Q2 = r * np.sin(phi[0])*np.cos(phi[1])
+    Q3 = r * np.sin(phi[0])*np.sin(phi[1])*np.cos(phi[2])
+    Q4 = r * np.sin(phi[0])*np.sin(phi[1])*np.sin(phi[2])*np.cos(phi[3])
+    Q5 = r * np.sin(phi[0])*np.sin(phi[1])*np.sin(phi[2])*np.sin(phi[3])*np.cos(phi[4])
+    Q6 = r * np.sin(phi[0])*np.sin(phi[1])*np.sin(phi[2])*np.sin(phi[3])*np.sin(phi[4])*np.cos(phi[5])
+    Q7 = r * np.sin(phi[0])*np.sin(phi[1])*np.sin(phi[2])*np.sin(phi[3])*np.sin(phi[4])*np.sin(phi[5])*np.cos(phi[6])
+    Q8 = r * np.sin(phi[0])*np.sin(phi[1])*np.sin(phi[2])*np.sin(phi[3])*np.sin(phi[4])*np.sin(phi[5])*np.sin(phi[6])
+    q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
+
+    return q0
