@@ -5,7 +5,6 @@
 from curraun.numba_target import use_cuda, myjit, my_parallel_loop, my_cuda_sum, mycudajit
 import curraun.lattice as l
 import curraun.su as su
-import curraun.kappa as kappa
 
 if use_cuda:
     import numba.cuda as cuda
@@ -177,20 +176,6 @@ class WongSolver:
                          self.d_p, self.d_p0, self.d_m, self.s.t, self.d_x0)
 
         self.initialized = True
-
-    # def add_particle(self, x0, p0, q0, m):
-    #     i = self.allocated
-    #     if i < self.n_particles:
-    #         self.x0[i, :] = x0[:]
-    #         self.x1[i, :] = x0[:]
-    #         self.p[i, :] = p0[:]
-    #         q0_algebra = su.get_algebra_element(q0)
-    #         self.q[i, :] = q0_algebra[:]
-
-    #         self.m[i] = m
-    #         self.allocated += 1
-    #     else:
-    #         raise Exception("Maximum number of particles reached.")
 
     def initialize(self, x0s, p0s, q0s, masses):
 
@@ -404,14 +389,9 @@ def update_coordinates_kernel(index, x0, x1, p, q, q0, dt, u0, aeta0, n, w, acti
         for d in range(2):
             delta_ngp = ngp1[d] - ngp0[d]
             if delta_ngp == 1:
-                # U = u0[ngp0_index, d]
-                # q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
-                # w[index, :] = su.mul(w[index, :], u0[ngp0_index, d])
                 w[index, :] = su.mul(w[index, :], u0[ngp1_index, d])
 
             if delta_ngp == -1:
-                # U = su.dagger(u0[ngp1_index, d])
-                # q1 = su.mul(su.mul(U, q[index]), su.dagger(U))
                 w[index, :] = su.mul(w[index, :], su.dagger(u0[ngp1_index, d]))
 
         # parallel transport charge along eta
@@ -466,22 +446,14 @@ def update_momenta_kernel(index, x1, p, q, m, t, dt, u0, pt0, pt1, aeta0, peta0,
         p[index, 2] = py1
         p[index, 3] = peeta1
 
-        # compute pz from peta or from dpz/dt=feta for limiting cases (qhat.py or kappa.py)
-        # if LIMITING_CASE:
-        #     pz0 = p[index, 4]
-        #     pz1 = pz0 + dt * feta
-        # else:
-        #     eta0 = x1[index, 2]
-        #     pz1 = math.sinh(eta0) * ptau0 + math.cosh(eta0) * t * peeta0
-
         eta1 = x1[index, 2]
         pz1 = math.sinh(eta1) * ptau1 + math.cosh(eta1) * t * peeta1
         p[index, 4] = pz1
 
-        # Invariant Lorentz force
+        # invariant Lorentz force
         finv[index, 0], finv[index, 1], finv[index, 2] = fx, fy, feta 
 
-        # Color Lorentz force
+        # color Lorentz force
         fc_x, fc_y, fc_eta, fc_z = compute_color_lorentz_force(index, Ex, Ey, Eeta, Bx, By, Beta, p, t)
         fc[index, 0, :], fc[index, 1, :], fc[index, 2, :], fc[index, 3, :] = fc_x, fc_y, fc_eta, fc_z
 
@@ -543,12 +515,6 @@ def collect_results(p_sq_mean, p_sq_x, p_sq_y, p_sq_z, p_sq_eta):
     p_sq_mean[1] = p_sq_y[0] / p_sq_y.size
     p_sq_mean[2] = p_sq_z[0] / p_sq_z.size
     p_sq_mean[3] = p_sq_eta[0] / p_sq_eta.size
-
-# @myjit
-# def swap_coordinates_kernel(index, x0, x1, active):
-#     if active[index] == 1:
-#         for d in range(3):
-#             x0[index, d], x1[index, d] = x1[index, d], x0[index, d]
 
 @myjit
 def compute_casimirs_fundamental_kernel(index, q, c):
@@ -676,11 +642,11 @@ def init_charge(representation):
         q = 2 * np.einsum('ijk,kj', T, Q)
         return np.real(q)
 
+
 def init_charge_brute_force():
 
+    # color charges randomly distributed on a 8-dimensional hypersphere with radius fixed by quadratic Casimir r^2=q2
     q2 = 4/3
-    # q2 = 1
-
     r = np.sqrt(q2)
     phi = np.random.uniform(0, 2 * np.pi, 7)
     Q1 = r * np.cos(phi[0])
@@ -691,6 +657,46 @@ def init_charge_brute_force():
     Q6 = r * np.sin(phi[0])*np.sin(phi[1])*np.sin(phi[2])*np.sin(phi[3])*np.sin(phi[4])*np.cos(phi[5])
     Q7 = r * np.sin(phi[0])*np.sin(phi[1])*np.sin(phi[2])*np.sin(phi[3])*np.sin(phi[4])*np.sin(phi[5])*np.cos(phi[6])
     Q8 = r * np.sin(phi[0])*np.sin(phi[1])*np.sin(phi[2])*np.sin(phi[3])*np.sin(phi[4])*np.sin(phi[5])*np.sin(phi[6])
+    q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
+
+    return q0
+
+
+def init_charge_darboux():
+    # Values used to compute the SU(3) Casimirs
+    # J1, J2 = 1, 0
+    J1, J2 = 2.84801, 1.00841
+    
+    K1, K2 = (2*J1+J2)/3, (2*J2+J1)/3
+    x, y = np.random.uniform(K2-K1, K1), np.random.uniform(K1-K2, K2)
+    A1, A2, A3 = K1-K2+x, K2+x, K1-x
+    B1, B2, B3 = K2-K1+y, K2-y, K1+y
+    numA, numB = A1*A2*A3, B1*B2*B3
+    
+    pi3, pi2 = (x-y)*np.sqrt(3)/2, (x+y)/2
+    pi1 = np.random.uniform(-np.abs(pi3), np.abs(pi3))
+    A, B = np.sqrt(numA)/(6*pi3), np.sqrt(numB)/(6*pi3)
+
+    # Angle Darboux variables
+    # phi1, phi2, phi3 = np.random.uniform(), np.random.uniform(), np.random.uniform()
+    # Bounded angles (0,2pi)
+    phi1, phi2, phi3 = np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi), np.random.uniform(0, 2*np.pi)
+
+    pip, pim = np.sqrt(pi3+pi1), np.sqrt(pi3-pi1)
+    Cpp, Cpm, Cmp, Cmm = np.cos((+phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((+phi1+np.sqrt(3)*phi2-phi3)/2), \
+                        np.cos((-phi1+np.sqrt(3)*phi2+phi3)/2), np.cos((-phi1+np.sqrt(3)*phi2-phi3)/2)
+    Spp, Spm, Smp, Smm = np.sin((+phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((+phi1+np.sqrt(3)*phi2-phi3)/2), \
+                        np.sin((-phi1+np.sqrt(3)*phi2+phi3)/2), np.sin((-phi1+np.sqrt(3)*phi2-phi3)/2)
+
+    # Color charges
+    Q1 = np.cos(phi1) * pip * pim
+    Q2 = np.sin(phi1) * pip * pim
+    Q3 = pi1
+    Q4 = Cpp * pip * A + Cpm * pim * B
+    Q5 = Spp * pip * A + Spm * pim * B
+    Q6 = Cmp * pim * A - Cmm * pip * B
+    Q7 = Smp * pim * A - Smm * pip * B
+    Q8 = pi2
     q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
 
     return q0

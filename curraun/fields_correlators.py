@@ -37,8 +37,8 @@ class FieldsCorrelators:
     def copy_to_host(self):
         self.d_EformE.copy_to_host(self.EformE)
         self.d_BformB.copy_to_host(self.BformB)
-        self.EformE /= self.s.g ** 2
-        self.BformB /= self.s.g ** 2
+        # self.EformE /= self.s.g ** 2
+        # self.BformB /= self.s.g ** 2
 
     def compute_elfield(self):
         u0 = self.s.d_u0

@@ -181,7 +181,8 @@ def casimir_fundamental(Q):
     Notice that Tr{Q^2}=T(R)C_2 with T(R)=1/2 for R=F.
     """
 
-    C = tr(mul(Q, dagger(Q))) / (T_R * D_R)
+    # C = tr(mul(Q, dagger(Q))) / (T_R * D_R)
+    C = tr(mul(Q, dagger(Q))) / T_R
     
     return C
 
@@ -196,6 +197,7 @@ def casimir_adjoint(Q):
     Notice that Tr{Q^2}=T(R)C_2 with T(R)=1/2 for R=F.
     """
 
-    C = tr(mul(Q, dagger(Q))) / (T_R * D_R)
+    # C = tr(mul(Q, dagger(Q))) / (T_R * D_R)
+    C = tr(mul(Q, dagger(Q))) / T_R
 
     return C

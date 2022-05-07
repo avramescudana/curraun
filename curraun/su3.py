@@ -515,8 +515,10 @@ def casimir_fundamental(Q):
     Notice that Tr{Q^2}=T(R)C_2 and Tr{Q^3}=[T(R)]^2C_3, with T(R)=1/2 for R=F.
     """
 
-    c0 = tr(mul(Q, dagger(Q))).real / (T_R * D_R)
-    c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag / (T_R ** 2 * D_R)
+    # c0 = tr(mul(Q, dagger(Q))).real / (T_R * D_R)
+    # c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag / (T_R ** 2 * D_R)
+    c0 = tr(mul(Q, dagger(Q))).real / T_R
+    c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag / (T_R ** 2)
     return c0, c1
 
 
@@ -547,9 +549,110 @@ def casimir_adjoint(Q):
     Notice that Tr{Q^2}=T(R)C_2 and Tr{Q^3}=[T(R)]^2C_3, with T(R)=1/2 for R=F.
     """
 
-    c0 = tr(mul(Q, dagger(Q))).real / (T_R * D_R)
-    c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag / (T_R ** 2 * D_R)
+    # c0 = tr(mul(Q, dagger(Q))).real / (T_R * D_R)
+    # c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag / (T_R ** 2 * D_R)
+    c0 = tr(mul(Q, dagger(Q))).real / T_R
+    c1 = tr(mul(Q,mul(Q, dagger(Q)))).imag / (T_R ** 2)
     return c0, c1
+
+@myjit
+def u2(a):
+    # t2 = mul_s(s2, 1/2)
+    # buf1 = mul_s(t2, 1j*np.sin(a))
+    buf1 = mul_s(s2, 1j*np.sin(a))
+    buf2 = add(id0, buf1)
+    # buf3 = mul(t2, t2)
+    buf3 = mul(s2, s2)
+    buf4 = mul_s(buf3, (np.cos(a)-1))
+    res = add(buf2, buf4)
+    return res
+
+@myjit
+def u3(a):
+    # t3 = mul_s(s3, 1/2)
+    # buf1 = mul_s(t3, 1j*np.sin(a))
+    buf1 = mul_s(s3, 1j*np.sin(a))
+    buf2 = add(id0, buf1)
+    # buf3 = mul(t3, t3)
+    buf3 = mul(s3, s3)
+    buf4 = mul_s(buf3, (np.cos(a)-1))
+    res = add(buf2, buf4)
+    return res
+
+@myjit
+def u5(a):
+    # t5 = mul_s(s5, 1/2)
+    # buf1 = mul_s(t5, 1j*np.sin(a))
+    buf1 = mul_s(s5, 1j*np.sin(a))
+    buf2 = add(id0, buf1)
+    # buf3 = mul(t5, t5)
+    buf3 = mul(s5, s5)
+    buf4 = mul_s(buf3, (np.cos(a)-1))
+    res = add(buf2, buf4)
+    return res
+
+@myjit
+def u8(a):
+    # t8 = mul_s(s8, 1/2)
+    buf1 = mul_s(id0, 2/3)
+    # buf2 = mul_s(t8, 1/np.sqrt(3))
+    buf2 = mul_s(s8, 1/np.sqrt(3))
+    buf3 = add(buf1, buf2)
+    buf4 = mul_s(buf3, np.cos(a/np.sqrt(3))+1j*np.sin(a/np.sqrt(3)))
+
+    buf5 = mul_s(id0, 1/3)
+    # buf6 = mul_s(t8, -1/np.sqrt(3))
+    buf6 = mul_s(s8, -1/np.sqrt(3))
+    buf7 = add(buf5, buf6)
+    buf8 = mul_s(buf7, np.cos(2*a/np.sqrt(3))-1j*np.sin(2*a/np.sqrt(3)))
+
+    res = add(buf4, buf8)
+
+    # res1 = np.cos(a/np.sqrt(3))+1j*np.sin(a/np.sqrt(3))
+    # res2 = np.cos(2*a/np.sqrt(3))-1j*np.sin(2*a/np.sqrt(3))
+    # res = complex_tuple(res1, 0, 0, 0, res1, 0, 0, 0, res2)
+
+    return res
+
+@myjit
+def euler(a,b,c,d,e,f,g,h):
+    buf1 = mul(u3(a), u2(b))
+    buf2 = mul(buf1, u3(c))
+    buf3 = mul(buf2, u5(d))
+    buf4 = mul(buf3, u3(e))
+    buf5 = mul(buf4, u2(f))
+    buf6 = mul(buf5, u3(g))
+    res = mul(buf6, u8(h))
+    return res
+
+@myjit
+def casimir_euler_angles(u):
+
+    # Dynkin index and dimension of fundamental representation
+    T_R = 1./2.
+
+    """
+    Computes the quadratic and cubic Casimirs C_2 and C_3. 
+    Notice that Tr{Q^2}=T(R)C_2 and Tr{Q^3}=[T(R)]^2C_3, with T(R)=1/2 for R=F.
+    """
+
+    # c0 = tr(mul(u, u)).real / T_R 
+    # c1 = tr(mul(u,mul(u, u))).real / T_R ** 2 
+    c0 = tr(mul(u, u)).real 
+    c1 = tr(mul(u,mul(u, u))).real 
+    return c0, c1
+
+@myjit
+def get_color_components(g):
+    r1 = tr(mul(s1, g))/2
+    r2 = tr(mul(s2, g))/2
+    r3 = tr(mul(s3, g))/2
+    r4 = tr(mul(s4, g))/2
+    r5 = tr(mul(s5, g))/2
+    r6 = tr(mul(s6, g))/2
+    r7 = tr(mul(s7, g))/2
+    r8 = tr(mul(s8, g))/2
+    return r1, r2, r3, r4, r5, r6, r7, r8
 
 """
     DocTest

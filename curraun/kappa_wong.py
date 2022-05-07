@@ -24,24 +24,17 @@ class TransportedForce:
         self.finv_int = np.zeros((n_particles, 3), dtype=np.double)
 
         # single components
-        self.p_perp_x_fc = np.zeros(n_particles, dtype=np.double)
-        self.p_perp_y_fc = np.zeros(n_particles, dtype=np.double)
-        self.p_perp_eta_fc = np.zeros(n_particles, dtype=np.double)
-
-        self.p_perp_x_finv = np.zeros(n_particles, dtype=np.double)
-        self.p_perp_y_finv = np.zeros(n_particles, dtype=np.double)
-        self.p_perp_eta_finv = np.zeros(n_particles, dtype=np.double)
+        self.p_perp_fc = np.zeros((n_particles, 4), dtype=np.double)
+        self.p_perp_finv = np.zeros((n_particles, 4), dtype=np.double)
 
         # mean values
         self.p_perp_mean_fc = np.zeros(3, dtype=np.double)
         if use_cuda:
-            # use pinned memory for asynchronous data transfer
             self.p_perp_mean_fc = cuda.pinned_array(3, dtype=np.double)
             self.p_perp_mean_fc[0:3] = 0.0
 
         self.p_perp_mean_finv = np.zeros(3, dtype=np.double)
         if use_cuda:
-            # use pinned memory for asynchronous data transfer
             self.p_perp_mean_finv = cuda.pinned_array(3, dtype=np.double)
             self.p_perp_mean_finv[0:3] = 0.0
 
@@ -52,42 +45,27 @@ class TransportedForce:
         self.d_fc_transp = self.fc_transp
         self.d_fc_int = self.fc_int
         self.d_finv_int = self.finv_int
-        self.d_p_perp_x_fc = self.p_perp_x_fc
-        self.d_p_perp_y_fc = self.p_perp_y_fc
-        self.d_p_perp_eta_fc = self.p_perp_eta_fc
+        self.d_p_perp_fc = self.p_perp_fc
         self.d_p_perp_mean_fc = self.p_perp_mean_fc
-
-        self.d_p_perp_x_finv = self.p_perp_x_finv
-        self.d_p_perp_y_finv = self.p_perp_y_finv
-        self.d_p_perp_eta_finv = self.p_perp_eta_finv
+        self.d_p_perp_fc = self.p_perp_fc
         self.d_p_perp_mean_finv = self.p_perp_mean_finv
 
     def copy_to_device(self):
         self.d_fc_transp = cuda.to_device(self.fc_transp)
         self.d_fc_int = cuda.to_device(self.fc_int)
         self.d_finv_int = cuda.to_device(self.finv_int)
-        self.d_p_perp_x_fc = cuda.to_device(self.p_perp_x_fc)
-        self.d_p_perp_y_fc = cuda.to_device(self.p_perp_y_fc)
-        self.d_p_perp_eta_fc = cuda.to_device(self.p_perp_eta_fc)
+        self.d_p_perp_fc = cuda.to_device(self.p_perp_fc)
         self.d_p_perp_mean_fc = cuda.to_device(self.p_perp_mean_fc)
-
-        self.d_p_perp_x_finv = cuda.to_device(self.p_perp_x_finv)
-        self.d_p_perp_y_finv = cuda.to_device(self.p_perp_y_finv)
-        self.d_p_perp_eta_finv = cuda.to_device(self.p_perp_eta_finv)
+        self.d_p_perp_finv = cuda.to_device(self.p_perp_finv)
         self.d_p_perp_mean_finv = cuda.to_device(self.p_perp_mean_finv)
 
     def copy_to_host(self):
         self.d_fc_transp.copy_to_host(self.fc_transp)
         self.d_fc_int.copy_to_host(self.fc_int)
         self.d_finv_int.copy_to_host(self.finv_int)
-        self.d_p_perp_x_fc.copy_to_host(self.p_perp_x_fc)
-        self.d_p_perp_y_fc.copy_to_host(self.p_perp_y_fc)
-        self.d_p_perp_eta_fc.copy_to_host(self.p_perp_eta_fc)
+        self.d_p_perp_fc.copy_to_host(self.p_perp_fc)
         self.d_p_perp_mean_fc.copy_to_host(self.p_perp_mean_fc)
-
-        self.d_p_perp_x_finv.copy_to_host(self.p_perp_x_finv)
-        self.d_p_perp_y_finv.copy_to_host(self.p_perp_y_finv)
-        self.d_p_perp_eta_finv.copy_to_host(self.p_perp_eta_finv)
+        self.d_p_perp_finv.copy_to_host(self.p_perp_finv)
         self.d_p_perp_mean_finv.copy_to_host(self.p_perp_mean_finv)
 
     def copy_mean_to_device(self, stream=None):
@@ -111,10 +89,10 @@ class TransportedForce:
             integrate_fc(self.d_fc_transp, self.d_fc_int, self.n_particles, 1.0, self.s.t, stream)
 
             # integrate perpendicular momentum
-            compute_p_perp_fc(self.d_fc_int, self.d_p_perp_x_fc, self.d_p_perp_y_fc, self.d_p_perp_eta_fc, self.n_particles, self.s.t, stream)
+            compute_p_perp_fc(self.d_fc_int, self.d_p_perp_fc, self.n_particles, self.s.t, stream)
 
             # calculate mean
-            kappa.compute_mean(self.d_p_perp_x_fc, self.d_p_perp_y_fc, self.d_p_perp_eta_fc, self.d_p_perp_mean_fc, stream)
+            compute_mean(self.d_p_perp_fc, self.d_p_perp_mean_fc, stream)
 
             """
                 Momentum broadenings from invariant Lorentz forces
@@ -123,10 +101,10 @@ class TransportedForce:
             integrate_finv(wong.d_finv,  self.d_finv_int, self.n_particles, 1.0, self.s.t, stream)
 
             # compute squared momentum
-            compute_p_perp_finv(self.d_finv_int, self.d_p_perp_x_finv, self.d_p_perp_y_finv, self.d_p_perp_eta_finv, self.n_particles, self.s.t, stream)
+            compute_p_perp_finv(self.d_finv_int, self.d_p_perp_finv, self.n_particles, self.s.t, stream)
 
             # calculate mean
-            kappa.compute_mean(self.d_p_perp_x_finv, self.d_p_perp_y_finv, self.d_p_perp_eta_finv, self.d_p_perp_mean_finv, stream)
+            compute_mean(self.d_p_perp_finv, self.d_p_perp_mean_finv, stream)
 
 def apply_w(w, fc, fc_transp, n_particles, stream):
     my_parallel_loop(apply_w_kernel, n_particles, fc, w, fc_transp, stream=stream)
@@ -158,20 +136,38 @@ def integrate_finv_kernel(index, finv, finv_int, dt, t):
     finv_int[index, 2] += finv[index, 2] * dt * t ** 2
 
 
-def compute_p_perp_fc(fc_int, p_perp_x, p_perp_y, p_perp_eta, n_particles, t, stream):
-    my_parallel_loop(compute_p_perp_fc_kernel, n_particles, fc_int, p_perp_x, p_perp_y, p_perp_eta, t, stream=stream)
+def compute_p_perp_fc(fc_int, p_perp, n_particles, t, stream):
+    my_parallel_loop(compute_p_perp_fc_kernel, n_particles, fc_int, p_perp, t, stream=stream)
 
 @myjit
-def compute_p_perp_fc_kernel(index, fc_int, p_perp_x, p_perp_y, p_perp_eta, t):
-    p_perp_x[index] = su.sq(fc_int[index, 0])
-    p_perp_y[index] = su.sq(fc_int[index, 1])
-    p_perp_eta[index] = su.sq(fc_int[index, 2]) / t ** 2
+def compute_p_perp_fc_kernel(index, fc_int, p_perp, t):
+    for i in range(3):
+        if i==2:
+            p_perp[index, i] = su.sq(fc_int[index, i]) / t**2
+        else:
+            p_perp[index, i] = su.sq(fc_int[index, i])
 
-def compute_p_perp_finv(finv_int, p_perp_x, p_perp_y, p_perp_eta, n_particles, t, stream):
-    my_parallel_loop(compute_p_perp_finv_kernel, n_particles, finv_int, p_perp_x, p_perp_y, p_perp_eta, t, stream=stream)
+def compute_mean(p_sq, p_sq_mean, stream):
+    if use_cuda:
+        for i in range(3):
+            my_cuda_sum(p_sq[:, i], stream)
+        collect_results[1, 1, stream](p_sq_mean, p_sq)
+    else:
+        for i in range(3):
+            p_sq_mean[i] = np.mean(p_sq[:, i])
+
+@mycudajit  
+def collect_results(p_sq_mean, p_sq):
+    for i in range(3):
+        p_sq_mean[i] = p_sq[0, i] / p_sq[:, i].size
+
+def compute_p_perp_finv(finv_int, p_perp, n_particles, t, stream):
+    my_parallel_loop(compute_p_perp_finv_kernel, n_particles, finv_int, p_perp, t, stream=stream)
 
 @myjit
-def compute_p_perp_finv_kernel(index, finv_int, p_perp_x, p_perp_y, p_perp_eta, t):
-    p_perp_x[index] = finv_int[index, 0] ** 2
-    p_perp_y[index] = finv_int[index, 1] ** 2
-    p_perp_eta[index] = finv_int[index, 2] ** 2 / t ** 2
+def compute_p_perp_finv_kernel(index, finv_int, p_perp, t):
+    for i in range(3):
+        if i==2:
+            p_perp[index, i] = finv_int[index, i] ** 2 / t ** 2
+        else:
+            p_perp[index, i] = finv_int[index, i] ** 2
