@@ -123,8 +123,9 @@ results/
 # Plots
 *.png
 plots/
+*.pdf
 
 # Trial notebooks
-Miscellaneous*.ipynb
+# Miscellaneous*.ipynb
 # Julia files
 *.jl
