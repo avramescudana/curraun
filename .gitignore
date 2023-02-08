@@ -129,3 +129,8 @@ plots/
 # Miscellaneous*.ipynb
 # Julia files
 *.jl
+
+# Singularity
+*.def
+*.sif
+*.json
