@@ -126,11 +126,11 @@ plots/
 *.pdf
 
 # Trial notebooks
-# Miscellaneous*.ipynb
+# Trial*.ipynb
 # Julia files
 *.jl
 
 # Singularity
-*.def
+# *.def
 *.sif
 *.json
