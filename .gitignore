@@ -126,7 +126,7 @@ plots/
 *.pdf
 
 # Trial notebooks
-# Trial*.ipynb
+Trial*.ipynb
 # Julia files
 *.jl
 
