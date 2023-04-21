@@ -50,10 +50,12 @@ class Angles:
 def compute_angles_kernel(index, pmuq, pmuaq, pT, deta, dphi):
     # |\vec{p}|^2=p^2=p_T^2+p_L^2=p_x^2+p_y^2+p_z^2, where pmu=(p^\tau, p^x, p^y, p^\eta, p^z)
     pq = math.sqrt(pmuq[index, 1]**2 + pmuq[index, 2] **2 + pmuq[index, 4] **2)
-    etaq = math.atan(pmuq[index, 4]/pq)
+    # etaq = math.atanh(pmuq[index, 4]/pq)
+    etaq = math.log((pq+pmuq[index, 4])/(pq-pmuq[index, 4]))/2
 
     paq = math.sqrt(pmuaq[index, 1]**2 + pmuaq[index, 2] **2 + pmuaq[index, 4] **2)
-    etaaq = math.atan(pmuaq[index, 4]/paq)
+    # etaaq = math.atanh(pmuaq[index, 4]/paq)
+    etaaq = math.log((paq+pmuaq[index, 4])/(paq-pmuaq[index, 4]))/2
 
     # deta[index] = math.fabs(etaq-etaaq)
     deta[index] = etaq-etaaq
@@ -62,7 +64,7 @@ def compute_angles_kernel(index, pmuq, pmuaq, pT, deta, dphi):
     phiaq = math.atan(pmuaq[index, 2]/pmuaq[index, 1])
 
     # dphi[index] = math.fabs(phiq-phiaq)
-    dphi[index] = phiq-phiaq
+    dphi[index] = phiq-phiaq + math.pi
 
     # pT for quark and antiquark
     pT[index, 0] = math.sqrt(pmuq[index, 1]**2 + pmuq[index, 2] **2)
@@ -110,10 +112,12 @@ class BorderAngles:
 def compute_borderangles_kernel(index, pmuq, pmuaq, pT, deta, dphi):
     # |\vec{p}|^2=p^2=p_T^2+p_L^2=p_x^2+p_y^2+p_z^2, where pmu=(p^\tau, p^x, p^y, p^\eta, p^z)
     pq = math.sqrt(pmuq[index, 1]**2 + pmuq[index, 2] **2 + pmuq[index, 4] **2)
-    etaq = math.atan(pmuq[index, 4]/pq)
+    etaq = math.atanh(pmuq[index, 4]/pq)
+    # etaq = math.log((pq+pmuq[index, 4])/(pq-pmuq[index, 4]))/2
 
     paq = math.sqrt(pmuaq[index, 1]**2 + pmuaq[index, 2] **2 + pmuaq[index, 4] **2)
-    etaaq = math.atan(pmuaq[index, 4]/paq)
+    etaaq = math.atanh(pmuaq[index, 4]/paq)
+    # etaaq = math.log((paq+pmuaq[index, 4])/(paq-pmuaq[index, 4]))/2
 
     # deta[index] = math.fabs(etaq-etaaq)
     deta[index] = etaq-etaaq

@@ -128,7 +128,7 @@ plots/
 # Trial notebooks
 Trial*.ipynb
 # Julia files
-*.jl
+# *.jl
 
 # Singularity
 # *.def
