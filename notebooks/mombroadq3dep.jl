@@ -4,122 +4,40 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ f1b881da-25c7-4d10-a143-3a4e0db31e31
+# ╔═╡ 79fb48c0-e377-11ed-31c1-45a5ae0977dc
 begin
 	using Pickle
-	using DataFrames
 	using CairoMakie
-	using AlgebraOfGraphics
-	using LaTeXStrings
 end
 
-# ╔═╡ d0bd3d08-025e-4b01-87ac-10a970781af5
-saveplots = false
+# ╔═╡ b67f2833-492c-4c06-b734-db6eca2ca1a6
+results = Pickle.npyload("mom_broad_q3_dep.pickle")
 
-# ╔═╡ 97e3098c-e036-11ed-24a9-1d300dc10496
-begin
-	folder = "corr_toy_pT_2_charm"
-	filename = pwd() * "/results/" * folder * "/event_1.pickle"
-	# folder_path = pwd() * "/results/" * folder * "/"
-	# cd(folder_path)
-	# events = readdir()
-end
+# ╔═╡ 80bdca68-2408-47a9-a9d0-ca24f0e47669
+q3s = results["q3s"]
 
-# ╔═╡ 2d3b4e1c-a351-458c-a300-c3bd721c35ae
+# ╔═╡ 31005ba1-029d-4173-9af3-1a863b64ebd7
 begin
-	output = Pickle.npyload(filename)
-	τ = output["tau"]
-	Δη, Δϕ, pₜ = output["deta"], output["dphi"], output["pTs"]
-end
-
-# ╔═╡ 2b72231b-f791-4d20-96c2-fc31c88b7fa6
-begin
-	# index of tau, atm do everything at a time slice
-	τᵢ = 2
-	τᵣ = round(τ[τᵢ]; digits=2)
-	df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = Δϕ[τᵢ,:], pₜᵢ = pₜ[τᵢ,:, 1], pbarₜᵢ = pₜ[τᵢ,:, 2])
-	# df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = rad2deg.(Δϕ[τᵢ,:]))
-	# df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = Δϕ[τᵢ,:])
-end
-
-# ╔═╡ adcae181-959d-4c35-8663-189e5e38b985
-begin
-	set_aog_theme!(fonts = (; regular = "CMU Serif"))
-	axis = (width = 300, height = 300, xlabel=L"\Delta\eta", ylabel=L"\Delta\phi",
-		xlabelsize = 20, ylabelsize = 20, yticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
-		limits = (-4, 4, 0, 2*π), 
-		# limits = (-4, 4, nothing, nothing), 
-		title=L"\tau=%$(τᵣ)\,\mathrm{fm/}c", titlesize = 20)
-	dNdΔηdΔϕ = data(df) * mapping(:Δηᵢ, :Δϕᵢ)
-	plt = dNdΔηdΔϕ * AlgebraOfGraphics.density() * visual(Heatmap, colormap = reverse(cgrad(:beach)))
-end
-
-# ╔═╡ 9070c134-03c6-496d-be4a-378381d9f07a
-begin
-	fig = draw(plt; axis = axis, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10))
-	if saveplots
-		save("plots/Cdetadphi_heatmap_toy_charm_pT_2_tau_$(τᵣ).png", fig, px_per_unit = 5)
+	custom_colors = ["#9300d3", "#019d73", "#57b5e8"]
+	fig = Figure(resolution = (400, 300), font = "CMU Serif")
+	axes = Axis(fig[1, 1]) 
+	
+	τ = results["tau"]
+	for (i, q3) in enumerate(q3s)
+		δp²T = results["mom_broad_T"][q3]
+		lines!(axes, τ, δp²T, color=custom_colors[i])
 	end
 	fig
-end
-
-# ╔═╡ 41419f92-3a95-4534-98b1-3cdbe2c66f85
-begin
-	dNdΔηdΔϕ3D = data(df) * mapping(:Δηᵢ, :Δϕᵢ) *
-		    AlgebraOfGraphics.density() * visual(Surface, shading=false, colormap = reverse(cgrad(:beach)))
-	axis3D = (width = 450, height = 400,
-		type=Axis3, 
-		# limits=(nothing, nothing, (nothing, nothing)), 
-		limits = ((nothing, nothing), (0, 2*π), (nothing, nothing)),
-		elevation=0.1π, azimuth=0.4π, 
-		xlabel=L"\Delta\eta", ylabel=L"\Delta\phi", zlabel="", xlabelsize = 20, ylabelsize = 20, zlabelsize = 20,
-		yticks = ([0, π, 2*π], ["0", "π", "2π"]), title=L"\tau=%$(τᵣ)\,\mathrm{fm/}c", titlesize = 20
-	)
-end
-
-# ╔═╡ f31d439d-362e-42f2-9f33-eb8f38892ba0
-begin
-	fig3D = draw(dNdΔηdΔϕ3D; axis = axis3D, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10))
-	if saveplots
-		save("plots/Cdetadphi_3D_toy_charm_pT_2_tau_$(τᵣ).png", fig3D, px_per_unit = 5)
-	end
-	fig3D
-end
-
-# ╔═╡ dc59346c-1011-4775-a507-2e5673da07aa
-begin
-	axispt = (width = 300, height = 300, xlabel=L"p_T^Q\,\mathrm{[GeV]}", ylabel=L"p_T^{\overline{Q}}\,\mathrm{[GeV]}",
-		xlabelsize = 20, ylabelsize = 20, 
-		# yticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
-		limits = (0, 5, 0, 5), 
-		title=L"\tau=%$(τᵣ)\,\mathrm{fm/}c", titlesize = 20)
-	dNdpₜdpbarₜ = data(df) * mapping(:pₜᵢ, :pbarₜᵢ)
-	pltpt = dNdpₜdpbarₜ * AlgebraOfGraphics.density() * visual(Heatmap, colormap = reverse(cgrad(:beach)))
-end
-
-# ╔═╡ 8ab4071f-30da-4290-9e1b-b40c8efe89e0
-begin
-	figpt = draw(pltpt; axis = axispt, colorbar=(position=:right, label = "", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10))
-	if saveplots
-		save("plots/Cptpbart_heatmap_toy_charm_pT_2_tau_$(τᵣ).png", figpt, px_per_unit = 5)
-	end
-	figpt
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
 
 [compat]
-AlgebraOfGraphics = "~0.6.14"
 CairoMakie = "~0.10.4"
-DataFrames = "~1.5.0"
-LaTeXStrings = "~1.3.0"
 Pickle = "~0.3.2"
 """
 
@@ -129,7 +47,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "3a51a1fc57b5a1e2be9369033899d1cf2487f55d"
+project_hash = "6d4b492050eb9deb2dfc1f7a9e0b78cefe24c6f8"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -147,12 +65,6 @@ deps = ["LinearAlgebra", "Requires"]
 git-tree-sha1 = "cc37d689f599e8df4f464b2fa3870ff7db7492ef"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 version = "3.6.1"
-
-[[deps.AlgebraOfGraphics]]
-deps = ["Colors", "Dates", "Dictionaries", "FileIO", "GLM", "GeoInterface", "GeometryBasics", "GridLayoutBase", "KernelDensity", "Loess", "Makie", "PlotUtils", "PooledArrays", "RelocatableFolders", "SnoopPrecompile", "StatsBase", "StructArrays", "Tables"]
-git-tree-sha1 = "43c2ef89ca0cdaf77373401a989abae4410c7b8a"
-uuid = "cbdf2221-f076-402e-a563-3d30da359d67"
-version = "0.6.14"
 
 [[deps.Animations]]
 deps = ["Colors"]
@@ -245,10 +157,10 @@ uuid = "a2cac450-b92f-5266-8821-25eda20663c8"
 version = "0.4.0"
 
 [[deps.ColorSchemes]]
-deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Random", "SnoopPrecompile"]
-git-tree-sha1 = "aa3edc8f8dea6cbfa176ee12f7c2fc82f0608ed3"
+deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
+git-tree-sha1 = "be6ab11021cd29f0344d5c4357b163af05a48cba"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.20.0"
+version = "3.21.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -290,21 +202,10 @@ git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.2"
 
-[[deps.Crayons]]
-git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
-uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
-version = "4.1.1"
-
 [[deps.DataAPI]]
 git-tree-sha1 = "e8119c1a33d267e16108be441a287a6981ba1630"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.14.0"
-
-[[deps.DataFrames]]
-deps = ["Compat", "DataAPI", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SentinelArrays", "SnoopPrecompile", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
-git-tree-sha1 = "aa51303df86f8626a962fccb878430cdb0a97eee"
-uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-version = "1.5.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -326,18 +227,6 @@ deps = ["InverseFunctions", "Test"]
 git-tree-sha1 = "80c3e8639e3353e5d2912fb3a1916b8455e2494b"
 uuid = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 version = "0.4.0"
-
-[[deps.Dictionaries]]
-deps = ["Indexing", "Random", "Serialization"]
-git-tree-sha1 = "e82c3c97b5b4ec111f3c1b55228cebc7510525a2"
-uuid = "85a47980-9c8c-11e8-2b9f-f7ca1fa99fb4"
-version = "0.3.25"
-
-[[deps.Distances]]
-deps = ["LinearAlgebra", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "49eba9ad9f7ead780bfb7ee319f962c811c6d3b2"
-uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-version = "0.10.8"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -468,12 +357,6 @@ version = "1.0.10+0"
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
-[[deps.GLM]]
-deps = ["Distributions", "LinearAlgebra", "Printf", "Reexport", "SparseArrays", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns", "StatsModels"]
-git-tree-sha1 = "cd3e314957dc11c4c905d54d1f5a65c979e4748a"
-uuid = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
-version = "1.8.2"
-
 [[deps.GPUArraysCore]]
 deps = ["Adapt"]
 git-tree-sha1 = "1cd7f0af1aa58abc02ea1d872953a97359cb87fa"
@@ -575,11 +458,6 @@ git-tree-sha1 = "3d09a9f60edf77f8a4d99f9e015e8fbf9989605d"
 uuid = "905a6f67-0a94-5f89-b386-d35d92009cd1"
 version = "3.1.7+0"
 
-[[deps.Indexing]]
-git-tree-sha1 = "ce1566720fd6b19ff3411404d4b977acd4814f9f"
-uuid = "313cdc1a-70c2-5d6a-ae34-0150d3930a38"
-version = "1.1.1"
-
 [[deps.IndirectArrays]]
 git-tree-sha1 = "012e604e1c7458645cb8b436f8fba789a51b257f"
 uuid = "9b13fd28-a010-5f03-acff-a1bbcff69959"
@@ -589,12 +467,6 @@ version = "1.0.0"
 git-tree-sha1 = "5cd07aab533df5170988219191dfad0519391428"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
 version = "0.1.3"
-
-[[deps.InlineStrings]]
-deps = ["Parsers"]
-git-tree-sha1 = "9cc2baf75c6d09f9da536ddf58eb2f29dedaf461"
-uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
-version = "1.4.0"
 
 [[deps.IntelOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -629,11 +501,6 @@ deps = ["Test"]
 git-tree-sha1 = "49510dfcb407e572524ba94aeae2fced1f3feb0f"
 uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
 version = "0.1.8"
-
-[[deps.InvertedIndices]]
-git-tree-sha1 = "0dc7b50b8d436461be01300fd8cd45aa0274b038"
-uuid = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
-version = "1.3.0"
 
 [[deps.IrrationalConstants]]
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
@@ -773,12 +640,6 @@ version = "2.36.0+0"
 [[deps.LinearAlgebra]]
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
-
-[[deps.Loess]]
-deps = ["Distances", "LinearAlgebra", "Statistics"]
-git-tree-sha1 = "46efcea75c890e5d820e670516dc156689851722"
-uuid = "4345ca2d-374a-55d4-8d30-97f9976e7612"
-version = "0.5.4"
 
 [[deps.LogExpFunctions]]
 deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
@@ -1006,33 +867,27 @@ uuid = "eebad327-c553-4316-9ea0-9fa01ccd7688"
 version = "0.3.2"
 
 [[deps.PlotUtils]]
-deps = ["ColorSchemes", "Colors", "Dates", "Printf", "Random", "Reexport", "SnoopPrecompile", "Statistics"]
-git-tree-sha1 = "c95373e73290cf50a8a22c3375e4625ded5c5280"
+deps = ["ColorSchemes", "Colors", "Dates", "PrecompileTools", "Printf", "Random", "Reexport", "Statistics"]
+git-tree-sha1 = "f92e1315dadf8c46561fb9396e525f7200cdc227"
 uuid = "995b91a9-d308-5afd-9ec6-746e21dbc043"
-version = "1.3.4"
+version = "1.3.5"
 
 [[deps.PolygonOps]]
 git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
 uuid = "647866c9-e3ac-4575-94e7-e3d426903924"
 version = "0.1.2"
 
-[[deps.PooledArrays]]
-deps = ["DataAPI", "Future"]
-git-tree-sha1 = "a6062fe4063cdafe78f4a0a81cfffb89721b30e7"
-uuid = "2dfb63ee-cc39-5dd5-95bd-886bf059d720"
-version = "1.4.2"
+[[deps.PrecompileTools]]
+deps = ["Preferences"]
+git-tree-sha1 = "bc2bda41d798c2e66e7c44a11007bb329b15941b"
+uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+version = "1.0.1"
 
 [[deps.Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "47e5f437cc0e7ef2ce8406ce1e7e24d44915f88d"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.3.0"
-
-[[deps.PrettyTables]]
-deps = ["Crayons", "Formatting", "LaTeXStrings", "Markdown", "Reexport", "StringManipulation", "Tables"]
-git-tree-sha1 = "548793c7859e28ef026dba514752275ee871169f"
-uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
-version = "2.2.3"
 
 [[deps.Printf]]
 deps = ["Unicode"]
@@ -1083,9 +938,9 @@ version = "0.3.2"
 
 [[deps.Ratios]]
 deps = ["Requires"]
-git-tree-sha1 = "dc84268fe0e3335a62e315a3a7cf2afa7178a734"
+git-tree-sha1 = "6d7bb727e76147ba18eed998700998e17b8e4911"
 uuid = "c84ed2f1-dad5-54f0-aa8e-dbefe2724439"
-version = "0.4.3"
+version = "0.4.4"
 
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
@@ -1138,12 +993,6 @@ git-tree-sha1 = "30449ee12237627992a99d5e30ae63e4d78cd24a"
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
 version = "1.2.0"
 
-[[deps.SentinelArrays]]
-deps = ["Dates", "Random"]
-git-tree-sha1 = "77d3c4726515dca71f6d80fbb5e251088defe305"
-uuid = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
-version = "1.3.18"
-
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
@@ -1156,11 +1005,6 @@ version = "1.1.1"
 [[deps.SharedArrays]]
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
-
-[[deps.ShiftedArrays]]
-git-tree-sha1 = "503688b59397b3307443af35cd953a13e8005c16"
-uuid = "1277b4bf-5013-50f5-be3d-901d8477a67a"
-version = "2.0.0"
 
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
@@ -1256,12 +1100,6 @@ git-tree-sha1 = "f625d686d5a88bcd2b15cd81f18f98186fdc0c9a"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "1.3.0"
 
-[[deps.StatsModels]]
-deps = ["DataAPI", "DataStructures", "LinearAlgebra", "Printf", "REPL", "ShiftedArrays", "SparseArrays", "StatsBase", "StatsFuns", "Tables"]
-git-tree-sha1 = "51cdf1afd9d78552e7a08536930d7abc3b288a5c"
-uuid = "3eaba693-59b7-5ba5-a881-562e759f1c8d"
-version = "0.7.1"
-
 [[deps.Strided]]
 deps = ["LinearAlgebra", "TupleTools"]
 git-tree-sha1 = "a7a664c91104329c88222aa20264e1a05b6ad138"
@@ -1273,11 +1111,6 @@ deps = ["Libiconv_jll"]
 git-tree-sha1 = "33c0da881af3248dafefb939a21694b97cfece76"
 uuid = "69024149-9ee7-55f6-a4c4-859efe599b68"
 version = "0.3.6"
-
-[[deps.StringManipulation]]
-git-tree-sha1 = "46da2434b41f41ac3594ee9816ce5541c6096123"
-uuid = "892a3eda-7b42-436c-8928-eab12a02cf0e"
-version = "0.3.0"
 
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "GPUArraysCore", "StaticArraysCore", "Tables"]
@@ -1504,16 +1337,9 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═f1b881da-25c7-4d10-a143-3a4e0db31e31
-# ╠═d0bd3d08-025e-4b01-87ac-10a970781af5
-# ╠═97e3098c-e036-11ed-24a9-1d300dc10496
-# ╠═2d3b4e1c-a351-458c-a300-c3bd721c35ae
-# ╠═2b72231b-f791-4d20-96c2-fc31c88b7fa6
-# ╠═adcae181-959d-4c35-8663-189e5e38b985
-# ╠═9070c134-03c6-496d-be4a-378381d9f07a
-# ╠═41419f92-3a95-4534-98b1-3cdbe2c66f85
-# ╠═f31d439d-362e-42f2-9f33-eb8f38892ba0
-# ╠═dc59346c-1011-4775-a507-2e5673da07aa
-# ╠═8ab4071f-30da-4290-9e1b-b40c8efe89e0
+# ╠═79fb48c0-e377-11ed-31c1-45a5ae0977dc
+# ╠═b67f2833-492c-4c06-b734-db6eca2ca1a6
+# ╠═80bdca68-2408-47a9-a9d0-ca24f0e47669
+# ╠═31005ba1-029d-4173-9af3-1a863b64ebd7
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
