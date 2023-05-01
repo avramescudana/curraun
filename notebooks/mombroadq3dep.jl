@@ -8,6 +8,7 @@ using InteractiveUtils
 begin
 	using Pickle
 	using CairoMakie
+	using LaTeXStrings
 end
 
 # ╔═╡ b67f2833-492c-4c06-b734-db6eca2ca1a6
@@ -16,28 +17,57 @@ results = Pickle.npyload("mom_broad_q3_dep.pickle")
 # ╔═╡ 80bdca68-2408-47a9-a9d0-ca24f0e47669
 q3s = results["q3s"]
 
+# ╔═╡ 922896f4-1be4-4046-945c-51d3f39f30dd
+function string_as_varname(s::AbstractString,v::Any)
+    s=Symbol(s)
+    return @eval (($s) = ($v))
+end
+
 # ╔═╡ 31005ba1-029d-4173-9af3-1a863b64ebd7
 begin
+	set_theme!(fonts = (; regular ="CMU Serif"))
+		
 	custom_colors = ["#9300d3", "#019d73", "#57b5e8"]
-	fig = Figure(resolution = (400, 300), font = "CMU Serif")
-	axes = Axis(fig[1, 1]) 
+	q₃_labels = [L"3", L"10/3", L"4"]
+	
+	fig = Figure(resolution = (500, 300), font = "CMU Serif")
+	axes = Axis(fig[1, 1], xlabel=L"\delta\tau\,\mathrm{[fm/c]}", ylabel=L"\langle \delta p^2\rangle\,\mathrm{[GeV^2]}", xlabelsize = 18, ylabelsize= 18, xticklabelsize=12, yticklabelsize=12, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4) 
 	
 	τ = results["tau"]
 	for (i, q3) in enumerate(q3s)
-		δp²T = results["mom_broad_T"][q3]
-		lines!(axes, τ, δp²T, color=custom_colors[i])
+		δp² = results["psq"][q3]
+		string_as_varname("line"*string(i), lines!(axes, τ, (δp²[:,1]+δp²[:,2])/3, color=custom_colors[i], label=q₃_labels[i]))
+		lines!(axes, τ, δp²[:,3]/3, color=custom_colors[i])
 	end
+	
+	Legend(fig[1,2], axes, L"q_3", labelsize=14, titlesize=18)
+	
+	# axislegend(axes, [line1, line2, line3], q₃_labels, labelsize=16, position = :lt, orientation = :vertical, bgcolor = (:white, 0.7), framecolor=(:grey80, 0))
+
+	text!(axes, L"\langle\delta p_T^2\,\rangle", position = (1.25, 0.6), fontsize=18)
+	text!(axes, L"\langle\delta p_L^2\,\rangle", position = (1.25, 6.5), fontsize=18)
+
+	text!(axes, L"q_2=4", position = (0.06, 9.5), fontsize=18)
+	ylims!(axes, 0, 11)
+	xlims!(axes, 0, 1.5)
+	axes.xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
+	axes.yticks = ([3, 6, 9], string.([3,6,9]))
+	
 	fig
+
+	save("plots/mom_broad_q3_dep.png", fig, px_per_unit = 5.0)
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
 
 [compat]
 CairoMakie = "~0.10.4"
+LaTeXStrings = "~1.3.0"
 Pickle = "~0.3.2"
 """
 
@@ -47,7 +77,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "6d4b492050eb9deb2dfc1f7a9e0b78cefe24c6f8"
+project_hash = "150604de66566ae49d337adaccf18139bb00d943"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -1340,6 +1370,7 @@ version = "3.5.0+0"
 # ╠═79fb48c0-e377-11ed-31c1-45a5ae0977dc
 # ╠═b67f2833-492c-4c06-b734-db6eca2ca1a6
 # ╠═80bdca68-2408-47a9-a9d0-ca24f0e47669
+# ╠═922896f4-1be4-4046-945c-51d3f39f30dd
 # ╠═31005ba1-029d-4173-9af3-1a863b64ebd7
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -11,6 +11,7 @@ begin
 	using CairoMakie
 	using AlgebraOfGraphics
 	using LaTeXStrings
+	using ColorSchemes
 end
 
 # ╔═╡ d0bd3d08-025e-4b01-87ac-10a970781af5
@@ -18,70 +19,110 @@ saveplots = false
 
 # ╔═╡ 97e3098c-e036-11ed-24a9-1d300dc10496
 begin
+	current_path = pwd()
 	folder = "corr_toy_pT_2_charm"
-	filename = pwd() * "/results/" * folder * "/event_1.pickle"
-	# folder_path = pwd() * "/results/" * folder * "/"
-	# cd(folder_path)
-	# events = readdir()
+	# filename = current_path * "/results/" * folder * "/event_1.pickle"
+	folder_path = current_path * "/results/" * folder * "/"
+	cd(folder_path)
+	events = readdir()
+	filenames = current_path * "/results/" * folder * "/" .* events
+	cd(current_path)
 end
 
-# ╔═╡ 2d3b4e1c-a351-458c-a300-c3bd721c35ae
-begin
-	output = Pickle.npyload(filename)
+# ╔═╡ 54a1777c-d177-4073-ac56-5e5fd344e728
+events
+
+# ╔═╡ 8a7a86b8-e88a-4008-a71a-5e2b77f1a0a8
+τₛ = [0.1, 0.2, 0.5];
+
+# ╔═╡ c56fba33-ced5-4663-86bb-4cad513c957c
+function findminindex(value, array)
+	return findmin(element->abs(element-value),array)[2]
+end 
+
+# ╔═╡ ee82dfec-5520-4b76-8ca0-a83c04ecba0a
+# Construct data frame at a time slice
+function dfslice(output, τₛ)	
 	τ = output["tau"]
+	τᵢ = findminindex(τₛ, τ)
 	Δη, Δϕ, pₜ = output["deta"], output["dphi"], output["pTs"]
-end
-
-# ╔═╡ 2b72231b-f791-4d20-96c2-fc31c88b7fa6
-begin
-	# index of tau, atm do everything at a time slice
-	τᵢ = 2
-	τᵣ = round(τ[τᵢ]; digits=2)
 	df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = Δϕ[τᵢ,:], pₜᵢ = pₜ[τᵢ,:, 1], pbarₜᵢ = pₜ[τᵢ,:, 2])
 	# df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = rad2deg.(Δϕ[τᵢ,:]))
 	# df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = Δϕ[τᵢ,:])
+	
+	# Make Δηᵢ, Δϕᵢ∈[0,1], could be useful for kde normalization
+	# df.Δηᵢ = df.Δηᵢ./maximum(df.Δηᵢ)
+	# df.Δϕᵢ = df.Δϕᵢ./maximum(df.Δϕᵢ)
+	
+	df[!,"τₛ"] .= string(τₛ);
+	return df
 end
+
+# ╔═╡ 4793f778-6f10-442a-9606-714065de5a88
+function dfevent(filename)
+	output = Pickle.npyload(filename)
+	# parameters = output["parameters"]
+	
+	df = DataFrame()
+	for τₛᵢ in τₛ
+		dfᵢ = dfslice(output, τₛᵢ)
+		append!(df,dfᵢ)
+	end
+	return df
+end
+
+# ╔═╡ cbcf3786-bf86-43cf-af9a-e95f6db15754
+begin
+	df = DataFrame()
+	for filename in filenames
+		dfᵢ = dfevent(filename)
+		append!(df,dfᵢ)
+	end
+end
+
+# ╔═╡ 130464b5-6b4d-44ea-b055-d34ef5777f72
+i = 3
 
 # ╔═╡ adcae181-959d-4c35-8663-189e5e38b985
 begin
+	dfᵢ = df[df.τₛ .== string(τₛ[i]), :]
 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
 	axis = (width = 300, height = 300, xlabel=L"\Delta\eta", ylabel=L"\Delta\phi",
-		xlabelsize = 20, ylabelsize = 20, yticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
+		xlabelsize = 20, ylabelsize = 20, 
+		yticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
 		limits = (-4, 4, 0, 2*π), 
-		# limits = (-4, 4, nothing, nothing), 
-		title=L"\tau=%$(τᵣ)\,\mathrm{fm/}c", titlesize = 20)
-	dNdΔηdΔϕ = data(df) * mapping(:Δηᵢ, :Δϕᵢ)
-	plt = dNdΔηdΔϕ * AlgebraOfGraphics.density() * visual(Heatmap, colormap = reverse(cgrad(:beach)))
-end
+		# limits = (nothing, nothing, nothing, nothing), 
+		title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+	)
+	# AlgebraOfGraphics.density(; bandwidth=(0.01, 0.01))
+	dNdΔηdΔϕ = data(dfᵢ) * AlgebraOfGraphics.density() * visual(Heatmap, colormap = reverse(cgrad(:beach))) * mapping(:Δηᵢ, :Δϕᵢ)
 
-# ╔═╡ 9070c134-03c6-496d-be4a-378381d9f07a
-begin
-	fig = draw(plt; axis = axis, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10))
+	fig = draw(dNdΔηdΔϕ, axis = axis, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10), 
+	)
 	if saveplots
-		save("plots/Cdetadphi_heatmap_toy_charm_pT_2_tau_$(τᵣ).png", fig, px_per_unit = 5)
+		save("plots/Cdetadphi_heatmap_toy_charm_pT_2_tau_$(τₛ[i]).png", fig, px_per_unit = 5)
 	end
 	fig
 end
 
 # ╔═╡ 41419f92-3a95-4534-98b1-3cdbe2c66f85
 begin
-	dNdΔηdΔϕ3D = data(df) * mapping(:Δηᵢ, :Δϕᵢ) *
+	# ; bandwidth=(0.01, 0.01)
+	dNdΔηdΔϕ3D = data(dfᵢ) * mapping(:Δηᵢ, :Δϕᵢ) *
 		    AlgebraOfGraphics.density() * visual(Surface, shading=false, colormap = reverse(cgrad(:beach)))
 	axis3D = (width = 450, height = 400,
 		type=Axis3, 
 		# limits=(nothing, nothing, (nothing, nothing)), 
+		# limits = ((-9, 9), (0, 2*π), (nothing, nothing)),
 		limits = ((nothing, nothing), (0, 2*π), (nothing, nothing)),
 		elevation=0.1π, azimuth=0.4π, 
 		xlabel=L"\Delta\eta", ylabel=L"\Delta\phi", zlabel="", xlabelsize = 20, ylabelsize = 20, zlabelsize = 20,
-		yticks = ([0, π, 2*π], ["0", "π", "2π"]), title=L"\tau=%$(τᵣ)\,\mathrm{fm/}c", titlesize = 20
+		yticks = ([0, π, 2*π], ["0", "π", "2π"]), title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
 	)
-end
 
-# ╔═╡ f31d439d-362e-42f2-9f33-eb8f38892ba0
-begin
 	fig3D = draw(dNdΔηdΔϕ3D; axis = axis3D, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10))
 	if saveplots
-		save("plots/Cdetadphi_3D_toy_charm_pT_2_tau_$(τᵣ).png", fig3D, px_per_unit = 5)
+		save("plots/Cdetadphi_3D_toy_charm_pT_2_tau_$(τₛ[i]).png", fig3D, px_per_unit = 5)
 	end
 	fig3D
 end
@@ -91,26 +132,129 @@ begin
 	axispt = (width = 300, height = 300, xlabel=L"p_T^Q\,\mathrm{[GeV]}", ylabel=L"p_T^{\overline{Q}}\,\mathrm{[GeV]}",
 		xlabelsize = 20, ylabelsize = 20, 
 		# yticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
-		limits = (0, 5, 0, 5), 
-		title=L"\tau=%$(τᵣ)\,\mathrm{fm/}c", titlesize = 20)
-	dNdpₜdpbarₜ = data(df) * mapping(:pₜᵢ, :pbarₜᵢ)
+		limits = (0, 8, 0, 8), 
+		title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20)
+	dNdpₜdpbarₜ = data(dfᵢ) * mapping(:pₜᵢ, :pbarₜᵢ)
 	pltpt = dNdpₜdpbarₜ * AlgebraOfGraphics.density() * visual(Heatmap, colormap = reverse(cgrad(:beach)))
-end
 
-# ╔═╡ 8ab4071f-30da-4290-9e1b-b40c8efe89e0
-begin
 	figpt = draw(pltpt; axis = axispt, colorbar=(position=:right, label = "", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10))
 	if saveplots
-		save("plots/Cptpbart_heatmap_toy_charm_pT_2_tau_$(τᵣ).png", figpt, px_per_unit = 5)
+		save("plots/Cptpbart_heatmap_toy_charm_pT_2_tau_$(τₛ[i]).png", figpt, px_per_unit = 5)
 	end
 	figpt
 end
+
+# ╔═╡ 1407b2ba-0e03-4d1a-81bc-5c4067f0cc71
+begin
+	axis_dNdpₜdΔϕ = (width = 300, height = 300, xlabel=L"\Delta\phi", ylabel=L"p_T^Q\,\mathrm{[GeV]}",
+		xlabelsize = 20, ylabelsize = 20, 
+		xticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
+		limits = (0, 2π, 0, 8), 
+		title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20)
+	dNdpₜdΔϕ = data(dfᵢ) * mapping(:Δϕᵢ, :pₜᵢ) * AlgebraOfGraphics.density() * visual(Heatmap, colormap = reverse(cgrad(:beach)))
+
+	fig_dNdpₜdΔϕ = draw(dNdpₜdΔϕ; axis = axis_dNdpₜdΔϕ, colorbar=(position=:right, label ="", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10))
+	if saveplots
+		save("plots/Cdphidpt_heatmap_toy_charm_pT_2_tau_$(τₛ[i]).png", fig_dNdpₜdΔϕ, px_per_unit = 5)
+	end
+	fig_dNdpₜdΔϕ
+end
+
+# ╔═╡ b7498278-7582-4679-a69f-49bce37f1715
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	set_aog_theme!(fonts = (; regular = "CMU Serif"))
+	axis_dNdΔϕ = (width = 300, height = 300, xlabel=L"\Delta\phi", ylabel=L"1/N_\mathrm{pairs}\,\mathrm{d}N/\mathrm{d}\Delta\phi",
+		xlabelsize = 20, ylabelsize = 20, xticklabelsize = 14, yticklabelsize=14, 
+		xticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
+		limits = (0, 2π, 0, nothing), 
+		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+	)
+	dNdΔϕ = data(df) * mapping(:Δϕᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density() 
+	# * visual(Heatmap, colormap = reverse(cgrad(:beach)))
+
+	segmented_cmap = cgrad(:beach, 16, categorical = true)
+	colors = [segmented_cmap[12], segmented_cmap[9], segmented_cmap[4]]
+	fig_dNdΔϕ = draw(dNdΔϕ; axis = axis_dNdΔϕ, legend=(;position=:right, linewidth=1.5,), 
+		palettes=(; color=colors)
+	)
+	if saveplots
+		save("plots/dNdphi_tau_dep.png", fig_dNdΔϕ, px_per_unit = 5)
+	end
+	fig_dNdΔϕ
+end
+  ╠═╡ =#
+
+# ╔═╡ 4d6d41e2-40bb-4b5c-8af2-f238f76c6ba2
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	# dfᵢ = df[df.τₛ .== τₛ[1], :]
+	set_aog_theme!(fonts = (; regular = "CMU Serif"))
+	axis_dNdΔηdΔϕ_layout = (width = 300, height = 300, xlabel=L"\Delta\eta", ylabel=L"\Delta\phi",
+		xlabelsize = 20, ylabelsize = 20, 
+		yticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
+		limits = (-4, 4, 0, 2*π), 
+		# limits = (nothing, nothing, nothing, nothing), 
+		# title=L"\Delta\tau=%$(τₛ[1])\,\mathrm{fm/}c", titlesize = 20
+	)
+	# datalimits = ((-2, 2), (1, 5))
+	dNdΔηdΔϕ_layout = data(df) * mapping(col=:τₛ) * AlgebraOfGraphics.density() * visual(Heatmap, colormap = reverse(cgrad(:beach))) * mapping(:Δηᵢ, :Δϕᵢ)
+	draw(dNdΔηdΔϕ_layout; axis = axis_dNdΔηdΔϕ_layout)
+end
+  ╠═╡ =#
+
+# ╔═╡ cd1c62b2-6bbd-4e2f-b5b5-686e11d03e87
+function plot_dNdΔηdΔϕ(bw)
+	dfᵢ = df[df.τₛ .== string(τₛ[i]), :]
+	set_aog_theme!(fonts = (; regular = "CMU Serif"))
+	axis = (width = 300, height = 300, xlabel=L"\Delta\eta", ylabel=L"\Delta\phi",
+		xlabelsize = 20, ylabelsize = 20, 
+		yticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
+		limits = (-4, 4, 0, 2*π), 
+		# limits = (nothing, nothing, nothing, nothing), 
+		title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c,\,\,\mathrm{bw}=%$bw", titlesize = 20
+	)
+	# AlgebraOfGraphics.density(; bandwidth=(0.01, 0.01))
+	dNdΔηdΔϕ = data(dfᵢ) * AlgebraOfGraphics.density(; bandwidth=(bw, bw)) * visual(Heatmap, colormap = reverse(cgrad(:beach))) * mapping(:Δηᵢ, :Δϕᵢ)
+	fig = draw(dNdΔηdΔϕ, axis = axis, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10), 
+	)
+	save("plots/Cdetadphi_heatmap_toy_charm_pT_2_tau_$(τₛ[i])_$bw.png", fig, px_per_unit = 5)
+	fig
+end
+
+# ╔═╡ 10ab6b57-12be-4c57-880e-8c2bfbbba3b9
+plot_dNdΔηdΔϕ(0.05)
+
+# ╔═╡ f7f2103c-329c-4ded-ab4e-f6301537be78
+function plot_dNdΔηdΔϕ3D(bw)
+	dNdΔηdΔϕ3D = data(dfᵢ) * mapping(:Δηᵢ, :Δϕᵢ) *
+		    AlgebraOfGraphics.density(; bandwidth=(bw, bw)) * visual(Surface, shading=false, colormap = reverse(cgrad(:beach)))
+	axis3D = (width = 450, height = 400,
+		type=Axis3, 
+		# limits=(nothing, nothing, (nothing, nothing)), 
+		# limits = ((-9, 9), (0, 2*π), (nothing, nothing)),
+		limits = ((nothing, nothing), (0, 2*π), (nothing, nothing)),
+		elevation=0.1π, azimuth=0.4π, 
+		xlabel=L"\Delta\eta", ylabel=L"\Delta\phi", zlabel="", xlabelsize = 20, ylabelsize = 20, zlabelsize = 20,
+		yticks = ([0, π, 2*π], ["0", "π", "2π"]), title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c\,\mathrm{fm/}c,\,\,\mathrm{bw}=%$bw", titlesize = 20
+	)
+
+	fig3D = draw(dNdΔηdΔϕ3D; axis = axis3D, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=14, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10))
+	save("plots/Cdetadphi_3D_toy_charm_pT_2_tau_$(τₛ[i])_$bw.png", fig3D, px_per_unit = 5)
+	fig3D
+end
+
+# ╔═╡ 2092e2ff-8449-4b9c-96c8-3a4b1c1aaa77
+plot_dNdΔηdΔϕ3D(1)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
@@ -118,6 +262,7 @@ Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
 [compat]
 AlgebraOfGraphics = "~0.6.14"
 CairoMakie = "~0.10.4"
+ColorSchemes = "~3.21.0"
 DataFrames = "~1.5.0"
 LaTeXStrings = "~1.3.0"
 Pickle = "~0.3.2"
@@ -129,7 +274,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "3a51a1fc57b5a1e2be9369033899d1cf2487f55d"
+project_hash = "aceec65a74d87bcfc50daac58f20af72d77e0ae4"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -245,10 +390,10 @@ uuid = "a2cac450-b92f-5266-8821-25eda20663c8"
 version = "0.4.0"
 
 [[deps.ColorSchemes]]
-deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "Random", "SnoopPrecompile"]
-git-tree-sha1 = "aa3edc8f8dea6cbfa176ee12f7c2fc82f0608ed3"
+deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
+git-tree-sha1 = "be6ab11021cd29f0344d5c4357b163af05a48cba"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.20.0"
+version = "3.21.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -1022,6 +1167,12 @@ git-tree-sha1 = "a6062fe4063cdafe78f4a0a81cfffb89721b30e7"
 uuid = "2dfb63ee-cc39-5dd5-95bd-886bf059d720"
 version = "1.4.2"
 
+[[deps.PrecompileTools]]
+deps = ["Preferences"]
+git-tree-sha1 = "2e47054ffe7d0a8872e977c0d09eb4b3d162ebde"
+uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
+version = "1.0.2"
+
 [[deps.Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "47e5f437cc0e7ef2ce8406ce1e7e24d44915f88d"
@@ -1507,13 +1658,22 @@ version = "3.5.0+0"
 # ╠═f1b881da-25c7-4d10-a143-3a4e0db31e31
 # ╠═d0bd3d08-025e-4b01-87ac-10a970781af5
 # ╠═97e3098c-e036-11ed-24a9-1d300dc10496
-# ╠═2d3b4e1c-a351-458c-a300-c3bd721c35ae
-# ╠═2b72231b-f791-4d20-96c2-fc31c88b7fa6
+# ╠═54a1777c-d177-4073-ac56-5e5fd344e728
+# ╠═8a7a86b8-e88a-4008-a71a-5e2b77f1a0a8
+# ╠═c56fba33-ced5-4663-86bb-4cad513c957c
+# ╠═ee82dfec-5520-4b76-8ca0-a83c04ecba0a
+# ╠═4793f778-6f10-442a-9606-714065de5a88
+# ╠═cbcf3786-bf86-43cf-af9a-e95f6db15754
+# ╠═130464b5-6b4d-44ea-b055-d34ef5777f72
 # ╠═adcae181-959d-4c35-8663-189e5e38b985
-# ╠═9070c134-03c6-496d-be4a-378381d9f07a
 # ╠═41419f92-3a95-4534-98b1-3cdbe2c66f85
-# ╠═f31d439d-362e-42f2-9f33-eb8f38892ba0
 # ╠═dc59346c-1011-4775-a507-2e5673da07aa
-# ╠═8ab4071f-30da-4290-9e1b-b40c8efe89e0
+# ╠═1407b2ba-0e03-4d1a-81bc-5c4067f0cc71
+# ╠═b7498278-7582-4679-a69f-49bce37f1715
+# ╠═4d6d41e2-40bb-4b5c-8af2-f238f76c6ba2
+# ╠═cd1c62b2-6bbd-4e2f-b5b5-686e11d03e87
+# ╠═10ab6b57-12be-4c57-880e-8c2bfbbba3b9
+# ╠═f7f2103c-329c-4ded-ab4e-f6301537be78
+# ╠═2092e2ff-8449-4b9c-96c8-3a4b1c1aaa77
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

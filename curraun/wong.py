@@ -21,6 +21,7 @@ WONG_TO_HOST = False       # copy_to_host() all variables from the WongSolver
 CASIMIRS = False        # compute Casimir invariants
 BOUNDARY = 'periodic'           # 'periodic' or 'frozen'
 NUM_CHECK = False            # checks the p^\tau constaint
+CUB_MOM = False             # compute p^3
 
 class WongSolver:
     def __init__(self, s, n_particles):
@@ -80,6 +81,18 @@ class WongSolver:
             self.p_sq_mean = cuda.pinned_array(4, dtype=np.double)
             self.p_sq_mean[0:4] = 0.0
 
+        if CUB_MOM:
+            self.p_cub_x = np.zeros(n_particles, dtype=np.double)
+            self.p_cub_y = np.zeros(n_particles, dtype=np.double)
+            self.p_cub_z = np.zeros(n_particles, dtype=np.double)
+            self.p_cub_eta = np.zeros(n_particles, dtype=np.double)
+
+            self.p_cub_mean = np.zeros(4, dtype=np.double)
+            if use_cuda:
+                # use pinned memory for asynchronous data transfer
+                self.p_cub_mean = cuda.pinned_array(4, dtype=np.double)
+                self.p_cub_mean[0:4] = 0.0
+
         # set-up device pointers
         self.d_x0 = self.x0
         self.d_x1 = self.x1
@@ -99,6 +112,13 @@ class WongSolver:
         self.d_p_sq_z = self.p_sq_z
         self.d_p_sq_eta = self.p_sq_eta
         self.d_p_sq_mean = self.p_sq_mean
+
+        if CUB_MOM:
+            self.d_p_cub_x = self.p_cub_x
+            self.d_p_cub_y = self.p_cub_y
+            self.d_p_cub_z = self.p_cub_z
+            self.d_p_cub_eta = self.p_cub_eta
+            self.d_p_cub_mean = self.p_cub_mean
 
         if CASIMIRS:
             self.d_c = self.c
@@ -137,6 +157,14 @@ class WongSolver:
         self.d_p_sq_eta = cuda.to_device(self.p_sq_eta)
         self.d_p_sq_mean = cuda.to_device(self.p_sq_mean)
 
+        if CUB_MOM:
+            self.d_p_cub_x = cuda.to_device(self.p_cub_x)
+            self.d_p_cub_y = cuda.to_device(self.p_cub_y)
+            self.d_p_cub_z = cuda.to_device(self.p_cub_z)
+            self.d_p_cub_eta = cuda.to_device(self.p_cub_eta)
+            self.d_p_cub_mean = cuda.to_device(self.p_cub_mean)
+
+
     def copy_to_host(self):
         self.d_x0.copy_to_host(self.x0)
         self.d_x1.copy_to_host(self.x1)
@@ -156,6 +184,13 @@ class WongSolver:
         self.d_p_sq_eta.copy_to_host(self.p_sq_eta)
         self.d_p_sq_mean.copy_to_host(self.p_sq_mean)
 
+        if CUB_MOM:
+            self.d_p_cub_x.copy_to_host(self.p_cub_x)
+            self.d_p_cub_y.copy_to_host(self.p_cub_y)
+            self.d_p_cub_z.copy_to_host(self.p_cub_z)
+            self.d_p_cub_eta.copy_to_host(self.p_cub_eta)
+            self.d_p_cub_mean.copy_to_host(self.p_cub_mean)
+
         if CASIMIRS:
             self.d_c.copy_to_host(self.c)
 
@@ -164,9 +199,13 @@ class WongSolver:
 
     def copy_mom_broad_to_device(self, stream=None):
         self.d_p_sq_mean = cuda.to_device(self.p_sq_mean, stream)
+        if CUB_MOM:
+            self.d_p_cub_mean = cuda.to_device(self.p_cub_mean, stream)
 
     def copy_mom_broad_to_host(self, stream=None):
         self.d_p_sq_mean.copy_to_host(self.p_sq_mean, stream)
+        if CUB_MOM:
+            self.d_p_cub_mean.copy_to_host(self.p_cub_mean, stream)
 
     def init(self):
         if use_cuda:
@@ -217,6 +256,13 @@ class WongSolver:
 
         # compute mean
         compute_mean(self.d_p_sq_x, self.d_p_sq_y, self.d_p_sq_z,  self.d_p_sq_eta, self.d_p_sq_mean, stream)
+
+        if CUB_MOM:
+            # compute momenta components cubed
+            compute_p_cub(self.n_particles, self.d_p0, self.d_p, self.d_p_cub_x, self.d_p_cub_y, self.d_p_cub_z, self.s.t, self.d_p_cub_eta, stream)
+
+            # compute mean
+            compute_mean(self.d_p_cub_x, self.d_p_cub_y, self.d_p_cub_z,  self.d_p_cub_eta, self.d_p_cub_mean, stream)
 
         if use_cuda:
             self.copy_mom_broad_to_host()
@@ -495,6 +541,18 @@ def compute_p_sq_kernel(index, p0, p, p_sq_x, p_sq_y, p_sq_z, t, p_sq_eta):
     # usually p^\eta=0 at formation time
     #TODO more general computation of (p^\eta)^2
     p_sq_eta[index] = (t * p[index, 3]) ** 2
+
+def compute_p_cub(ntp, p0, p, p_cub_x, p_cub_y,p_cub_z, t, p_cub_eta, stream):
+    my_parallel_loop(compute_p_cub_kernel, ntp, p0, p, p_cub_x, p_cub_y, p_cub_z, t, p_cub_eta, stream=stream)
+
+@myjit
+def compute_p_cub_kernel(index, p0, p, p_cub_x, p_cub_y, p_cub_z, t, p_cub_eta):
+    p_cub_x[index] = (p[index, 1] - p0[index, 1]) ** 3 
+    p_cub_y[index] = (p[index, 2] - p0[index, 2]) ** 3 
+    p_cub_z[index] = (p[index, 4] - p0[index, 4]) ** 3
+    # usually p^\eta=0 at formation time
+    #TODO more general computation of (p^\eta)^2
+    p_cub_eta[index] = (t * p[index, 3]) ** 3
 
 def compute_mean(p_sq_x, p_sq_y, p_sq_z, p_sq_eta, p_sq_mean, stream):
     if use_cuda:
