@@ -168,3 +168,36 @@ def compute_borderangles_kernel(index, pmuq, pmuaq, pT, deta, dphi):
 
     # pT for quark
     pT[index] = math.sqrt(pmuq[index, 1]**2 + pmuq[index, 2] **2)
+
+
+class TransMom:
+    def __init__(self, wong, n_particles):
+        self.wong = wong
+        self.n_particles = n_particles
+
+        # pTs
+        self.pT = np.zeros(n_particles, dtype=np.double)
+
+        # set-up device pointers
+        self.d_pT = self.pT
+
+        # move data to GPU
+        if use_cuda:
+            self.copy_to_device()
+
+    def copy_to_device(self):
+        self.d_pT = cuda.to_device(self.pT)
+
+    def copy_to_host(self):
+        self.d_pT.copy_to_host(self.pT)
+
+    def compute(self):
+
+        my_parallel_loop(compute_trans_mom_kernel, self.n_particles, self.d_pT, self.wong.d_p)
+
+        if use_cuda:
+            self.copy_to_host()
+
+@myjit
+def compute_trans_mom_kernel(index, pT, p):
+    pT[index] = math.sqrt(p[index, 1]**2 + p[index, 2] **2)

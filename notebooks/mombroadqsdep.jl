@@ -4,269 +4,261 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 79fb48c0-e377-11ed-31c1-45a5ae0977dc
+# ╔═╡ 4198ed34-f33f-11ed-36ac-c1f9962c07dc
 begin
 	using Pickle
 	using CairoMakie
-	using LaTeXStrings
+	using ColorSchemes
 end
 
-# ╔═╡ b361316d-f9f2-42d6-a123-3fdbb65b75bd
-begin
-	choice_q2 = "4/3"
-	# choice_q2 = "4"
-	quark = "jet"
-	# quark = "infmass"
-	# quark = "charm"
-	pT = 5
-end
-
-# ╔═╡ b67f2833-492c-4c06-b734-db6eca2ca1a6
-begin
-	current_path = pwd()
-	if choice_q2=="4/3"
-		results = Pickle.npyload(current_path*"/results/mom_broad_brute_force_q2_1.33_q3_dep_"*quark*"_pT_"*string(pT)*".pickle")
-		charges = Pickle.npyload(current_path*"/results/brute_force_q2_1.33.pickle")
-	else
-		results = Pickle.npyload(current_path*"/results/mom_broad_brute_force_q2_4.0_q3_dep_"*quark*"_pT_"*string(pT)*".pickle")
-		charges = Pickle.npyload(current_path*"/results/brute_force_q2_4.0.pickle")
-	end
-end
-
-# ╔═╡ 80bdca68-2408-47a9-a9d0-ca24f0e47669
-begin
-	q3s = results["q3s"]
-	q2 = results["q2"]
-	q3s_bf = charges["q3s"]
-	if choice_q2=="4/3"
-		factor=1
-	else
-		factor=3
-	end
-end
-
-# ╔═╡ 922896f4-1be4-4046-945c-51d3f39f30dd
+# ╔═╡ 1a8732f3-15be-445c-8b8e-fa7888359322
 function string_as_varname(s::AbstractString,v::Any)
     s=Symbol(s)
     return @eval (($s) = ($v))
 end
 
-# ╔═╡ 31005ba1-029d-4173-9af3-1a863b64ebd7
+# ╔═╡ b1d2e8e4-4340-4933-b6ce-412e835ae338
+quark = "beauty"
+
+# ╔═╡ 2ab7978c-5e98-4c5c-b1ba-d5ce999b8f55
+saveplots = true
+
+# ╔═╡ 40cb386f-c93a-4ff0-9677-6452fcbdcac7
+# [Gev * fm]
+hbarc = 0.197326 
+
+# ╔═╡ 559b2d7c-3184-442f-80be-6063fe08b931
+rescaled = false
+
+# ╔═╡ 066b7c42-cb52-43e0-a9d1-0068717b75a8
+md"""
+---
+Charm and beauty on the same plot, longer proper times.
+"""
+
+# ╔═╡ c880716e-bfde-45ea-9202-0747ec796499
 begin
-	set_theme!(fonts = (; regular ="CMU Serif"))
-
-	if choice_q2=="4/3"
-		segmented_cmap = cgrad(:deep, 14, categorical = true)
-	else
-		segmented_cmap = cgrad(:dense, 14, categorical = true)
+	lens = 20
+	δτ_sel, ind_sel =  Dict(), Dict()
+	for (iq, quark) in enumerate(quarks)
+		for (iQs, Qs) in enumerate(Qss)
+			tag = quarks[iq] * "_Qs_" * Qss[iQs]
+			δτ = Float64.(tau_wong[tag])
+			δτ_sel[tag] = LinRange(δτ[1],δτ[length(δτ)],lens)
+			ind_sel[tag] = floor.(Int, LinRange(1,length(δτ),lens))
+		end
 	end
-	custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7], segmented_cmap[9], segmented_cmap[11]]
-	q₃_labels = [L"%$q3ᵢ" for q3ᵢ in q3s]
+end
 
-	if choice_q2=="4/3"
-		ylabel = L"\langle \delta p^2\rangle\,\mathrm{[GeV^2]}"
+# ╔═╡ 5d85e0f6-218a-4abb-94d3-08bcaf343a1b
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	current_path = pwd()
+	file = current_path*"/results/Qs_mom_broad_wong_"*quark*".pickle"
+	data = Pickle.npyload(file)
+	mom_broad_wong = data["mom_broad"]
+	tau_wong = data["tau"]
+	
+	quarks = data["quarks"]
+	Qss = string.(data["Qs"])
+end
+  ╠═╡ =#
+
+# ╔═╡ 04abc26e-d827-4e7f-9cef-e787f41c1643
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	segmented_cmap = cgrad(:lapaz, 16, categorical = true)
+	colors = [segmented_cmap[14], segmented_cmap[11], segmented_cmap[8], segmented_cmap[5], segmented_cmap[2]]
+	linestyles = [:dash, :dashdot, :dot]
+	
+	fig = Figure(resolution = (1050, 300), font = "CMU Serif")
+	if rescaled
+		ylabels = [L"\langle\delta p_L^2\rangle/Q_s^2", L"\langle\delta p_T^2\,\rangle/Q_s^2", L"\langle\delta p^2_L\,\rangle/\langle\delta p^2_T\,\rangle"]
+		xlabel = L"Q_s\,\delta\tau"
 	else
-		ylabel = L"\langle \delta p^2\rangle/D_F\,\mathrm{[GeV^2]}"
+		ylabels = [L"\langle\delta p_L^2\,\rangle\,\mathrm{[GeV^2]}", L"\langle\delta p_T^2\,\rangle\,\mathrm{[GeV^2]}", L"\langle\delta p^2_L\,\rangle/\langle\delta p^2_T\,\rangle"]
+		xlabel = L"\delta\tau\,\mathrm{[fm/c]}"
 	end
 	
-	fig = Figure(resolution = (430, 400), font = "CMU Serif")
-	axes = Axis(fig[1, 1], 
-		xlabel=L"\delta\tau\,\mathrm{[fm/c]}", ylabel=ylabel, xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4
-	) 
-	
-	τ = results["tau"]
-	for (i, q3) in enumerate(q3s)
-		δp² = results["psq"][q3]
-		string_as_varname("line"*string(i), lines!(axes, τ, (δp²[:,1]+δp²[:,2])/factor, 
-			color=custom_colors[i], 
-			label=q₃_labels[i]
-		))
-		lines!(axes, τ, δp²[:,3]/factor, 
-			color=custom_colors[i]
-		)
-	end
+	axes = [Axis(fig[1, i], xlabel=xlabel, ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xgridvisible = false, ygridvisible = false) for i in 1:3]
+
+	iq = 1
+	for iQs in 1:length(Qss)
+		tag_wong = quarks[iq] * "_Qs_" * Qss[iQs]
+		if rescaled
+			Qs_value = parse(Float64, Qss[iQs])
+			δτ_wong = Float64.(tau_wong[tag_wong])*Qs_value/hbarc
+
+			for i in 1:3
+				xlims!(axes[i], 0, 10)
+				axes[i].xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+			end
+
+			ylims!(axes[1], -0.1, 2.5)
+			ylims!(axes[2], -0.1, 1.3)
+			ylims!(axes[3], 0.8, 3.2)
+			axes[2].yticks = ([0, 0.5, 1], ["0", "0.5", "1"])
+			axes[3].yticks = ([1, 2, 3], ["1", "2", "3"])
+		else
+			δτ_wong = Float64.(tau_wong[tag_wong])
+
+			for i in 1:3
+				xlims!(axes[i], 0, 2.5)
+				axes[i].xticks = ([0, 0.5, 1, 1.5, 2, 2.5], ["0", "0.5", "1", "1.5", "2", "2.5"])
+				
+			end
+
+			ylims!(axes[1], -1, 21)
+			ylims!(axes[2], -1, 12)
+			ylims!(axes[3], 0.8, 3.2)
+			axes[1].yticks = ([0, 10, 20], ["0", "10", "20"])
+			axes[3].yticks = ([1, 2, 3], ["1", "2", "3"])
+		end
+	        
+		if rescaled
+			mom_broad_L_wong = mom_broad_wong[tag_wong][:, 3]/Qs_value^2
+			mom_broad_T_wong = (mom_broad_wong[tag_wong][:, 1] + mom_broad_wong[tag_wong][:, 2])/Qs_value^2
+		else
+			mom_broad_L_wong = mom_broad_wong[tag_wong][:, 3]
+			mom_broad_T_wong = mom_broad_wong[tag_wong][:, 1] + mom_broad_wong[tag_wong][:, 2]
+		end
 		
-	axislegend(axes, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = :rt, orientation = :vertical)
-
-	xlims!(axes, 0, 1.5)
-	axes.xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
-
-	if choice_q2=="4/3"
-		text!(axes, L"\langle\delta p_T^2\,\rangle", position = (1.3, 1.2), fontsize=18)
-		text!(axes, L"\langle\delta p_L^2\,\rangle", position = (1.3, 3), fontsize=18)
-		ylims!(axes, 0, 12)
-		axes.yticks = ([4, 8, 12], string.([4, 8, 12]))
-	else
-		text!(axes, L"\langle\delta p_T^2\,\rangle", position = (1.3, 0.45), fontsize=18)
-		text!(axes, L"\langle\delta p_L^2\,\rangle", position = (1.3, 6), fontsize=18)
-		ylims!(axes, 0, 21)
-		axes.yticks = ([4, 8, 12, 16, 20], ["4", "8", "12", "16", "20"])
+		lines!(axes[1], δτ_wong, mom_broad_L_wong, linewidth = 1.5, color=colors[iQs])
+		lines!(axes[2], δτ_wong, mom_broad_T_wong, linewidth = 1.5, color=colors[iQs])
+		ratio = mom_broad_L_wong./mom_broad_T_wong
+		string_as_varname("wong_Qs_"*string(iQs), lines!(axes[3], δτ_wong, ratio, linewidth = 1.5, color=colors[iQs]))
 	end
-
-	if choice_q2=="4/3"
-		lower_box_bound = 120
-	else
-		lower_box_bound = 110
-	end
-	ax_zoomin = Axis(fig, xlabel=L"\mathrm{KDE}\,(q_3\,)", ylabel=L"q_3",
-	        bbox = BBox(lower_box_bound, lower_box_bound+130, 240, 370), 
-	        xticklabelsize=0, yticklabelsize=14,
-	        xtickalign = 0, xticksize=0, ytickalign=1, yticksize=3, xlabelpadding = 0, xgridvisible = false, ygridvisible = false,
-	        ytickcolor = :grey, xtickcolor = :grey, yticklabelcolor = :grey, xticklabelcolor = :grey, ylabelcolor = :grey, xlabelcolor = :grey,
-	        bottomspinecolor = :grey, topspinecolor = :grey, leftspinecolor = :grey, rightspinecolor = :grey)
 	
-	translate!(ax_zoomin.elements[:background], 0, 0, 9)
-	translate!(ax_zoomin.scene, 0, 0, 10)
+	
+	# lines!(axes[3], δτ_wong, ones(length(δτ_wong)), linewidth = 1.8, color=(:grey60, 0.4))
+	# lines!(axes[3], δτ_wong, ones(length(δτ_wong)), linewidth = 1.8, color=:grey60, linestyle=:dash)
+	
+	cbar = Colorbar(fig[1, 4], limits = (1, 6), colormap =  cgrad(colors, 5, categorical = true), size = 25, labelsize = 22, width = 10, flipaxis = true,
+	ticksize=3, tickalign = 0, ticklabelsize = 14, height = Relative(1), label=L"Q_s\,\mathrm{[GeV]}")
+	cbar.ticks = ([1.5, 2.5, 3.5, 4.5, 5.5],  Qss)
 
-	obj = density!(ax_zoomin, q3s_bf, 
-		color = (segmented_cmap[7], 0.3), strokecolor = segmented_cmap[7], strokewidth = 1.5, strokearound = true
-	)
-	rotate!(obj, -π/2)
-
-	if choice_q2=="4/3"
-		ylims!(ax_zoomin, -0.85, 0.85)
-		xlims!(ax_zoomin, 0, 13)
-		ax_zoomin.yticks = ([-0.8, -0.4, 0, 0.4, 0.8], ["-0.8", "-0.4", "0", "0.4", "0.8"])
-		text!(ax_zoomin, L"q_2=4/3", position = (6, 0.4), fontsize=18)
-		save("plots/mom_broad_brute_force_q2_1.33_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+	if rescaled
+		if saveplots
+			save("plots/mom_broad_Qstau_beauty.png", fig, px_per_unit = 5.0) 
+		end
 	else
-		ylims!(ax_zoomin, -4.2, 4.2)
-		xlims!(ax_zoomin, 0, 2.6)
-		ax_zoomin.yticks = ([-4, -2, 0, 2, 4], ["-4", "-2", "0", "2", "4"])
-		text!(ax_zoomin, L"q_2=4", position = (1.5, 2), fontsize=18)
-		save("plots/mom_broad_brute_force_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		if saveplots
+			save("plots/mom_broad_Qs_beauty.png", fig, px_per_unit = 5.0) 
+		end
+	end
+	
+
+	fig
+end
+  ╠═╡ =#
+
+# ╔═╡ 55245d67-5f6c-4383-a442-d47ea4eb2b0b
+begin
+	current_path = pwd()
+	file = current_path*"/results/Qs_mom_broad_wong_charm_beauty.pickle"
+	data = Pickle.npyload(file)
+	mom_broad_wong = data["mom_broad"]
+	tau_wong = data["tau"]
+	
+	quarks = data["quarks"]
+	Qss = string.(data["Qs"])
+end
+
+# ╔═╡ 5d8ac4a5-7567-4c17-9d98-f9df6289d7bf
+begin
+	segmented_cmap = cgrad(:lapaz, 16, categorical = true)
+	colors = [segmented_cmap[14], segmented_cmap[11], segmented_cmap[8], segmented_cmap[5], segmented_cmap[2]]
+	linestyles = [:dash, :dashdot, :dot]
+	
+	fig = Figure(resolution = (1050, 500), font = "CMU Serif")
+		ylabels = reshape([L"\langle\delta p_L^2\,\rangle\,\mathrm{[GeV^2]}", L"\langle\delta p_T^2\,\rangle\,\mathrm{[GeV^2]}", L"\langle\delta p^2_L\,\rangle/\langle\delta p^2_T\,\rangle", L"\langle\delta p_L^2\rangle/Q_s^2", L"\langle\delta p_T^2\,\rangle/Q_s^2", L"\langle\delta p^2_L\,\rangle/\langle\delta p^2_T\,\rangle"], 3, 2)
+		xlabel = [L"\delta\tau\,\mathrm{[fm/c]}",L"Q_s\,\delta\tau"] 
+	
+	axes = reshape([Axis(fig[j, i], xlabel=xlabel[j], ylabel=ylabels[i, j], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xgridvisible = false, ygridvisible = false) for i in 1:3 for j in 1:2], 2, 3)
+
+	iq = 2
+	alpha = 1
+	markers = [:circle, :utriangle]
+	quark_labels = [L"\mathrm{charm}", L"\mathrm{beauty}"]
+
+	# for (iq, quark) in enumerate(quarks)
+		for iQs in 1:length(Qss)
+			tag_wong = quarks[iq] * "_Qs_" * Qss[iQs]
+			δτ_wong = Float64.(tau_wong[tag_wong])
+
+			for i in 1:3
+				xlims!(axes[1, i], 0, 10)
+				axes[1, i].xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+			end
+
+			# ylims!(axes[1], -1, 21)
+			# ylims!(axes[2], -1, 12)
+			# ylims!(axes[3], 0.8, 3.2)
+			# axes[1].yticks = ([0, 10, 20], ["0", "10", "20"])
+			# axes[3].yticks = ([1, 2, 3], ["1", "2", "3"])		        
+			mom_broad_L_wong = mom_broad_wong[tag_wong][:, 3]
+			mom_broad_T_wong = mom_broad_wong[tag_wong][:, 1] + mom_broad_wong[tag_wong][:, 2]
+			
+			lines!(axes[1, 1], δτ_wong, mom_broad_L_wong, linewidth = 1.5, color=(colors[iQs], alpha))
+			# scatter!(axes[1], δτ_sel[tag_wong], mom_broad_L_wong[ind_sel[tag_wong]], color=colors[iQs], marker=markers[iq], markersize=7)
+			
+			lines!(axes[1, 2], δτ_wong, mom_broad_T_wong, linewidth = 1.5, color=(colors[iQs], alpha))
+			# scatter!(axes[2], δτ_sel[tag_wong], mom_broad_T_wong[ind_sel[tag_wong]], color=colors[iQs], marker=markers[iq], markersize=7)
+			
+			
+			ratio = mom_broad_L_wong./mom_broad_T_wong
+			lines!(axes[1, 3], δτ_wong, ratio, linewidth = 1.5, color=(colors[iQs], alpha))
+
+			# scatter!(axes[3], δτ_sel[tag_wong], ratio[ind_sel[tag_wong]], color=colors[iQs], marker=markers[iq], markersize=7)
+
+			#rescaled
+			Qs_value = parse(Float64, Qss[iQs])
+			δτ_wong = Float64.(tau_wong[tag_wong])*Qs_value/hbarc
+			mom_broad_L_wong = mom_broad_wong[tag_wong][:, 3]/Qs_value^2
+			mom_broad_T_wong = (mom_broad_wong[tag_wong][:, 1] + mom_broad_wong[tag_wong][:, 2])/Qs_value^2
+
+			lines!(axes[2, 1], δτ_wong, mom_broad_L_wong, linewidth = 1.5, color=(colors[iQs], alpha))
+			lines!(axes[2, 2], δτ_wong, mom_broad_T_wong, linewidth = 1.5, color=(colors[iQs], alpha))
+			ratio = mom_broad_L_wong./mom_broad_T_wong
+			lines!(axes[2, 3], δτ_wong, ratio, linewidth = 1.5, color=(colors[iQs], alpha))
+
+			for i in 1:3
+				xlims!(axes[2, i], 0, 50)
+				# axes[2, i].xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+			end
+		end
+	# end
+	
+	# lines!(axes[3], δτ_wong, ones(length(δτ_wong)), linewidth = 1.8, color=(:grey60, 0.4))
+	# lines!(axes[3], δτ_wong, ones(length(δτ_wong)), linewidth = 1.8, color=:grey60, linestyle=:dash)
+
+	
+	rowsize!(fig.layout, 1, Relative(3/5))
+	rowsize!(fig.layout, 2, Relative(2/5))
+	
+	cbar = Colorbar(fig[1:2, 4], limits = (1, 6), colormap =  cgrad(colors, 5, categorical = true), size = 25, labelsize = 22, width = 10, flipaxis = true,
+	ticksize=3, tickalign = 0, ticklabelsize = 14, height = Relative(1), label=L"Q_s\,\mathrm{[GeV]}")
+	cbar.ticks = ([1.5, 2.5, 3.5, 4.5, 5.5],  Qss)
+
+	if saveplots
+		save("plots/mom_broad_Qs_"*quarks[iq]*"_layout.png", fig, px_per_unit = 5.0) 
 	end
 	
 	fig
-end
-
-# ╔═╡ f63ea92f-77cb-4057-93b2-ffcb6a86cbed
-begin
-	set_theme!(fonts = (; regular ="CMU Serif"))
-	fig_bf = Figure(resolution = (420, 300), font = "CMU Serif")
-	ax_bf = Axis(fig_bf[1, 1], 
-		xlabel=L"N_\mathrm{tp}\,[\times 10^6]", ylabel=L"q_3=d_{abc}Q^aQ^bQ^c", xlabelsize = 18, ylabelsize= 18, xticklabelsize=12, yticklabelsize=12, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4
-	)
-	ntp = range(1, length(q3s_bf))
-	# Makie complains that it needs Float32 input arrays
-	scatter!(ax_bf, Float32.(ntp), Float32.(q3s_bf), markersize=0.6, color=segmented_cmap[10])
-	xlims!(ax_bf, 0, 10^6)
-	ax_bf.xticks = ([0, 0.2, 0.4, 0.6, 0.8, 1].*10^6, string.([0, 0.2, 0.4, 0.6, 0.8, 1]))
-	# Label(fig_bf[1,2, Bottom()], L"\times 10^6", fontsize=14)
-	if choice_q2 =="4/3"
-		save("plots/color_charges_brute_force_q2_1.33.png", fig_bf, px_per_unit = 5.0)
-	else
-		save("plots/color_charges_brute_force_q2_4.png", fig_bf, px_per_unit = 5.0)
-	end
-	fig_bf
-end
-
-# ╔═╡ 27ad3673-7376-4db1-8a04-296d6e01c7ca
-begin
-	# pT = 5
-	# # quark = "infmass"
-	# # quark = "charm"
-	# quark = "jet"
-	# # q2=4/3
-	results_qmq2 = Pickle.npyload("results/mom_broad_brute_force_q2_1.33_q3_dep_"*quark*"_pT_"*string(pT)*".pickle")
-	q3s_qmq2 = results_qmq2["q3s"]
-	# q2=4
-	results_clq2 =Pickle.npyload("results/mom_broad_brute_force_q2_4.0_q3_dep_"*quark*"_pT_"*string(pT)*".pickle")
-	q3s_clq2 = results_clq2["q3s"]
-end
-
-# ╔═╡ 928b1a01-8462-41da-9057-31403ae499f9
-begin
-	set_theme!(fonts = (; regular ="CMU Serif"))
-
-	segmented_cmap_qm = cgrad(:deep, 14, categorical = true)
-	custom_colors_qm = [segmented_cmap_qm[3], segmented_cmap_qm[5], segmented_cmap_qm[7], segmented_cmap_qm[9], segmented_cmap_qm[11]]
-	segmented_cmap_cl = cgrad(:dense, 14, categorical = true)
-	custom_colors_cl = [segmented_cmap_cl[3], segmented_cmap_cl[5], segmented_cmap_cl[7], segmented_cmap_cl[9], segmented_cmap_cl[11]]
-		
-	q₃_labels_qm = [L"%$q3ᵢ" for q3ᵢ in q3s_qmq2]
-	q₃_labels_cl = [L"%$q3ᵢ" for q3ᵢ in q3s_clq2]
-	
-	fig_qmcl = Figure(resolution = (720, 350), font = "CMU Serif", title=L"m=1\,\mathrm{GeV}, p_T=2\,\mathrm{GeV}")
-	ylabels = [L"\langle \delta p^2\rangle/D_R\,\mathrm{[GeV^2]}", L"\langle \delta p^2\rangle\,\mathrm{[GeV^2]}"]
-	titles = [L"q_2=4", L"q_2=4/3"]
-	axes_qmcl = [Axis(fig_qmcl[1, i], 
-		xlabel=L"\delta\tau\,\mathrm{[fm/c]}", ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, title=titles[i], titlesize=20
-	) for i in 1:2]
-	
-	τ_qm, τ_cl = results_qmq2["tau"], results_clq2["tau"]
-
-	for (i, q3) in enumerate(q3s_clq2)
-		δp² = results_clq2["psq"][q3]
-		string_as_varname("line_cl_"*string(i), lines!(axes_qmcl[1], τ_cl, (δp²[:,1]+δp²[:,2])/3, 
-			color=custom_colors_cl[i], 
-			label=q₃_labels_cl[i]
-		))
-		lines!(axes_qmcl[1], τ_cl, δp²[:,3]/3, 
-			color=custom_colors_cl[i]
-		)
-	end
-
-	if (pT==50)||(pT==10)||(pT==5)
-		legend_pos = :rb
-	else
-		legend_pos = :lt
-	end
-	
-	axislegend(axes_qmcl[1], [line_cl_1, line_cl_2, line_cl_3, line_cl_4, line_cl_5], q₃_labels_cl, L"q_3", labelsize=14, titlesize=18, position = legend_pos, orientation = :vertical
-		# orientation = :horizontal, titleposition = :left
-	)
-	
-	for (i, q3) in enumerate(q3s_qmq2)
-		δp² = results_qmq2["psq"][q3]
-		string_as_varname("line_qm_"*string(i), lines!(axes_qmcl[2], τ_qm, (δp²[:,1]+δp²[:,2]), 
-			color=custom_colors_qm[i], 
-			label=q₃_labels_qm[i]
-		))
-		lines!(axes_qmcl[2], τ_qm, δp²[:,3], 
-			color=custom_colors_qm[i]
-		)
-	end
-
-	axislegend(axes_qmcl[2], [line_qm_1, line_qm_2, line_qm_3, line_qm_4, line_qm_5], q₃_labels_qm, L"q_3", labelsize=14, titlesize=18, position = legend_pos, orientation = :vertical
-		# orientation = :horizontal, titleposition = :left
-	)
-
-
-	linkyaxes!(axes_qmcl[1], axes_qmcl[2])
-
-	for i in 1:2
-		xlims!(axes_qmcl[i], 0, 1.5)
-		axes_qmcl[i].xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
-	end
-
-	if (pT==50)||(pT==10)||(pT==5)
-		text!(axes_qmcl[1], L"m=1\,\mathrm{GeV},\,p_T=%$pT\,\mathrm{GeV}", position = (0.1, 0), fontsize=18)
-		# text!(axes_qmcl[2], L"p_T=2\,\mathrm{GeV}", position = (0.2, 0), fontsize=18)
-	elseif quark=="charm"
-		text!(axes_qmcl[2], L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.65, 0), fontsize=18)
-	elseif quark=="infmass"
-		text!(axes_qmcl[2], L"m\rightarrow\infty,\,p_T=2\,\mathrm{GeV}", position = (0.65, 0), fontsize=18)
-	else
-		text!(axes_qmcl[2], L"m=1\,\mathrm{GeV}", position = (1.01, 9), fontsize=18)
-		text!(axes_qmcl[2], L"p_T=2\,\mathrm{GeV}", position = (1, 8), fontsize=18)
-	end
-		
-	save("plots/mom_broad_brute_force_q2_4_vs_q2_1.33_q3_dep_"*quark*"_pT_"*string(pT)*".png", fig_qmcl, px_per_unit = 5.0)
-
-	fig_qmcl
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
 
 [compat]
-CairoMakie = "~0.10.4"
-LaTeXStrings = "~1.3.0"
+CairoMakie = "~0.10.5"
+ColorSchemes = "~3.21.0"
 Pickle = "~0.3.2"
 """
 
@@ -276,7 +268,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "150604de66566ae49d337adaccf18139bb00d943"
+project_hash = "ca6d41d2a7a7726298d3ad0566ffb2085534c8ff"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -291,9 +283,9 @@ version = "0.4.4"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
-git-tree-sha1 = "cc37d689f599e8df4f464b2fa3870ff7db7492ef"
+git-tree-sha1 = "76289dc51920fdc6e0013c872ba9551d54961c24"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
-version = "3.6.1"
+version = "3.6.2"
 
 [[deps.Animations]]
 deps = ["Colors"]
@@ -350,10 +342,10 @@ uuid = "159f3aea-2a34-519c-b102-8c37f9878175"
 version = "1.0.5"
 
 [[deps.CairoMakie]]
-deps = ["Base64", "Cairo", "Colors", "FFTW", "FileIO", "FreeType", "GeometryBasics", "LinearAlgebra", "Makie", "SHA", "SnoopPrecompile"]
-git-tree-sha1 = "2aba202861fd2b7603beb80496b6566491229855"
+deps = ["Base64", "Cairo", "Colors", "FFTW", "FileIO", "FreeType", "GeometryBasics", "LinearAlgebra", "Makie", "PrecompileTools", "SHA"]
+git-tree-sha1 = "9e7f01dd16e576ebbdf8b453086f9d0eff814a09"
 uuid = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-version = "0.10.4"
+version = "0.10.5"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -369,15 +361,15 @@ version = "0.5.1"
 
 [[deps.ChainRulesCore]]
 deps = ["Compat", "LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "c6d890a52d2c4d55d326439580c3b8d0875a77d9"
+git-tree-sha1 = "e30f2f4e20f7f186dc36529910beaedc60cfa644"
 uuid = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-version = "1.15.7"
+version = "1.16.0"
 
 [[deps.ChangesOfVariables]]
-deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
-git-tree-sha1 = "485193efd2176b88e6622a39a246f8c5b600e74e"
+deps = ["LinearAlgebra", "Test"]
+git-tree-sha1 = "f84967c4497e0e1955f9a582c232b02847c5f589"
 uuid = "9e997f8a-9a97-42d5-a9f1-ce6bfc15e2c0"
-version = "0.1.6"
+version = "0.1.7"
 
 [[deps.ColorBrewer]]
 deps = ["Colors", "JSON", "Test"]
@@ -422,9 +414,9 @@ version = "0.5.2+0"
 
 [[deps.ConstructionBase]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "89a9db8d28102b094992472d333674bd1a83ce2a"
+git-tree-sha1 = "738fec4d684a9a6ee9598a8bfee305b26831f28c"
 uuid = "187b0558-2788-49d3-abe0-74a17ed4e7c9"
-version = "1.5.1"
+version = "1.5.2"
 
 [[deps.Contour]]
 git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
@@ -432,9 +424,9 @@ uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.2"
 
 [[deps.DataAPI]]
-git-tree-sha1 = "e8119c1a33d267e16108be441a287a6981ba1630"
+git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
-version = "1.14.0"
+version = "1.15.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -463,9 +455,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "eead66061583b6807652281c0fbf291d7a9dc497"
+git-tree-sha1 = "b0a916504cf33a6f07a4b56c58451d1dc93a2ff5"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.90"
+version = "0.25.91"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -527,9 +519,9 @@ version = "3.3.10+0"
 
 [[deps.FileIO]]
 deps = ["Pkg", "Requires", "UUIDs"]
-git-tree-sha1 = "7be5f99f7d15578798f338f5433b6c432ea8037b"
+git-tree-sha1 = "299dc33549f68299137e51e6d49a13b5b1da9673"
 uuid = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-version = "1.16.0"
+version = "1.16.1"
 
 [[deps.FileWatching]]
 uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
@@ -594,15 +586,15 @@ version = "0.1.4"
 
 [[deps.GeoInterface]]
 deps = ["Extents"]
-git-tree-sha1 = "0eb6de0b312688f852f347171aba888658e29f20"
+git-tree-sha1 = "bb198ff907228523f3dee1070ceee63b9359b6ab"
 uuid = "cf35fbd7-0cd7-5166-be24-54bfbe79505f"
-version = "1.3.0"
+version = "1.3.1"
 
 [[deps.GeometryBasics]]
 deps = ["EarCut_jll", "GeoInterface", "IterTools", "LinearAlgebra", "StaticArrays", "StructArrays", "Tables"]
-git-tree-sha1 = "303202358e38d2b01ba46844b92e48a3c238fd9e"
+git-tree-sha1 = "659140c9375afa2f685e37c1a0b9c9a60ef56b40"
 uuid = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
-version = "0.4.6"
+version = "0.4.7"
 
 [[deps.Gettext_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "XML2_jll"]
@@ -647,9 +639,9 @@ version = "2.8.1+1"
 
 [[deps.HypergeometricFunctions]]
 deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
-git-tree-sha1 = "432b5b03176f8182bd6841fbfc42c718506a2d5f"
+git-tree-sha1 = "84204eae2dd237500835990bcade263e27674a93"
 uuid = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
-version = "0.3.15"
+version = "0.3.16"
 
 [[deps.ImageAxes]]
 deps = ["AxisArrays", "ImageBase", "ImageCore", "Reexport", "SimpleTraits"]
@@ -727,9 +719,9 @@ version = "0.7.4"
 
 [[deps.InverseFunctions]]
 deps = ["Test"]
-git-tree-sha1 = "49510dfcb407e572524ba94aeae2fced1f3feb0f"
+git-tree-sha1 = "6667aadd1cdee2c6cd068128b3d226ebc4fb0c67"
 uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
-version = "0.1.8"
+version = "0.1.9"
 
 [[deps.IrrationalConstants]]
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
@@ -778,9 +770,9 @@ version = "2.1.91+0"
 
 [[deps.KernelDensity]]
 deps = ["Distributions", "DocStringExtensions", "FFTW", "Interpolations", "StatsBase"]
-git-tree-sha1 = "9816b296736292a80b9a3200eb7fbb57aaa3917a"
+git-tree-sha1 = "90442c50e202a5cdf21a7899c66b240fdef14035"
 uuid = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
-version = "0.6.5"
+version = "0.6.7"
 
 [[deps.LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -892,10 +884,10 @@ uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 version = "0.5.10"
 
 [[deps.Makie]]
-deps = ["Animations", "Base64", "ColorBrewer", "ColorSchemes", "ColorTypes", "Colors", "Contour", "Distributions", "DocStringExtensions", "Downloads", "FFMPEG", "FileIO", "FixedPointNumbers", "Formatting", "FreeType", "FreeTypeAbstraction", "GeometryBasics", "GridLayoutBase", "ImageIO", "InteractiveUtils", "IntervalSets", "Isoband", "KernelDensity", "LaTeXStrings", "LinearAlgebra", "MakieCore", "Markdown", "Match", "MathTeXEngine", "MiniQhull", "Observables", "OffsetArrays", "Packing", "PlotUtils", "PolygonOps", "Printf", "Random", "RelocatableFolders", "Setfield", "Showoff", "SignedDistanceFields", "SnoopPrecompile", "SparseArrays", "StableHashTraits", "Statistics", "StatsBase", "StatsFuns", "StructArrays", "TriplotBase", "UnicodeFun"]
-git-tree-sha1 = "74657542dc85c3b72b8a5a9392d57713d8b7a999"
+deps = ["Animations", "Base64", "ColorBrewer", "ColorSchemes", "ColorTypes", "Colors", "Contour", "Distributions", "DocStringExtensions", "Downloads", "FFMPEG", "FileIO", "FixedPointNumbers", "Formatting", "FreeType", "FreeTypeAbstraction", "GeometryBasics", "GridLayoutBase", "ImageIO", "InteractiveUtils", "IntervalSets", "Isoband", "KernelDensity", "LaTeXStrings", "LinearAlgebra", "MacroTools", "MakieCore", "Markdown", "Match", "MathTeXEngine", "MiniQhull", "Observables", "OffsetArrays", "Packing", "PlotUtils", "PolygonOps", "PrecompileTools", "Printf", "REPL", "Random", "RelocatableFolders", "Setfield", "Showoff", "SignedDistanceFields", "SparseArrays", "StableHashTraits", "Statistics", "StatsBase", "StatsFuns", "StructArrays", "TriplotBase", "UnicodeFun"]
+git-tree-sha1 = "3a9ca622a78dcbab3a034df35d1acd3ca7ad487d"
 uuid = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-version = "0.19.4"
+version = "0.19.5"
 
 [[deps.MakieCore]]
 deps = ["Observables"]
@@ -904,9 +896,9 @@ uuid = "20f20a25-4f0e-4fdf-b5d1-57303727442b"
 version = "0.6.3"
 
 [[deps.MappedArrays]]
-git-tree-sha1 = "e8b359ef06ec72e8c030463fe02efe5527ee5142"
+git-tree-sha1 = "2dab0221fe2b0f2cb6754eaa743cc266339f527e"
 uuid = "dbb5928d-eab1-5f90-85c2-b9b0edb7c900"
-version = "0.4.1"
+version = "0.4.2"
 
 [[deps.Markdown]]
 deps = ["Base64"]
@@ -1067,10 +1059,10 @@ uuid = "36c8627f-9965-5494-a995-c6b170f724f3"
 version = "1.50.9+0"
 
 [[deps.Parsers]]
-deps = ["Dates", "SnoopPrecompile"]
-git-tree-sha1 = "478ac6c952fddd4399e71d4779797c538d0ff2bf"
+deps = ["Dates", "PrecompileTools", "UUIDs"]
+git-tree-sha1 = "7302075e5e06da7d000d9bfa055013e3e85578ca"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.5.8"
+version = "2.5.9"
 
 [[deps.Pickle]]
 deps = ["DataStructures", "InternedStrings", "Serialization", "SparseArrays", "Strided", "StringEncodings", "ZipFile"]
@@ -1108,15 +1100,15 @@ version = "0.1.2"
 
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
-git-tree-sha1 = "bc2bda41d798c2e66e7c44a11007bb329b15941b"
+git-tree-sha1 = "259e206946c293698122f63e2b513a7c99a244e8"
 uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
-version = "1.0.1"
+version = "1.1.1"
 
 [[deps.Preferences]]
 deps = ["TOML"]
-git-tree-sha1 = "47e5f437cc0e7ef2ce8406ce1e7e24d44915f88d"
+git-tree-sha1 = "7eb1686b4f04b82f96ed7a4ea5890a4f0c7a09f1"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
-version = "1.3.0"
+version = "1.4.0"
 
 [[deps.Printf]]
 deps = ["Unicode"]
@@ -1141,10 +1133,10 @@ uuid = "460c41e3-6112-5d7f-b78c-b6823adb3f2d"
 version = "1.0.0+1"
 
 [[deps.Qhull_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "238dd7e2cc577281976b9681702174850f8d4cbc"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "be2449911f4d6cfddacdf7efc895eceda3eee5c1"
 uuid = "784f63db-0788-585a-bace-daefebcd302b"
-version = "8.0.1001+0"
+version = "8.0.1003+0"
 
 [[deps.QuadGK]]
 deps = ["DataStructures", "LinearAlgebra"]
@@ -1205,10 +1197,10 @@ uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
 
 [[deps.SIMD]]
-deps = ["SnoopPrecompile"]
-git-tree-sha1 = "8b20084a97b004588125caebf418d8cab9e393d1"
+deps = ["PrecompileTools"]
+git-tree-sha1 = "0e270732477b9e551d884e6b07e23bb2ec947790"
 uuid = "fdea26ae-647d-5447-a871-4b548cad5224"
-version = "3.4.4"
+version = "3.4.5"
 
 [[deps.ScanByte]]
 deps = ["Libdl", "SIMD"]
@@ -1259,12 +1251,6 @@ git-tree-sha1 = "8fb59825be681d451c246a795117f317ecbcaa28"
 uuid = "45858cf5-a6b0-47a3-bbea-62219f50df47"
 version = "0.1.2"
 
-[[deps.SnoopPrecompile]]
-deps = ["Preferences"]
-git-tree-sha1 = "e760a70afdcd461cf01a575947738d359234665c"
-uuid = "66db9d55-30c0-4569-8b51-7e840670fc0c"
-version = "1.0.3"
-
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 
@@ -1298,9 +1284,9 @@ version = "0.1.1"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]
-git-tree-sha1 = "63e84b7fdf5021026d0f17f76af7c57772313d99"
+git-tree-sha1 = "8982b3607a212b070a5e46eea83eb62b4744ae12"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.5.21"
+version = "1.5.25"
 
 [[deps.StaticArraysCore]]
 git-tree-sha1 = "6b7ba252635a5eff6a0b0664a41ee140a1c9e72a"
@@ -1391,9 +1377,9 @@ version = "0.6.4"
 
 [[deps.TranscodingStreams]]
 deps = ["Random", "Test"]
-git-tree-sha1 = "0b829474fed270a4b0ab07117dce9b9a2fa7581a"
+git-tree-sha1 = "9a6ae7ed916312b41236fcef7e0af564ef934769"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.9.12"
+version = "0.9.13"
 
 [[deps.TriplotBase]]
 git-tree-sha1 = "4d4ed7f294cda19382ff7de4c137d24d16adc89b"
@@ -1566,14 +1552,17 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═79fb48c0-e377-11ed-31c1-45a5ae0977dc
-# ╠═b361316d-f9f2-42d6-a123-3fdbb65b75bd
-# ╠═b67f2833-492c-4c06-b734-db6eca2ca1a6
-# ╠═80bdca68-2408-47a9-a9d0-ca24f0e47669
-# ╠═922896f4-1be4-4046-945c-51d3f39f30dd
-# ╠═31005ba1-029d-4173-9af3-1a863b64ebd7
-# ╠═f63ea92f-77cb-4057-93b2-ffcb6a86cbed
-# ╠═27ad3673-7376-4db1-8a04-296d6e01c7ca
-# ╠═928b1a01-8462-41da-9057-31403ae499f9
+# ╠═4198ed34-f33f-11ed-36ac-c1f9962c07dc
+# ╠═1a8732f3-15be-445c-8b8e-fa7888359322
+# ╠═b1d2e8e4-4340-4933-b6ce-412e835ae338
+# ╠═2ab7978c-5e98-4c5c-b1ba-d5ce999b8f55
+# ╠═5d85e0f6-218a-4abb-94d3-08bcaf343a1b
+# ╠═40cb386f-c93a-4ff0-9677-6452fcbdcac7
+# ╠═559b2d7c-3184-442f-80be-6063fe08b931
+# ╠═04abc26e-d827-4e7f-9cef-e787f41c1643
+# ╟─066b7c42-cb52-43e0-a9d1-0068717b75a8
+# ╠═55245d67-5f6c-4383-a442-d47ea4eb2b0b
+# ╠═c880716e-bfde-45ea-9202-0747ec796499
+# ╠═5d8ac4a5-7567-4c17-9d98-f9df6289d7bf
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

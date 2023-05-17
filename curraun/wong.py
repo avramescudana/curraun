@@ -624,6 +624,7 @@ def init_mom_toy(type_init, p):
 
 def fonll(p, pt):
     quark = p['QUARK']
+    # values taken from https://arxiv.org/pdf/1911.02480.pdf
     if quark=='charm':
         x0, x1, x2, x3 = 20.2837, 1.95061, 3.13695, 0.0751663
     elif quark=='beauty':
