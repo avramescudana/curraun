@@ -11,6 +11,8 @@ begin
 	using CairoMakie
 	using AlgebraOfGraphics
 	using ColorSchemes
+	using Statistics
+	using KernelDensity
 end
 
 # ╔═╡ 34772700-4de5-4379-9d09-fbd4d22b40c1
@@ -28,19 +30,19 @@ folder = "RAA_charm_fonll_Qs_2.0"
 # ╔═╡ f3bf8812-4061-402b-b333-cc7ded15d785
 begin
 	current_path = pwd()
-	if allevents == true
-		folder_path = current_path * "/results/" * folder * "/"
-		cd(folder_path)
-		events = readdir()
-		filenames = current_path * "/results/" * folder * "/" .* events
-		cd(current_path)
-	else
+	# if allevents == true
+	# 	folder_path = current_path * "/results/" * folder * "/"
+	# 	cd(folder_path)
+	# 	events = readdir()
+	# 	filenames = current_path * "/results/" * folder * "/" .* events
+	# 	cd(current_path)
+	# else
 		filename = current_path * "/results/" * folder * "/event_1.pickle"
-	end
+	# end
 end
 
 # ╔═╡ 7b6150cb-575a-4502-b646-2c1673b42398
-τₛ = [0.01, 0.1, 1.0];
+τₛ = [0, 0.1, 0.5, 1.0];
 
 # ╔═╡ ce6b28aa-78ba-4994-a03c-d99bed2d9e06
 function findminindex(value, array)
@@ -69,49 +71,226 @@ begin
 		df = DataFrame()
 		for τₛᵢ in τₛ
 			# dfᵢ, pT_fonll = dfslice(output, τₛᵢ)
-			dfᵢ = dfslice(output, τₛᵢ)
+			if τₛᵢ==0
+				pT_fonll = Pickle.npyload(current_path * "/results/" * folder * "/event_1.pickle")["pTs_fonll"]
+				dfᵢ = DataFrame(pTᵢ = pT_fonll)
+				dfᵢ[!,"τₛ"] .= string(τₛᵢ);
+			else
+				dfᵢ = dfslice(output, τₛᵢ)
+			end
 			append!(df,dfᵢ)
 		end
 		# return df, pT_fonll
 		return df
 	end
 	
-	if allevents==true
-			df = DataFrame()
-			for filename in filenames
-				dfᵢ = dfevent(filename)
-				append!(df,dfᵢ)
-			end
-	else
+	# if allevents==true
+
+	# 		# folder_path = current_path * "/results/" * folder * "/"
+	# 		# cd(folder_path)
+	# 		# events = readdir()
+	# 		# filenames = current_path * "/results/" * folder * "/" .* events
+	# 		# cd(current_path)
+		
+	# 		df = DataFrame()
+	# 		for filename in filenames
+	# 			dfᵢ = dfevent(filename)
+	# 			append!(df,dfᵢ)
+	# 		end
+	# else
 		# df, pT_fonll = dfevent(filename)
 		df = dfevent(filename)
-	end
+	# end
+		
+	# df_fonll = DataFrame(pT = pT_fonll)
+end
 
-	pT_fonll = Pickle.npyload(current_path * "/results/" * folder * "/event_1.pickle")["pTs_fonll"]
+# ╔═╡ 374001c2-e149-4b3e-b00b-8a994532ba9a
+begin
+	# n_points = 40
+	n_events = 80
+end
+
+# ╔═╡ d27be157-7c65-4f43-86d0-d078d95acab1
+begin
+	# average over multiple Glasma events
+	folder_path = current_path * "/results/" * folder * "/"
+	cd(folder_path)
+	events = readdir()
+	filenames = current_path * "/results/" * folder * "/" .* events
+	cd(current_path)
+	
+	dNddpₜ_dens_ebe = [Vector{Vector{Float64}}() for i=1:length(filenames[1:n_events])]
+	for (fᵢ, filename) in enumerate(filenames[1:n_events])
+		# print(fᵢ)
+		dfᵢ = dfevent(filename)
+		dNdpₜᵢ = data(dfᵢ) * mapping(:pTᵢ, color=:τₛ) * AlgebraOfGraphics.density()
+		# dNdpₜᵢ = data(dfᵢ) * mapping(:pTᵢ, color=:τₛ) * AlgebraOfGraphics.density(npoints=n_points)
+		
+		if fᵢ==1
+			global pₜ_dens = Array[AlgebraOfGraphics.process(dNdpₜᵢ).positional[1][1]][1]
+		end
+		# print(typeof(AlgebraOfGraphics.process(dNdpₜᵢ).positional[2]))
+		dNddpₜ_dens_ebe[fᵢ] = AlgebraOfGraphics.process(dNdpₜᵢ).positional[2]
+	end
+	dNddpₜ_dens = mean(dNddpₜ_dens_ebe)
+end
+
+# ╔═╡ 0091b413-7009-41ec-a6c4-6eafbc23beda
+begin
+	segmented_cmap = cgrad(:twilight, 14, categorical = true)
+	colors = [segmented_cmap[3], segmented_cmap[6], segmented_cmap[9], segmented_cmap[12]]
 end
 
 # ╔═╡ ebb84f23-7f61-43d7-82fd-58cd5903b403
+# begin
+# 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
+# 	axis_dNdpₜ = (xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"1/N\,\mathrm{d}N/\mathrm{d}p_T",
+# 		xlabelsize = 20, ylabelsize = 20, xticklabelsize = 14, yticklabelsize=14,
+# 		# xticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
+# 		limits = (0, 10, 0, nothing), 
+# 		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+# 	)
+	
+# 	# dNdpₜ = data(df) * mapping(:pTᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density(npoints=n_points) 
+# 	dNdpₜ = data(df) * mapping(:pTᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density() 
+
+# 	fig_dNdpₜ = draw(dNdpₜ; axis = axis_dNdpₜ, legend=(;position=:right, linewidth=1.5,), palettes=(; color=colors), figure = (resolution=(400, 400),))
+		
+# 	pₜ_dens = Array[AlgebraOfGraphics.process(dNdpₜ).positional[1][1]][1]
+# 	# dNddpₜ_dens = AlgebraOfGraphics.process(dNdpₜ).positional[2]
+
+# 	lines(fig_dNdpₜ.figure[2, 1], pₜ_dens, dNddpₜ_dens[1]./dNddpₜ_dens[1], color=colors[1])
+# 	for i in 2:4
+# 		ratio = dNddpₜ_dens[i]./dNddpₜ_dens[1]
+# 		lines!(fig_dNdpₜ.figure[2, 1], pₜ_dens, ratio, color=colors[i])
+# 	end
+	
+# 	# rowsize!(fig_dNdpₜ.figure.layout, 1, Relative(3/5))
+# 	# rowsize!(fig_dNdpₜ.figure.layout, 2, Relative(2/5))
+
+# 	# if saveplots
+# 	# 	save("plots/dNdphi_tau_dep.png", fig_dNdΔₜ, px_per_unit = 5)
+# 	# end
+	
+# 	fig_dNdpₜ
+# end
+
+# ╔═╡ 73a92e48-49c8-4c6d-8b74-0f2b2936b265
+begin
+	function string_as_varname(s::AbstractString,v::Any)
+	    s=Symbol(s)
+	    return @eval (($s) = ($v))
+	end
+	
+	# function eval_string(s::AbstractString)
+	#     s=Symbol(s)
+	#     return @eval ($s)
+	# end
+end
+
+# ╔═╡ 5e710d84-65aa-4271-b85f-ebb9d050af82
 begin
 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
-	axis_dNdpₜ = (width = 300, height = 300, xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"1/N_\mathrm{pairs}\,\mathrm{d}N/\mathrm{d}p_T",
-		xlabelsize = 20, ylabelsize = 20, xticklabelsize = 14, yticklabelsize=14, 
-		# xticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
-		# limits = (0, 2π, 0, nothing), 
-		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
-	)
-	dNdpₜ = data(df) * mapping(:pTᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density() 
-	# * visual(Heatmap, colormap = reverse(cgrad(:beach)))
+	fig = Figure(resolution = (320, 420), font = "CMU Serif")
+	ylabels = [L"\mathrm{d}N/\mathrm{d}p_T", L"R_{AA}"]
+	ax = [Axis(fig[i,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=5, ytickalign=1, yticksize=5) for i in 1:2]
 
-	segmented_cmap = cgrad(:beach, 16, categorical = true)
-	colors = [segmented_cmap[12], segmented_cmap[9], segmented_cmap[4]]
-	fig_dNdpₜ = draw(dNdpₜ; axis = axis_dNdpₜ, legend=(;position=:right, linewidth=1.5,), 
-		palettes=(; color=colors)
-	)
-	# if saveplots
-	# 	save("plots/dNdphi_tau_dep.png", fig_dNdΔₜ, px_per_unit = 5)
-	# end
-	fig_dNdpₜ
+	for (i,τᵢ) in enumerate(string.(τₛ))
+		lines!(ax[1], pₜ_dens, dNddpₜ_dens[i], color=colors[i])
+		band!(ax[1], pₜ_dens, zeros(length(dNddpₜ_dens[i])), dNddpₜ_dens[i], color=(colors[i], 0.1))
+
+		lines!(ax[2], pₜ_dens, dNddpₜ_dens[i]./dNddpₜ_dens[1], color=colors[i])
+
+		string_as_varname("elem_"*string(i), [PolyElement(color = (colors[i], 0.1),strokewidth = 0), LineElement(color = colors[i])])
+	end
+
+	linkxaxes!(ax[1], ax[2])
+	hidexdecorations!(ax[1], ticks = false, ticklabels = false)
+	for i in 1:2
+		xlims!(ax[i], 0, 15)
+	end
+	ylims!(ax[1], 0, 0.3)
+	ylims!(ax[2], 0.3, 1.7)
+
+	τₛ_label = [L"0.0", L"0.1", L"0.5", L"1.0"]
+
+	axislegend(ax[1], [elem_1, elem_2, elem_3, elem_4], τₛ_label, L"\Delta\tau\,\mathrm{[fm}/c\mathrm{]}", labelsize=14, titlesize=16, position = :rt, orientation =:vertical, bgcolor = (:white, 0.7), framecolor=(:grey80, 0))
+
+	save("plots/dNdpT_RAA_tau_dep.png", fig, px_per_unit = 5)
+
+	fig
+	
 end
+
+# ╔═╡ 5fe0dca5-1510-46af-ba24-df671bffa6a4
+# begin
+
+# 	folder_path = current_path * "/results/" * folder * "/"
+# 	cd(folder_path)
+# 	events = readdir()
+# 	filenames = current_path * "/results/" * folder * "/" .* events
+# 	cd(current_path)
+
+# 	densᵢ_all, pTᵢ_all = Dict(), Dict()
+# 	for (i,τᵢ) in enumerate(string.(τₛ))
+# 		densᵢ_all[τᵢ], pTᵢ_all[τᵢ] = [Vector{Float64}() for i=1:length(filenames[1:n_events])], [Vector{Float64}() for i=1:length(filenames[1:n_events])]
+# 	end
+	
+
+# 	for (fᵢ, filename) in enumerate(filenames[1:n_events])
+# 		for (i,τᵢ) in enumerate(string.(τₛ))
+# 			df = dfevent(filename)
+# 			pT_dfᵢ = convert(Vector{Float64}, df[df.τₛ.==τᵢ, :].pTᵢ)
+# 			kdeᵢ = kde(pT_dfᵢ)
+# 			densᵢ_all[τᵢ][fᵢ] = kdeᵢ.density
+# 			pTᵢ_all[τᵢ][fᵢ] = convert(Vector{Float64}, kdeᵢ.x)
+# 		end
+# 	end
+
+# end
+
+# ╔═╡ 0a954a67-f183-4562-af16-99bebdad81d3
+# begin
+# 	densᵢ, pTᵢ = Dict(), Dict()
+# 	for (i,τᵢ) in enumerate(string.(τₛ))
+# 		densᵢ[τᵢ], pTᵢ[τᵢ] = mean(densᵢ_all[τᵢ]), mean(pTᵢ_all[τᵢ])
+# 	end
+# end
+
+# ╔═╡ fea5e25a-542b-44a4-94ac-c021e6a24d64
+# begin
+# 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
+# 	fig = Figure(resolution = (400, 500), font = "CMU Serif")
+# 	ylabels = [L"\mathrm{d}N/\mathrm{d}p_T", L"R_{AA}"]
+# 	ax = [Axis(fig[i,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=5, ytickalign=1, yticksize=5) for i in 1:2]
+
+# 	# densᵢ_all, pTᵢ_all = Dict(), Dict()
+# 	# for (i,τᵢ) in enumerate(string.(τₛ))
+# 	# 	densᵢ_all[τᵢ], pTᵢ_all[τᵢ] = Any[], Any[]
+# 	# end
+	
+
+# 	# for (fᵢ, filename) in enumerate(filenames[1:n_events])
+# 		for (i,τᵢ) in enumerate(string.(τₛ))
+	
+# 			# pT_dfᵢ = convert(Vector{Float64}, df[df.τₛ.==τᵢ, :].pTᵢ)
+# 			# kdeᵢ = kde(pT_dfᵢ)
+# 			# densᵢ_all[τᵢ].append(kdeᵢ.density)
+# 			# pTᵢ_all[τᵢ].append(convert(Vector{Float64}, kdeᵢ.x))
+# 			# lines!(ax[1], pTᵢ[τᵢ], densᵢ[τᵢ], color=colors[i])
+# 			# band!(ax[1], pTᵢ[τᵢ], zeros(length(densᵢ[τᵢ])), densᵢ[τᵢ], color=(colors[i], 0.2))
+	
+# 			lines!(ax[2], pTᵢ[τᵢ], densᵢ[τᵢ]./densᵢ[string(τₛ[1])], color=colors[i])
+# 		end
+# 	# end
+
+	
+		
+
+# 	fig
+	
+# end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -120,13 +299,16 @@ AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+KernelDensity = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
 AlgebraOfGraphics = "~0.6.14"
 CairoMakie = "~0.10.5"
 ColorSchemes = "~3.21.0"
 DataFrames = "~1.5.0"
+KernelDensity = "~0.6.7"
 Pickle = "~0.3.2"
 """
 
@@ -136,7 +318,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "807f8bd697f50c3e501396e5daf72f496b3d65fe"
+project_hash = "205c05e3a60dafefe570d45c3641c209c142695f"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -1526,6 +1708,14 @@ version = "3.5.0+0"
 # ╠═ce6b28aa-78ba-4994-a03c-d99bed2d9e06
 # ╠═d0ab4b56-2b23-43e1-8214-c828ddf0a62b
 # ╠═3ac3ee93-f70e-4f05-9cb9-aba2825faa18
+# ╠═374001c2-e149-4b3e-b00b-8a994532ba9a
+# ╠═d27be157-7c65-4f43-86d0-d078d95acab1
+# ╠═0091b413-7009-41ec-a6c4-6eafbc23beda
 # ╠═ebb84f23-7f61-43d7-82fd-58cd5903b403
+# ╠═5e710d84-65aa-4271-b85f-ebb9d050af82
+# ╠═73a92e48-49c8-4c6d-8b74-0f2b2936b265
+# ╠═5fe0dca5-1510-46af-ba24-df671bffa6a4
+# ╠═0a954a67-f183-4562-af16-99bebdad81d3
+# ╠═fea5e25a-542b-44a4-94ac-c021e6a24d64
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

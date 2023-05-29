@@ -49,35 +49,8 @@ function dfslice(output, τₛ)
 	τᵢ = findminindex(τₛ, τ)
 	Δη, Δϕ, pₜ = output["deta"], output["dphi"], output["pTs"]
 	df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = Δϕ[τᵢ,:], pₜᵢ = pₜ[τᵢ,:, 1], pbarₜᵢ = pₜ[τᵢ,:, 2])
-	# df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = rad2deg.(Δϕ[τᵢ,:]))
-	# df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = Δϕ[τᵢ,:])
-	
-	# Make Δηᵢ, Δϕᵢ∈[0,1], could be useful for kde normalization
-	# df.Δηᵢ = df.Δηᵢ./maximum(df.Δηᵢ)
-	# df.Δϕᵢ = df.Δϕᵢ./maximum(df.Δϕᵢ)
-	
-	# df[!,"τₛ"] .= string(τₛ);
 	return df
 end
-
-# ╔═╡ df04743a-b780-47d7-bdcb-3cf4c582e15f
-# ╠═╡ disabled = true
-#=╠═╡
-function dfevent(filename)
-	output = Pickle.npyload(filename)
-	# parameters = output["parameters"]
-	
-	df = DataFrame()
-	for τₛᵢ in τₛ
-		dfᵢ = dfslice(output, τₛᵢ)
-		append!(df,dfᵢ)
-	end
-	return df
-end
-  ╠═╡ =#
-
-# ╔═╡ 9cf1363a-84e1-48ed-9149-08d1af865e2a
-τs = Array[range(0, 1.5, 100)][1]
 
 # ╔═╡ 5e5f3693-563d-472c-aa47-7749e10ee6d9
 output = Pickle.npyload(filename)
@@ -124,7 +97,11 @@ begin
 	ax_σ = Axis(fig_σ[1, 1], xlabel=L"\Delta \tau\,\mathrm{[fm/}c\,\mathrm{]}", ylabel=L"\sigma_{\Delta\eta,\,\Delta\phi}", xlabelsize = 18, ylabelsize = 20, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1
 	)
 
-	segmented_cmap = cgrad(:dense, 14, categorical = true)
+	if q2==4
+		segmented_cmap = cgrad(:dense, 14, categorical = true)
+	elseif q2==1.33
+		segmented_cmap = cgrad(:deep, 14, categorical = true)
+	end
 	custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7], segmented_cmap[9], segmented_cmap[11]]
 
 	q₃_labels = [L"%$q3ᵢ" for q3ᵢ in q3s]
@@ -137,18 +114,27 @@ begin
 	end
 	
 	xlims!(0, 1.5)
-	ylims!(0, 1.6)
 	ax_σ.xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
-	ax_σ.yticks = ([0.5, 1, 1.5], ["0.5", "1", "1.5"])
+
+	ylims!(0, 1.6)
+		ax_σ.yticks = ([0.5, 1, 1.5], ["0.5", "1", "1.5"])
+
+	if q2==4
+		legend_pos = :rb
+		text!(ax_σ, L"q_2=4", position = (1.25, 1.4), fontsize=18)
+		text!(ax_σ, L"\Delta\phi", position = (0.5, 0.92), fontsize=18)
+		text!(ax_σ, L"\Delta\eta", position = (0.5, 1.36), fontsize=18)
+		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.08, 0.08), fontsize=18)
+	elseif q2==1.33
+		legend_pos = :lt
+		text!(ax_σ, L"q_2=4/3", position = (1.2, 1.4), fontsize=18)
+		text!(ax_σ, L"\Delta\phi", position = (0.5, 0.42), fontsize=18)
+		text!(ax_σ, L"\Delta\eta", position = (0.5, 0.88), fontsize=18)
+		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.82, 0.08), fontsize=18)
+	end
 	
-
-	text!(ax_σ, L"\Delta\phi", position = (0.5, 0.92), fontsize=18)
-	text!(ax_σ, L"\Delta\eta", position = (0.5, 1.36), fontsize=18)
-	text!(ax_σ, L"q_2=4", position = (1.25, 1.4), fontsize=18)
-	text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.08, 0.08), fontsize=18)
-
 	# Legend(fig_σ[1,2], ax_σ, labelsize=14)
-	axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = :rb, orientation = :vertical)
+	axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = legend_pos, orientation = :vertical)
 	
 	if saveplots
 		save("notebooks/plots/sigma_dphideta_tau_charm_pT_2_q2_"*string(q2)*"_q3_dep.png", fig_σ, px_per_unit = 5)
@@ -1520,7 +1506,6 @@ version = "3.5.0+0"
 # ╠═87b6f649-f960-420d-827d-2b3a8fd38cdc
 # ╠═3789a5dc-5cf4-4bfb-ab8c-14d980c1940b
 # ╠═df04743a-b780-47d7-bdcb-3cf4c582e15f
-# ╠═9cf1363a-84e1-48ed-9149-08d1af865e2a
 # ╠═5e5f3693-563d-472c-aa47-7749e10ee6d9
 # ╠═14c9c37a-d191-4872-a153-f1b1550fde4f
 # ╠═3a9aa3ec-f12c-4907-bea4-1efb3b5b933d
