@@ -681,6 +681,10 @@ def init_charge(representation):
             q0 = [0., 0., 0., 0., -1.69469, 0., 0., -1.06209]
         elif representation=='adjoint':
             q0 = [np.sqrt(24), 0., 0., 0., 0., 0., 0., 0.]
+        elif representation=='quantum fundamental':
+            # this choice corresponds to q2=4/3=C2 from group theory but q3=0
+            # since what quantities we are interested in have a very weak dependence on q3, this works well
+            q0 = [np.sqrt(4/3), 0., 0., 0., 0., 0., 0., 0.]
         Q0 = np.einsum('ijk,i', T, q0)
 
         """

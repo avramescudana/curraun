@@ -36,6 +36,18 @@ md"""
 Charm and beauty on the same plot, longer proper times.
 """
 
+# ╔═╡ 55245d67-5f6c-4383-a442-d47ea4eb2b0b
+begin
+	current_path = pwd()
+	file = current_path*"/results/mom_broad_Qs_dep_charm_beauty.pickle"
+	data = Pickle.npyload(file)
+	mom_broad_wong = data["mom_broad"]
+	tau_wong = data["tau"]
+	
+	quarks = data["quarks"]
+	Qss = string.(data["Qs"])
+end
+
 # ╔═╡ c880716e-bfde-45ea-9202-0747ec796499
 begin
 	lens = 20
@@ -48,122 +60,6 @@ begin
 			ind_sel[tag] = floor.(Int, LinRange(1,length(δτ),lens))
 		end
 	end
-end
-
-# ╔═╡ 5d85e0f6-218a-4abb-94d3-08bcaf343a1b
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-	current_path = pwd()
-	file = current_path*"/results/Qs_mom_broad_wong_"*quark*".pickle"
-	data = Pickle.npyload(file)
-	mom_broad_wong = data["mom_broad"]
-	tau_wong = data["tau"]
-	
-	quarks = data["quarks"]
-	Qss = string.(data["Qs"])
-end
-  ╠═╡ =#
-
-# ╔═╡ 04abc26e-d827-4e7f-9cef-e787f41c1643
-# ╠═╡ disabled = true
-#=╠═╡
-begin
-	segmented_cmap = cgrad(:lapaz, 16, categorical = true)
-	colors = [segmented_cmap[14], segmented_cmap[11], segmented_cmap[8], segmented_cmap[5], segmented_cmap[2]]
-	linestyles = [:dash, :dashdot, :dot]
-	
-	fig = Figure(resolution = (1050, 300), font = "CMU Serif")
-	if rescaled
-		ylabels = [L"\langle\delta p_L^2\rangle/Q_s^2", L"\langle\delta p_T^2\,\rangle/Q_s^2", L"\langle\delta p^2_L\,\rangle/\langle\delta p^2_T\,\rangle"]
-		xlabel = L"Q_s\,\delta\tau"
-	else
-		ylabels = [L"\langle\delta p_L^2\,\rangle\,\mathrm{[GeV^2]}", L"\langle\delta p_T^2\,\rangle\,\mathrm{[GeV^2]}", L"\langle\delta p^2_L\,\rangle/\langle\delta p^2_T\,\rangle"]
-		xlabel = L"\delta\tau\,\mathrm{[fm/c]}"
-	end
-	
-	axes = [Axis(fig[1, i], xlabel=xlabel, ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xgridvisible = false, ygridvisible = false) for i in 1:3]
-
-	iq = 1
-	for iQs in 1:length(Qss)
-		tag_wong = quarks[iq] * "_Qs_" * Qss[iQs]
-		if rescaled
-			Qs_value = parse(Float64, Qss[iQs])
-			δτ_wong = Float64.(tau_wong[tag_wong])*Qs_value/hbarc
-
-			for i in 1:3
-				xlims!(axes[i], 0, 10)
-				axes[i].xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
-			end
-
-			ylims!(axes[1], -0.1, 2.5)
-			ylims!(axes[2], -0.1, 1.3)
-			ylims!(axes[3], 0.8, 3.2)
-			axes[2].yticks = ([0, 0.5, 1], ["0", "0.5", "1"])
-			axes[3].yticks = ([1, 2, 3], ["1", "2", "3"])
-		else
-			δτ_wong = Float64.(tau_wong[tag_wong])
-
-			for i in 1:3
-				xlims!(axes[i], 0, 2.5)
-				axes[i].xticks = ([0, 0.5, 1, 1.5, 2, 2.5], ["0", "0.5", "1", "1.5", "2", "2.5"])
-				
-			end
-
-			ylims!(axes[1], -1, 21)
-			ylims!(axes[2], -1, 12)
-			ylims!(axes[3], 0.8, 3.2)
-			axes[1].yticks = ([0, 10, 20], ["0", "10", "20"])
-			axes[3].yticks = ([1, 2, 3], ["1", "2", "3"])
-		end
-	        
-		if rescaled
-			mom_broad_L_wong = mom_broad_wong[tag_wong][:, 3]/Qs_value^2
-			mom_broad_T_wong = (mom_broad_wong[tag_wong][:, 1] + mom_broad_wong[tag_wong][:, 2])/Qs_value^2
-		else
-			mom_broad_L_wong = mom_broad_wong[tag_wong][:, 3]
-			mom_broad_T_wong = mom_broad_wong[tag_wong][:, 1] + mom_broad_wong[tag_wong][:, 2]
-		end
-		
-		lines!(axes[1], δτ_wong, mom_broad_L_wong, linewidth = 1.5, color=colors[iQs])
-		lines!(axes[2], δτ_wong, mom_broad_T_wong, linewidth = 1.5, color=colors[iQs])
-		ratio = mom_broad_L_wong./mom_broad_T_wong
-		string_as_varname("wong_Qs_"*string(iQs), lines!(axes[3], δτ_wong, ratio, linewidth = 1.5, color=colors[iQs]))
-	end
-	
-	
-	# lines!(axes[3], δτ_wong, ones(length(δτ_wong)), linewidth = 1.8, color=(:grey60, 0.4))
-	# lines!(axes[3], δτ_wong, ones(length(δτ_wong)), linewidth = 1.8, color=:grey60, linestyle=:dash)
-	
-	cbar = Colorbar(fig[1, 4], limits = (1, 6), colormap =  cgrad(colors, 5, categorical = true), size = 25, labelsize = 22, width = 10, flipaxis = true,
-	ticksize=3, tickalign = 0, ticklabelsize = 14, height = Relative(1), label=L"Q_s\,\mathrm{[GeV]}")
-	cbar.ticks = ([1.5, 2.5, 3.5, 4.5, 5.5],  Qss)
-
-	if rescaled
-		if saveplots
-			save("plots/mom_broad_Qstau_beauty.png", fig, px_per_unit = 5.0) 
-		end
-	else
-		if saveplots
-			save("plots/mom_broad_Qs_beauty.png", fig, px_per_unit = 5.0) 
-		end
-	end
-	
-
-	fig
-end
-  ╠═╡ =#
-
-# ╔═╡ 55245d67-5f6c-4383-a442-d47ea4eb2b0b
-begin
-	current_path = pwd()
-	file = current_path*"/results/Qs_mom_broad_wong_charm_beauty.pickle"
-	data = Pickle.npyload(file)
-	mom_broad_wong = data["mom_broad"]
-	tau_wong = data["tau"]
-	
-	quarks = data["quarks"]
-	Qss = string.(data["Qs"])
 end
 
 # ╔═╡ 5d8ac4a5-7567-4c17-9d98-f9df6289d7bf

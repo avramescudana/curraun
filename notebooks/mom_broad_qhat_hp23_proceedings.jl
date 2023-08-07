@@ -4,392 +4,310 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 10b03640-f3c7-11ed-3945-29ebe6424909
+# ╔═╡ d63cbd90-0919-11ee-0a0f-79cd06d42808
 begin
 	using Pickle
-	using DataFrames
 	using CairoMakie
-	using AlgebraOfGraphics
 	using ColorSchemes
-	using Statistics
-	using KernelDensity
+	using ForwardDiff
 end
 
-# ╔═╡ 34772700-4de5-4379-9d09-fbd4d22b40c1
-# save figures
-saveplots = false
+# ╔═╡ 3dd596d2-f226-4f0e-b523-8460caf217a7
+function string_as_varname(s::AbstractString,v::Any)
+	s=Symbol(s)
+	return @eval (($s) = ($v))
+end
 
-# ╔═╡ 9f9afac9-b181-434f-a661-49c0264736e7
-# go through all events in a given folder
-allevents = true
-
-# ╔═╡ 7b18813a-35c8-4909-a94e-f941c9d1a28e
-# folder with events, labeled by initialization type, pT and quark
-folder = "RAA_charm_fonll_Qs_1.4"
-
-# ╔═╡ f3bf8812-4061-402b-b333-cc7ded15d785
+# ╔═╡ aff5cd65-114d-4631-9670-e3b40759d30c
 begin
-	current_path = pwd()
-	if allevents == true
-		folder_path = current_path * "/results/" * folder * "/"
-		cd(folder_path)
-		events = readdir()
-		filenames = current_path * "/results/" * folder * "/" .* events
-		cd(current_path)
-	else
-		filename = current_path * "/results/" * folder * "/event_1.pickle"
-	end
-end
-
-# ╔═╡ 7b6150cb-575a-4502-b646-2c1673b42398
-τₛ = [0, 0.1, 0.5, 1.0];
-
-# ╔═╡ ce6b28aa-78ba-4994-a03c-d99bed2d9e06
-function findminindex(value, array)
-	return findmin(element->abs(element-value),array)[2]
-end 
-
-# ╔═╡ d0ab4b56-2b23-43e1-8214-c828ddf0a62b
-# Construct data frame at a time slice
-function dfslice(output, τₛ)	
-	τ = output["tau"]
-	τᵢ = findminindex(τₛ, τ)
-	pT = output["pTs"]
-	# pT_fonll = output["pTs_fonll"]
-	df = DataFrame(pTᵢ = pT[τᵢ,:])
+	Qs = 2.0
+	results = ["wong_jets_px_dep", 
+		# "wong_jets_mass_dep", 
+		"qhat"]
 	
-	df[!,"τₛ"] .= string(τₛ);
-	return df
-end
-
-# ╔═╡ 2ed2681b-a03a-43bb-a169-1e34b25b1f33
-begin
-	# n_points = 40
-	n_events = 50
-end
-
-# ╔═╡ 796b9ebe-9666-4d31-b9ac-acddeca08879
-begin
-	segmented_cmap = cgrad(:twilight, 14, categorical = true)
-	colors = [segmented_cmap[3], segmented_cmap[6], segmented_cmap[9], segmented_cmap[12]]
-end
-
-# ╔═╡ 1de717b2-a153-45fe-ac8a-62cc847f55b9
-begin
-	function string_as_varname(s::AbstractString,v::Any)
-	    s=Symbol(s)
-	    return @eval (($s) = ($v))
+	for r in results
+		file = string_as_varname("file_" * r, "results/mom_broad_" * r * ".pickle")
+	    data = string_as_varname("data_" * r, Pickle.npyload(file))
+	    string_as_varname("mom_broad_" * r,  data["mom_broad"])
+	    string_as_varname("tau_" * r,  data["tau"])
 	end
 	
-	# function eval_string(s::AbstractString)
-	#     s=Symbol(s)
-	#     return @eval ($s)
-	# end
+	pxs, mass = string.(data_wong_jets_px_dep["pxs"]), string.(data_wong_jets_px_dep["mass"])
+	# masses, px = string.(data_wong_jets_mass_dep["masses"]), string.(data_wong_jets_mass_dep["px"])
 end
 
-# ╔═╡ 3ac3ee93-f70e-4f05-9cb9-aba2825faa18
+# ╔═╡ 1dcd2d79-a522-4b06-b13b-012c6293856f
 begin
-	function dfevent(filename)
-		output = Pickle.npyload(filename)
-		# parameters = output["parameters"]
+	segmented_cmap = cgrad(:watermelon, 24, categorical = true)
+	colors = [segmented_cmap[5], segmented_cmap[9], segmented_cmap[21], segmented_cmap[23]]
+	linestyles = [:dash, :dashdot, :dot]
+	width_line=2
+
+	set_theme!(fonts = (; regular ="CMU Serif"))
+	fig = Figure(resolution = (750, 400), font = "CMU Serif") 
+
+	ylabels = [L"\langle\delta p^2\,\rangle\,\mathrm{[GeV^2]}", L"\langle\delta p^2_z\,\rangle\,/\,\langle\delta p^2_y\,\rangle"]
+	axes_left = [Axis(fig[i, 1], 
+	        xlabel=L"\tau\,\mathrm{[fm/}c\mathrm{]}", 
+			ylabel=ylabels[i],
+	        xlabelsize = 19, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14,
+	        xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4) for i in 1:2]
+	ax_right = Axis(fig[1:2, 2], 
+	        xlabel=L"\tau\,\mathrm{[fm/}c\mathrm{]}", 
+			ylabel=L"\hat{q}\,\,\mathrm{[GeV^2/fm]}",
+	        xlabelsize = 19, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14,
+	        xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4)
+
+	# zoom-in
+	ax_right_zoomin = Axis(fig, bbox = BBox(470, 660, 180, 370), 
+         xticklabelsize=13, yticklabelsize=13,
+	        xtickalign = 1, xticksize=3, ytickalign=1, yticksize=3, xlabelpadding = -4, xgridvisible = false, ygridvisible = false,
+	        ytickcolor = :grey, xtickcolor = :grey, yticklabelcolor = :grey, xticklabelcolor = :grey, ylabelcolor = :grey, xlabelcolor = :grey,
+	        bottomspinecolor = :grey, topspinecolor = :grey, leftspinecolor = :grey, rightspinecolor = :grey) 
+	translate!(ax_right_zoomin.elements[:background], 0, 0, 9)
+	translate!(ax_right_zoomin.scene, 0, 0, 10)
+	poly!(ax_right, Rect(0, 0, 0.3, 17.3), color = :grey95, strokecolor = :grey70, strokewidth = 0.8)
+	lines!(ax_right, [0, 0.75], [17.3, 22.87], linewidth = 0.8, color=:grey70)
+	lines!(ax_right, [0.3, 1.922], [0, 7.05], linewidth = 0.8, color=:grey70)
+
+	linkxaxes!(axes_left[1], axes_left[2])
+	hidexdecorations!(axes_left[1], grid = false)
+
+	for i in 1:2
+		xlims!(axes_left[i], 0, 2)
+		axes_left[i].xticks = ([0, 0.5, 1, 1.5, 2], ["0", "0.5", "1", "1.5", "2"])
+	end 
+	xlims!(ax_right, 0, 2)
+	ax_right.xticks = ([0, 0.5, 1, 1.5, 2], ["0", "0.5", "1", "1.5", "2"])
+
+	ylims!(axes_left[1], 0, 4)
+	ylims!(axes_left[2], 0.5, 3.5)
+	axes_left[2].yticks = ([1, 2, 3], ["1", "2", "3"])
+	ylims!(ax_right, -3, 24)
+	ax_right.yticks = ([0, 5, 10, 15, 20], string.([0, 5, 10, 15, 20]))
+
+	xlims!(ax_right_zoomin, 0, 0.3)
+	ax_right_zoomin.xticks = ([0, 0.1, 0.2, 0.3], ["0", "0.1", "0.2", "0.3"])
+	ylims!(ax_right_zoomin, 0, 18)
+	ax_right_zoomin.yticks = ([5, 10, 15], ["5", "10", "15"])
+
+	text!(axes_left[1], L"\langle\delta p_z^2\,\rangle", position = (1.66,2.35), fontsize=18)
+	text!(axes_left[1], L"\langle\delta p_y^2\,\rangle", position = (1.66,0.6), fontsize=18)
+
+	text!(ax_right_zoomin, L"\hat{q}_z", position = (0.26, 4.8), fontsize=19)
+	text!(ax_right_zoomin, L"\hat{q}_y", position = (0.26, 1.5), fontsize=19)
+
+	text!(ax_right, L"\hat{q}_z", position = (1.87, -2.2), fontsize=16)
+	text!(ax_right, L"\hat{q}_y", position = (1.87, 0.6), fontsize=16)
+
+	text!(ax_right, L"Q_s=2\,\mathrm{GeV}", position = (0.02, -2.5), fontsize=16)
+	text!(ax_right_zoomin, L"\mathrm{jet\,quarks}", position = (0.18, 15.5), fontsize=16)
+	
+	# dimenstion of fundamental representation for SU(3)
+	DR = 3
+	
+	# factor
+	factor = 1
+	factor_qhat = 1
+
+	transp = 1
+
+	δτ_qhat = Float64.(tau_qhat)
+
+	# momentum broadening
+	mom_broad_L_qhat = mom_broad_qhat[:, 3]/DR
+	lines!(axes_left[1], δτ_qhat, factor*mom_broad_L_qhat, linewidth = width_line, color=:grey60, linestyle=:dash)
+	lines!(axes_left[1], δτ_qhat, factor*mom_broad_L_qhat, linewidth = width_line, color=(:grey60, 0.6))
+
+	mom_broad_T_qhat = mom_broad_qhat[:, 2] /DR
+	lines!(axes_left[1], δτ_qhat, mom_broad_T_qhat, linewidth = width_line, color=:grey60, linestyle=:dash)
+	lines!(axes_left[1], δτ_qhat, mom_broad_T_qhat, linewidth = width_line, color=(:grey60, 0.6))
+
+	# qhat
+	qhat_L_qhat = diff(mom_broad_L_qhat)./ diff(δτ_qhat)
+	insert!(qhat_L_qhat, 1, 0)
+	
+	lines!(ax_right, δτ_qhat, factor_qhat*qhat_L_qhat, linewidth = 1.5, color=:grey60, linestyle=:dash)
+	lines!(ax_right, δτ_qhat, factor_qhat*qhat_L_qhat, linewidth = 1.5, color=(:grey60, 0.6))
+
+	qhat_T_qhat = diff(mom_broad_T_qhat)./ diff(δτ_qhat)
+	insert!(qhat_T_qhat, 1, 0)
+	
+	lines!(ax_right, δτ_qhat, qhat_T_qhat, linewidth = 1.5, color=:grey60, linestyle=:dash)
+	lines!(ax_right, δτ_qhat, qhat_T_qhat, linewidth = 1.5, color=(:grey60, 0.6))
+
+	# zoom-in #
+	zoomin_indices = findall(t->t<=0.3, δτ_qhat)
+	δτ_qhat_zoomin = δτ_qhat[zoomin_indices]
+	
+	mom_broad_L_qhat_zoomin = mom_broad_L_qhat[zoomin_indices]
+	mom_broad_T_qhat_zoomin = mom_broad_T_qhat[zoomin_indices]
+
+	qhat_L_qhat_zoomin = diff(mom_broad_L_qhat_zoomin)./ diff(δτ_qhat_zoomin)
+	insert!(qhat_L_qhat_zoomin, 1, 0)
+
+	lines!(ax_right_zoomin, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=:grey60, linestyle=:dash)
+	lines!(ax_right_zoomin, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
+
+	qhat_T_qhat_zoomin = diff(mom_broad_T_qhat_zoomin)./ diff(δτ_qhat_zoomin)
+	insert!(qhat_T_qhat_zoomin, 1, 0)
+	
+	lines!(ax_right_zoomin, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=:grey60, linestyle=:dash)
+	lines!(ax_right_zoomin, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
+
+
+	for ip in 1:length(pxs)
+        tag_wong_jets = "mass_" * mass * "_px_" * pxs[ip]
+        δτ_wong_jets = Float64.(tau_wong_jets_px_dep[tag_wong_jets])
+
+		mom_broad_L_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 3]/DR
+		lines!(axes_left[1], δτ_wong_jets, factor*mom_broad_L_wong_jets, linewidth = width_line, color=(colors[ip], transp))
+
+		mom_broad_T_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 2]/DR
+		lines!(axes_left[1], δτ_wong_jets, mom_broad_T_wong_jets, linewidth = width_line, color=(colors[ip], transp))
+
+		qhat_L_wong = diff(mom_broad_L_wong_jets)./ diff(δτ_wong_jets)
+		insert!(qhat_L_wong, 1, 0)
+		lines!(ax_right, δτ_wong_jets, factor_qhat*qhat_L_wong, linewidth = 1.5, color=(colors[ip], transp))
+
+		qhat_T_wong = diff(mom_broad_T_wong_jets)./ diff(δτ_wong_jets)
+		insert!(qhat_T_wong, 1, 0)
+		lines!(ax_right, δτ_wong_jets, qhat_T_wong, linewidth = 1.5, color=(colors[ip], transp))
 		
-		df = DataFrame()
-		for τₛᵢ in τₛ
-			# dfᵢ, pT_fonll = dfslice(output, τₛᵢ)
-			if τₛᵢ==0
-				pT_fonll = Pickle.npyload(current_path * "/results/" * folder * "/event_1.pickle")["pTs_fonll"]
-				dfᵢ = DataFrame(pTᵢ = pT_fonll)
-				dfᵢ[!,"τₛ"] .= string(τₛᵢ);
-			else
-				dfᵢ = dfslice(output, τₛᵢ)
-			end
-			append!(df,dfᵢ)
-		end
-		# return df, pT_fonll
-		return df
-	end
-	
-	if allevents==true
+		local ratio = mom_broad_L_wong_jets./mom_broad_T_wong_jets
+		string_as_varname("wong_px_"*string(ip), lines!(axes_left[2], δτ_wong_jets, ratio, linewidth = width_line, color=colors[ip]))
 
-			# folder_path = current_path * "/results/" * folder * "/"
-			# cd(folder_path)
-			# events = readdir()
-			# filenames = current_path * "/results/" * folder * "/" .* events
-			# cd(current_path)
+		# zoom-in #
+		local zoomin_indices = findall(t->t<=0.31, δτ_wong_jets)
+		δτ_wong_jets_zoomin = δτ_wong_jets[zoomin_indices]
+
+		mom_broad_L_wong_jets_zoomin = mom_broad_L_wong_jets[zoomin_indices]
+		mom_broad_T_wong_jets_zoomin = mom_broad_T_wong_jets[zoomin_indices]
+
+		qhat_L_wong_jets_zoomin = diff(mom_broad_L_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+		insert!(qhat_L_wong_jets_zoomin, 1, 0)
+		lines!(ax_right_zoomin, δτ_wong_jets_zoomin, factor_qhat*qhat_L_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
+
+		qhat_T_wong_jets_zoomin = diff(mom_broad_T_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+		insert!(qhat_T_wong_jets_zoomin, 1, 0)
+		lines!(ax_right_zoomin, δτ_wong_jets_zoomin, qhat_T_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
 		
-			df = DataFrame()
-			for filename in filenames[1:n_events]
-				dfᵢ = dfevent(filename)
-				append!(df,dfᵢ)
-			end
-	else
-		# df, pT_fonll = dfevent(filename)
-		df = dfevent(filename)
 	end
-		
-	# df_fonll = DataFrame(pT = pT_fonll)
-end
 
-# ╔═╡ 8ad7a71c-660e-43d4-ab3a-d7115153157a
-md"""
-##### Second version
-Store each event in a data frame, extract $R_{AA}$ and then average over multiple events
-
-The first version, to store multiple events in a big data frame and compute $R_{AA}$ from that, didn't really have enough statistics
-"""
-
-# ╔═╡ 9a090b37-89f9-43ac-9503-def9186034e1
-# begin
-# 	dNdpₜ = data(df) * mapping(:pTᵢ, color=:τₛ) * AlgebraOfGraphics.density()
-# 	pₜ_dens = Array[AlgebraOfGraphics.process(dNdpₜ).positional[1][1]][1]
-# 	dNddpₜ_dens = AlgebraOfGraphics.process(dNdpₜ).positional[2]
-# end
-
-# ╔═╡ 40f2010d-bea4-4b6d-9659-e450d684a39f
-begin
-	# doing the estimation of the KDE and averaging "by hand"
-	densᵢ_all, pTᵢ_all, RAAᵢ_all = Dict(), Dict(), Dict()
-	for (i,τᵢ) in enumerate(string.(τₛ))
-		densᵢ_all[τᵢ], pTᵢ_all[τᵢ], RAAᵢ_all[τᵢ] = [Vector{Float64}() for i=1:length(filenames[1:n_events])], [Vector{Float64}() for i=1:length(filenames[1:n_events])], [Vector{Float64}() for i=1:length(filenames[1:n_events])]
-	end
+	ratio = mom_broad_L_qhat./mom_broad_T_qhat
+	qhat_dash = lines!(axes_left[2], δτ_qhat, ratio, linewidth = width_line, color=:grey60, linestyle=:dash)
+	qhat = lines!(axes_left[2], δτ_qhat, ratio, linewidth = width_line, color=(:grey60, 0.6))
+	# kappa = lines!(axes_left[2], δτ_kappa, ratio, linewidth = width_line, color=(:grey60, transp))
 	
-	for (fᵢ, filename) in enumerate(filenames[1:n_events])
-		for (i,τᵢ) in enumerate(string.(τₛ))
-			df = dfevent(filename)
-			pT_dfᵢ = convert(Vector{Float64}, df[df.τₛ.==τᵢ, :].pTᵢ)
-			kdeᵢ = kde(pT_dfᵢ)
-			densᵢ_all[τᵢ][fᵢ] = kdeᵢ.density
-			pTᵢ_all[τᵢ][fᵢ] = convert(Vector{Float64}, kdeᵢ.x)
-			RAAᵢ_all[τᵢ][fᵢ] = densᵢ_all[τᵢ][fᵢ]./densᵢ_all[string(τₛ[1])][fᵢ]
-		end
-	end
+	cbar = Colorbar(fig[1:2, 3], limits = (1, 5), colormap =  cgrad(colors, 4, categorical = true), size = 25, labelsize = 20, flipaxis = true,
+	ticksize=3, tickalign = 0, ticklabelsize = 14,  label=L"p_x\,(\tau_\mathrm{form})/m", 
+	height = Relative(1), width = 10,
+	)
+	cbar_pxs = string.(floor.(Int,(parse.(Int64, pxs))./10))
+	cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  cbar_pxs)
+	
+	legend_qhat = [L"\mathrm{lightlike}"]
+	axislegend(axes_left[1], [[qhat, qhat_dash]], legend_qhat, L"\mathrm{quark}", labelsize=15, titlesize=15, position = (0, 1), orientation = :vertical, bgcolor = :transparent, framecolor=(:grey80, 0), titleposition=:left)
 
-	densᵢ, pTᵢ, RAAᵢ = Dict(), Dict(), Dict()
-	for (i,τᵢ) in enumerate(string.(τₛ))
-		densᵢ[τᵢ], pTᵢ[τᵢ], RAAᵢ[τᵢ] = mean(densᵢ_all[τᵢ]), mean(pTᵢ_all[τᵢ]), mean(RAAᵢ_all[τᵢ])
-	end
-end
+	legend_wong = [L"\mathrm{dynamic}"]
+	elem_wong = [LineElement(color = colors[4])]
+	axislegend(axes_left[1], elem_wong, legend_wong, labelsize=15, position = (1.07,1), orientation = :vertical, bgcolor = :transparent, framecolor=(:grey80, 0))
+	
+	rowsize!(fig.layout, 1, Relative(2/3))
+	rowsize!(fig.layout, 2, Relative(1/3))
 
-# ╔═╡ f3e5348c-b54a-451a-a657-390c8da5da0d
-begin
-	set_aog_theme!(fonts = (; regular = "CMU Serif"))
-	fig = Figure(resolution = (320, 420), font = "CMU Serif")
-	ylabels = [L"\mathrm{d}N/\mathrm{d}p_T", L"R_{AA}"]
-	ax = [Axis(fig[i,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=5, ytickalign=1, yticksize=5) for i in 1:2]
-
-	for (i,τᵢ) in enumerate(string.(τₛ))
-		lines!(ax[1], pTᵢ[τᵢ], densᵢ[τᵢ], color=colors[i])
-		band!(ax[1], pTᵢ[τᵢ], zeros(length(densᵢ[τᵢ])), densᵢ[τᵢ], color=(colors[i], 0.1))
-
-		lines!(ax[2], pTᵢ[τᵢ], RAAᵢ[τᵢ], color=colors[i])
-
-		string_as_varname("elem_"*string(i), [PolyElement(color = (colors[i], 0.1),strokewidth = 0), LineElement(color = colors[i])])
-	end
-
-	linkxaxes!(ax[1], ax[2])
-	hidexdecorations!(ax[1], ticks = false, ticklabels = false)
-	# for i in 1:2
-		# xlims!(ax[i], 0, 20)
-	# end
-	# ylims!(ax[1], 0, 0.3)
-	# ylims!(ax[2], 0.6, 1.1)
-
-	τₛ_label = [L"0.0", L"0.1", L"0.5", L"1.0"]
-
-	axislegend(ax[1], [elem_1, elem_2, elem_3, elem_4], τₛ_label, L"\Delta\tau\,\mathrm{[fm}/c\mathrm{]}", labelsize=14, titlesize=16, position = :rt, orientation =:vertical, bgcolor = (:white, 0.7), framecolor=(:grey80, 0))
-
-	if saveplots
-		save("plots/dNdpT_RAA_tau_dep.png", fig, px_per_unit = 5)
-	end
-
+	colsize!(fig.layout, 1, Relative(3/7))
+	colsize!(fig.layout, 2, Relative(4/7))
+	
+	
+	colgap!(fig.layout, 10)
+	rowgap!(fig.layout, 0)
+	
+	save("plots/hp23_mom_broad_qhat_anis_wong_vs_qhat.pdf", fig) 
+	save("plots/hp23_mom_broad_qhat_anis_wong_vs_qhat.png", fig, px_per_unit=10.0) 
+	
 	fig
-	
 end
 
-# ╔═╡ 1ed08797-1c04-44e8-91aa-3252364dcaac
-md"""
-##### Old version
-"""
+# ╔═╡ db66738b-b19a-4545-8339-ed5012de8509
+begin
+	fig_qhat = Figure(resolution = (430, 400), font = "CMU Serif") 
 
-# ╔═╡ d27be157-7c65-4f43-86d0-d078d95acab1
-# begin
-# 	# average over multiple Glasma events
-# 	folder_path = current_path * "/results/" * folder * "/"
-# 	cd(folder_path)
-# 	events = readdir()
-# 	filenames = current_path * "/results/" * folder * "/" .* events
-# 	cd(current_path)
+	ax_qhat = Axis(fig_qhat[1, 1], 
+	        xlabel=L"\tau\,\mathrm{[fm/}c\mathrm{]}", 
+			ylabel=L"\hat{q}\,\,\mathrm{[GeV^2/fm]}",
+	        xlabelsize = 19, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14,
+	        xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4) 
+
+	lines!(ax_qhat, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=:grey60, linestyle=:dash)
+	lines!(ax_qhat, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
 	
-# 	dNddpₜ_dens_ebe = [Vector{Vector{Float64}}() for i=1:length(filenames[1:n_events])]
-# 	for (fᵢ, filename) in enumerate(filenames[1:n_events])
-# 		# print(fᵢ)
-# 		dfᵢ = dfevent(filename)
-# 		dNdpₜᵢ = data(dfᵢ) * mapping(:pTᵢ, color=:τₛ) * AlgebraOfGraphics.density()
-# 		# dNdpₜᵢ = data(dfᵢ) * mapping(:pTᵢ, color=:τₛ) * AlgebraOfGraphics.density(npoints=n_points)
+	lines!(ax_qhat, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=:grey60, linestyle=:dash)
+	lines!(ax_qhat, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
+
+	qhat_total_qhat = qhat_L_qhat_zoomin+qhat_T_qhat_zoomin
+	lines!(ax_qhat, δτ_qhat_zoomin, qhat_total_qhat, linewidth = width_line, color=:grey60, linestyle=:dash)
+	lines!(ax_qhat, δτ_qhat_zoomin, qhat_total_qhat, linewidth = width_line, color=(:grey60, 0.6))
+
+	qhat_total_qhat_max = findmax(qhat_total_qhat)
+	println("lightlike")
+	println("̂qₘₐₓ=", qhat_total_qhat_max[1])
+	println("τₘₐₓ=", δτ_qhat_zoomin[qhat_total_qhat_max[2]])
+
+	for ip in 1:length(pxs)
+        tag_wong_jets = "mass_" * mass * "_px_" * pxs[ip]
+        δτ_wong_jets = Float64.(tau_wong_jets_px_dep[tag_wong_jets])
+
+		mom_broad_L_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 3]/DR
+		mom_broad_T_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 2]/DR
+
+		qhat_L_wong = diff(mom_broad_L_wong_jets)./ diff(δτ_wong_jets)
+		insert!(qhat_L_wong, 1, 0)
+
+		qhat_T_wong = diff(mom_broad_T_wong_jets)./ diff(δτ_wong_jets)
+		insert!(qhat_T_wong, 1, 0)
+	
+		local zoomin_indices = findall(t->t<=0.31, δτ_wong_jets)
+		δτ_wong_jets_zoomin = δτ_wong_jets[zoomin_indices]
+
+		mom_broad_L_wong_jets_zoomin = mom_broad_L_wong_jets[zoomin_indices]
+		mom_broad_T_wong_jets_zoomin = mom_broad_T_wong_jets[zoomin_indices]
+
+		qhat_L_wong_jets_zoomin = diff(mom_broad_L_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+		insert!(qhat_L_wong_jets_zoomin, 1, 0)
+		lines!(ax_qhat, δτ_wong_jets_zoomin, factor_qhat*qhat_L_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
+
+		qhat_T_wong_jets_zoomin = diff(mom_broad_T_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+		insert!(qhat_T_wong_jets_zoomin, 1, 0)
+		lines!(ax_qhat, δτ_wong_jets_zoomin, qhat_T_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
+
+		qhat_total_wong = qhat_L_wong_jets_zoomin + qhat_T_wong_jets_zoomin
+
+		lines!(ax_qhat, δτ_wong_jets_zoomin, qhat_total_wong, linewidth = width_line, color=(colors[ip], transp))
+
+		qhat_total_wong_max = findmax(qhat_total_wong)
+		println("wong with px", ip)
+		println("̂qₘₐₓ=", qhat_total_wong_max[1])
+		println("τₘₐₓ=", δτ_wong_jets_zoomin[qhat_total_wong_max[2]])
 		
-# 		if fᵢ==1
-# 			global pₜ_dens = Array[AlgebraOfGraphics.process(dNdpₜᵢ).positional[1][1]][1]
-# 		end
-# 		# print(typeof(AlgebraOfGraphics.process(dNdpₜᵢ).positional[2]))
-# 		dNddpₜ_dens_ebe[fᵢ] = AlgebraOfGraphics.process(dNdpₜᵢ).positional[2]
-# 	end
-# 	dNddpₜ_dens = mean(dNddpₜ_dens_ebe)
-# end
+	end
 
-# ╔═╡ ebb84f23-7f61-43d7-82fd-58cd5903b403
-# begin
-# 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
-# 	axis_dNdpₜ = (xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"1/N\,\mathrm{d}N/\mathrm{d}p_T",
-# 		xlabelsize = 20, ylabelsize = 20, xticklabelsize = 14, yticklabelsize=14,
-# 		# xticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
-# 		limits = (0, 10, 0, nothing), 
-# 		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
-# 	)
-	
-# 	# dNdpₜ = data(df) * mapping(:pTᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density(npoints=n_points) 
-# 	dNdpₜ = data(df) * mapping(:pTᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density() 
+	fig_qhat
 
-# 	fig_dNdpₜ = draw(dNdpₜ; axis = axis_dNdpₜ, legend=(;position=:right, linewidth=1.5,), palettes=(; color=colors), figure = (resolution=(400, 400),))
-		
-# 	pₜ_dens = Array[AlgebraOfGraphics.process(dNdpₜ).positional[1][1]][1]
-# 	# dNddpₜ_dens = AlgebraOfGraphics.process(dNdpₜ).positional[2]
-
-# 	lines(fig_dNdpₜ.figure[2, 1], pₜ_dens, dNddpₜ_dens[1]./dNddpₜ_dens[1], color=colors[1])
-# 	for i in 2:4
-# 		ratio = dNddpₜ_dens[i]./dNddpₜ_dens[1]
-# 		lines!(fig_dNdpₜ.figure[2, 1], pₜ_dens, ratio, color=colors[i])
-# 	end
-	
-# 	# rowsize!(fig_dNdpₜ.figure.layout, 1, Relative(3/5))
-# 	# rowsize!(fig_dNdpₜ.figure.layout, 2, Relative(2/5))
-
-# 	# if saveplots
-# 	# 	save("plots/dNdphi_tau_dep.png", fig_dNdΔₜ, px_per_unit = 5)
-# 	# end
-	
-# 	fig_dNdpₜ
-# end
-
-# ╔═╡ 5e710d84-65aa-4271-b85f-ebb9d050af82
-# begin
-# 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
-# 	fig = Figure(resolution = (320, 420), font = "CMU Serif")
-# 	ylabels = [L"\mathrm{d}N/\mathrm{d}p_T", L"R_{AA}"]
-# 	ax = [Axis(fig[i,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=5, ytickalign=1, yticksize=5) for i in 1:2]
-
-# 	for (i,τᵢ) in enumerate(string.(τₛ))
-# 		lines!(ax[1], pₜ_dens, dNddpₜ_dens[i], color=colors[i])
-# 		band!(ax[1], pₜ_dens, zeros(length(dNddpₜ_dens[i])), dNddpₜ_dens[i], color=(colors[i], 0.1))
-
-# 		lines!(ax[2], pₜ_dens, dNddpₜ_dens[i]./dNddpₜ_dens[1], color=colors[i])
-
-# 		string_as_varname("elem_"*string(i), [PolyElement(color = (colors[i], 0.1),strokewidth = 0), LineElement(color = colors[i])])
-# 	end
-
-# 	linkxaxes!(ax[1], ax[2])
-# 	hidexdecorations!(ax[1], ticks = false, ticklabels = false)
-# 	for i in 1:2
-# 		xlims!(ax[i], 0, 10)
-# 	end
-# 	ylims!(ax[1], 0, 0.3)
-# 	ylims!(ax[2], 0.8, 1.2)
-
-# 	τₛ_label = [L"0.0", L"0.1", L"0.5", L"1.0"]
-
-# 	axislegend(ax[1], [elem_1, elem_2, elem_3, elem_4], τₛ_label, L"\Delta\tau\,\mathrm{[fm}/c\mathrm{]}", labelsize=14, titlesize=16, position = :rt, orientation =:vertical, bgcolor = (:white, 0.7), framecolor=(:grey80, 0))
-
-# 	save("plots/dNdpT_RAA_tau_dep.png", fig, px_per_unit = 5)
-
-# 	fig
-	
-# end
-
-# ╔═╡ 5fe0dca5-1510-46af-ba24-df671bffa6a4
-# begin
-
-# 	folder_path = current_path * "/results/" * folder * "/"
-# 	cd(folder_path)
-# 	events = readdir()
-# 	filenames = current_path * "/results/" * folder * "/" .* events
-# 	cd(current_path)
-
-# 	densᵢ_all, pTᵢ_all = Dict(), Dict()
-# 	for (i,τᵢ) in enumerate(string.(τₛ))
-# 		densᵢ_all[τᵢ], pTᵢ_all[τᵢ] = [Vector{Float64}() for i=1:length(filenames[1:n_events])], [Vector{Float64}() for i=1:length(filenames[1:n_events])]
-# 	end
-	
-
-# 	for (fᵢ, filename) in enumerate(filenames[1:n_events])
-# 		for (i,τᵢ) in enumerate(string.(τₛ))
-# 			df = dfevent(filename)
-# 			pT_dfᵢ = convert(Vector{Float64}, df[df.τₛ.==τᵢ, :].pTᵢ)
-# 			kdeᵢ = kde(pT_dfᵢ)
-# 			densᵢ_all[τᵢ][fᵢ] = kdeᵢ.density
-# 			pTᵢ_all[τᵢ][fᵢ] = convert(Vector{Float64}, kdeᵢ.x)
-# 		end
-# 	end
-
-# end
-
-# ╔═╡ 0a954a67-f183-4562-af16-99bebdad81d3
-# begin
-# 	densᵢ, pTᵢ = Dict(), Dict()
-# 	for (i,τᵢ) in enumerate(string.(τₛ))
-# 		densᵢ[τᵢ], pTᵢ[τᵢ] = mean(densᵢ_all[τᵢ]), mean(pTᵢ_all[τᵢ])
-# 	end
-# end
-
-# ╔═╡ fea5e25a-542b-44a4-94ac-c021e6a24d64
-# begin
-# 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
-# 	fig = Figure(resolution = (400, 500), font = "CMU Serif")
-# 	ylabels = [L"\mathrm{d}N/\mathrm{d}p_T", L"R_{AA}"]
-# 	ax = [Axis(fig[i,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=5, ytickalign=1, yticksize=5) for i in 1:2]
-
-# 	# densᵢ_all, pTᵢ_all = Dict(), Dict()
-# 	# for (i,τᵢ) in enumerate(string.(τₛ))
-# 	# 	densᵢ_all[τᵢ], pTᵢ_all[τᵢ] = Any[], Any[]
-# 	# end
-	
-
-# 	# for (fᵢ, filename) in enumerate(filenames[1:n_events])
-# 		for (i,τᵢ) in enumerate(string.(τₛ))
-	
-# 			# pT_dfᵢ = convert(Vector{Float64}, df[df.τₛ.==τᵢ, :].pTᵢ)
-# 			# kdeᵢ = kde(pT_dfᵢ)
-# 			# densᵢ_all[τᵢ].append(kdeᵢ.density)
-# 			# pTᵢ_all[τᵢ].append(convert(Vector{Float64}, kdeᵢ.x))
-# 			# lines!(ax[1], pTᵢ[τᵢ], densᵢ[τᵢ], color=colors[i])
-# 			# band!(ax[1], pTᵢ[τᵢ], zeros(length(densᵢ[τᵢ])), densᵢ[τᵢ], color=(colors[i], 0.2))
-	
-# 			lines!(ax[2], pTᵢ[τᵢ], densᵢ[τᵢ]./densᵢ[string(τₛ[1])], color=colors[i])
-# 		end
-# 	# end
-
-	
-		
-
-# 	fig
-	
-# end
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
-AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 ColorSchemes = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-KernelDensity = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
-Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
-AlgebraOfGraphics = "~0.6.14"
-CairoMakie = "~0.10.5"
+CairoMakie = "~0.10.6"
 ColorSchemes = "~3.21.0"
-DataFrames = "~1.5.0"
-KernelDensity = "~0.6.7"
+ForwardDiff = "~0.10.35"
 Pickle = "~0.3.2"
 """
 
@@ -399,7 +317,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "205c05e3a60dafefe570d45c3641c209c142695f"
+project_hash = "0a6bb200659216eedd6d2556ce51c475d453d928"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra"]
@@ -417,12 +335,6 @@ deps = ["LinearAlgebra", "Requires"]
 git-tree-sha1 = "76289dc51920fdc6e0013c872ba9551d54961c24"
 uuid = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 version = "3.6.2"
-
-[[deps.AlgebraOfGraphics]]
-deps = ["Colors", "Dates", "Dictionaries", "FileIO", "GLM", "GeoInterface", "GeometryBasics", "GridLayoutBase", "KernelDensity", "Loess", "Makie", "PlotUtils", "PooledArrays", "RelocatableFolders", "SnoopPrecompile", "StatsBase", "StructArrays", "Tables"]
-git-tree-sha1 = "43c2ef89ca0cdaf77373401a989abae4410c7b8a"
-uuid = "cbdf2221-f076-402e-a563-3d30da359d67"
-version = "0.6.14"
 
 [[deps.Animations]]
 deps = ["Colors"]
@@ -480,9 +392,9 @@ version = "1.0.5"
 
 [[deps.CairoMakie]]
 deps = ["Base64", "Cairo", "Colors", "FFTW", "FileIO", "FreeType", "GeometryBasics", "LinearAlgebra", "Makie", "PrecompileTools", "SHA"]
-git-tree-sha1 = "9e7f01dd16e576ebbdf8b453086f9d0eff814a09"
+git-tree-sha1 = "bfc7d54b3c514f8015055e6ad0d5997da64d99fc"
 uuid = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-version = "0.10.5"
+version = "0.10.6"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -538,6 +450,12 @@ git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.10"
 
+[[deps.CommonSubexpressions]]
+deps = ["MacroTools", "Test"]
+git-tree-sha1 = "7b8a93dba8af7e3b42fecabf646260105ac373f7"
+uuid = "bbf7d656-a473-5ed7-a52c-81e309532950"
+version = "0.3.0"
+
 [[deps.Compat]]
 deps = ["Dates", "LinearAlgebra", "UUIDs"]
 git-tree-sha1 = "7a60c856b9fa189eb34f5f8a6f6b5529b7942957"
@@ -560,21 +478,10 @@ git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.2"
 
-[[deps.Crayons]]
-git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
-uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
-version = "4.1.1"
-
 [[deps.DataAPI]]
 git-tree-sha1 = "8da84edb865b0b5b0100c0666a9bc9a0b71c553c"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.15.0"
-
-[[deps.DataFrames]]
-deps = ["Compat", "DataAPI", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SentinelArrays", "SnoopPrecompile", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
-git-tree-sha1 = "aa51303df86f8626a962fccb878430cdb0a97eee"
-uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
-version = "1.5.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -597,17 +504,17 @@ git-tree-sha1 = "80c3e8639e3353e5d2912fb3a1916b8455e2494b"
 uuid = "b429d917-457f-4dbc-8f4c-0cc954292b1d"
 version = "0.4.0"
 
-[[deps.Dictionaries]]
-deps = ["Indexing", "Random", "Serialization"]
-git-tree-sha1 = "e82c3c97b5b4ec111f3c1b55228cebc7510525a2"
-uuid = "85a47980-9c8c-11e8-2b9f-f7ca1fa99fb4"
-version = "0.3.25"
+[[deps.DiffResults]]
+deps = ["StaticArraysCore"]
+git-tree-sha1 = "782dd5f4561f5d267313f23853baaaa4c52ea621"
+uuid = "163ba53b-c6d8-5494-b064-1a9d43ac40c5"
+version = "1.1.0"
 
-[[deps.Distances]]
-deps = ["LinearAlgebra", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "49eba9ad9f7ead780bfb7ee319f962c811c6d3b2"
-uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-version = "0.10.8"
+[[deps.DiffRules]]
+deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialFunctions"]
+git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
+uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
+version = "1.15.1"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -615,9 +522,9 @@ uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 
 [[deps.Distributions]]
 deps = ["ChainRulesCore", "DensityInterface", "FillArrays", "LinearAlgebra", "PDMats", "Printf", "QuadGK", "Random", "SparseArrays", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns", "Test"]
-git-tree-sha1 = "4f59fe4eb1308011bd33b390369cbad74e46eea4"
+git-tree-sha1 = "c72970914c8a21b36bbc244e9df0ed1834a0360b"
 uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
-version = "0.25.92"
+version = "0.25.95"
 
 [[deps.DocStringExtensions]]
 deps = ["LibGit2"]
@@ -667,9 +574,9 @@ version = "4.4.2+2"
 
 [[deps.FFTW]]
 deps = ["AbstractFFTs", "FFTW_jll", "LinearAlgebra", "MKL_jll", "Preferences", "Reexport"]
-git-tree-sha1 = "f9818144ce7c8c41edf5c4c179c684d92aa4d9fe"
+git-tree-sha1 = "06bf20fcecd258eccf9a6ef7b99856a4dfe7b64c"
 uuid = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
-version = "1.6.0"
+version = "1.7.0"
 
 [[deps.FFTW_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -688,9 +595,9 @@ uuid = "7b1f6079-737a-58dc-b8bc-7a2ca5c1b5ee"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
-git-tree-sha1 = "fc86b4fd3eff76c3ce4f5e96e2fdfa6282722885"
+git-tree-sha1 = "589d3d3bff204bdd80ecc53293896b4f39175723"
 uuid = "1a297f60-69ca-5386-bcde-b61e274b549b"
-version = "1.0.0"
+version = "1.1.1"
 
 [[deps.FixedPointNumbers]]
 deps = ["Statistics"]
@@ -709,6 +616,12 @@ deps = ["Printf"]
 git-tree-sha1 = "8339d61043228fdd3eb658d86c926cb282ae72a8"
 uuid = "59287772-0a20-5a39-b81b-1366585eb4c0"
 version = "0.4.2"
+
+[[deps.ForwardDiff]]
+deps = ["CommonSubexpressions", "DiffResults", "DiffRules", "LinearAlgebra", "LogExpFunctions", "NaNMath", "Preferences", "Printf", "Random", "SpecialFunctions", "StaticArrays"]
+git-tree-sha1 = "00e252f4d706b3d55a8863432e742bf5717b498d"
+uuid = "f6369f11-7733-5829-9624-2563aa707210"
+version = "0.10.35"
 
 [[deps.FreeType]]
 deps = ["CEnum", "FreeType2_jll"]
@@ -738,17 +651,11 @@ version = "1.0.10+0"
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
-[[deps.GLM]]
-deps = ["Distributions", "LinearAlgebra", "Printf", "Reexport", "SparseArrays", "SpecialFunctions", "Statistics", "StatsAPI", "StatsBase", "StatsFuns", "StatsModels"]
-git-tree-sha1 = "97829cfda0df99ddaeaafb5b370d6cab87b7013e"
-uuid = "38e38edf-8417-5370-95a0-9cbb8c7f171a"
-version = "1.8.3"
-
 [[deps.GPUArraysCore]]
 deps = ["Adapt"]
-git-tree-sha1 = "1cd7f0af1aa58abc02ea1d872953a97359cb87fa"
+git-tree-sha1 = "2d6ca471a6c7b536127afccfa7564b5b39227fe0"
 uuid = "46192b85-c4d5-4398-a991-12ede77f4527"
-version = "0.1.4"
+version = "0.1.5"
 
 [[deps.GeoInterface]]
 deps = ["Extents"]
@@ -805,9 +712,9 @@ version = "2.8.1+1"
 
 [[deps.HypergeometricFunctions]]
 deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
-git-tree-sha1 = "84204eae2dd237500835990bcade263e27674a93"
+git-tree-sha1 = "0ec02c648befc2f94156eaef13b0f38106212f3f"
 uuid = "34004b35-14d8-5ef3-9330-4cdb6864b03a"
-version = "0.3.16"
+version = "0.3.17"
 
 [[deps.ImageAxes]]
 deps = ["AxisArrays", "ImageBase", "ImageCore", "Reexport", "SimpleTraits"]
@@ -845,11 +752,6 @@ git-tree-sha1 = "3d09a9f60edf77f8a4d99f9e015e8fbf9989605d"
 uuid = "905a6f67-0a94-5f89-b386-d35d92009cd1"
 version = "3.1.7+0"
 
-[[deps.Indexing]]
-git-tree-sha1 = "ce1566720fd6b19ff3411404d4b977acd4814f9f"
-uuid = "313cdc1a-70c2-5d6a-ae34-0150d3930a38"
-version = "1.1.1"
-
 [[deps.IndirectArrays]]
 git-tree-sha1 = "012e604e1c7458645cb8b436f8fba789a51b257f"
 uuid = "9b13fd28-a010-5f03-acff-a1bbcff69959"
@@ -859,12 +761,6 @@ version = "1.0.0"
 git-tree-sha1 = "5cd07aab533df5170988219191dfad0519391428"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
 version = "0.1.3"
-
-[[deps.InlineStrings]]
-deps = ["Parsers"]
-git-tree-sha1 = "9cc2baf75c6d09f9da536ddf58eb2f29dedaf461"
-uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
-version = "1.4.0"
 
 [[deps.IntelOpenMP_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -900,11 +796,6 @@ git-tree-sha1 = "6667aadd1cdee2c6cd068128b3d226ebc4fb0c67"
 uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
 version = "0.1.9"
 
-[[deps.InvertedIndices]]
-git-tree-sha1 = "0dc7b50b8d436461be01300fd8cd45aa0274b038"
-uuid = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
-version = "1.3.0"
-
 [[deps.IrrationalConstants]]
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
 uuid = "92d709cd-6900-40b7-9082-c6be49f344b6"
@@ -917,9 +808,9 @@ uuid = "f1662d9f-8043-43de-a69a-05efc1cc6ff4"
 version = "0.1.1"
 
 [[deps.IterTools]]
-git-tree-sha1 = "fa6287a4469f5e048d763df38279ee729fbd44e5"
+git-tree-sha1 = "4ced6667f9974fc5c5943fa5e2ef1ca43ea9e450"
 uuid = "c8e1da08-722c-5040-9ed9-7db0dc04731e"
-version = "1.4.0"
+version = "1.8.0"
 
 [[deps.IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
@@ -961,6 +852,12 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "f6250b16881adf048549549fba48b1161acdac8c"
 uuid = "c1c5ebd0-6772-5130-a774-d5fcae4a789d"
 version = "3.100.1+0"
+
+[[deps.LLVMOpenMP_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "f689897ccbe049adb19a065c495e75f372ecd42b"
+uuid = "1d63c593-3942-5779-bab2-d838dc0a180e"
+version = "15.0.4+0"
 
 [[deps.LZO_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1044,17 +941,11 @@ version = "2.36.0+0"
 deps = ["Libdl", "libblastrampoline_jll"]
 uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
-[[deps.Loess]]
-deps = ["Distances", "LinearAlgebra", "Statistics"]
-git-tree-sha1 = "46efcea75c890e5d820e670516dc156689851722"
-uuid = "4345ca2d-374a-55d4-8d30-97f9976e7612"
-version = "0.5.4"
-
 [[deps.LogExpFunctions]]
 deps = ["ChainRulesCore", "ChangesOfVariables", "DocStringExtensions", "InverseFunctions", "IrrationalConstants", "LinearAlgebra"]
-git-tree-sha1 = "0a1b7c2863e44523180fdb3146534e265a91870b"
+git-tree-sha1 = "c3ce8e7420b3a6e071e0fe4745f5d4300e37b13f"
 uuid = "2ab3a3ac-af41-5b50-aa03-7779005ae688"
-version = "0.3.23"
+version = "0.3.24"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
@@ -1073,9 +964,9 @@ version = "0.5.10"
 
 [[deps.Makie]]
 deps = ["Animations", "Base64", "ColorBrewer", "ColorSchemes", "ColorTypes", "Colors", "Contour", "Distributions", "DocStringExtensions", "Downloads", "FFMPEG", "FileIO", "FixedPointNumbers", "Formatting", "FreeType", "FreeTypeAbstraction", "GeometryBasics", "GridLayoutBase", "ImageIO", "InteractiveUtils", "IntervalSets", "Isoband", "KernelDensity", "LaTeXStrings", "LinearAlgebra", "MacroTools", "MakieCore", "Markdown", "Match", "MathTeXEngine", "MiniQhull", "Observables", "OffsetArrays", "Packing", "PlotUtils", "PolygonOps", "PrecompileTools", "Printf", "REPL", "Random", "RelocatableFolders", "Setfield", "Showoff", "SignedDistanceFields", "SparseArrays", "StableHashTraits", "Statistics", "StatsBase", "StatsFuns", "StructArrays", "TriplotBase", "UnicodeFun"]
-git-tree-sha1 = "3a9ca622a78dcbab3a034df35d1acd3ca7ad487d"
+git-tree-sha1 = "a6695a632992a2e19ae1a1d0c9bee0e137e2f3cb"
 uuid = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-version = "0.19.5"
+version = "0.19.6"
 
 [[deps.MakieCore]]
 deps = ["Observables"]
@@ -1189,10 +1080,10 @@ uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
 version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "9ff31d101d987eb9d66bd8b176ac7c277beccd09"
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "1aa4b74f80b01c6bc2b89992b861b5f210e665b5"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "1.1.20+0"
+version = "1.1.21+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
@@ -1248,9 +1139,9 @@ version = "1.50.9+0"
 
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
-git-tree-sha1 = "7302075e5e06da7d000d9bfa055013e3e85578ca"
+git-tree-sha1 = "a5aef8d4a6e8d81f171b2bd4be5265b01384c74c"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.5.9"
+version = "2.5.10"
 
 [[deps.Pickle]]
 deps = ["DataStructures", "InternedStrings", "Serialization", "SparseArrays", "Strided", "StringEncodings", "ZipFile"]
@@ -1259,10 +1150,10 @@ uuid = "fbb45041-c46e-462f-888f-7c521cafbc2c"
 version = "0.3.2"
 
 [[deps.Pixman_jll]]
-deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "b4f5d02549a10e20780a24fce72bea96b6329e29"
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "Libdl"]
+git-tree-sha1 = "64779bc4c9784fee475689a1752ef4d5747c5e87"
 uuid = "30392449-352a-5448-841d-b1acce4e97dc"
-version = "0.40.1+0"
+version = "0.42.2+0"
 
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "REPL", "Random", "SHA", "Serialization", "TOML", "Tar", "UUIDs", "p7zip_jll"]
@@ -1286,29 +1177,17 @@ git-tree-sha1 = "77b3d3605fc1cd0b42d95eba87dfcd2bf67d5ff6"
 uuid = "647866c9-e3ac-4575-94e7-e3d426903924"
 version = "0.1.2"
 
-[[deps.PooledArrays]]
-deps = ["DataAPI", "Future"]
-git-tree-sha1 = "a6062fe4063cdafe78f4a0a81cfffb89721b30e7"
-uuid = "2dfb63ee-cc39-5dd5-95bd-886bf059d720"
-version = "1.4.2"
-
 [[deps.PrecompileTools]]
 deps = ["Preferences"]
-git-tree-sha1 = "259e206946c293698122f63e2b513a7c99a244e8"
+git-tree-sha1 = "9673d39decc5feece56ef3940e5dafba15ba0f81"
 uuid = "aea7be01-6a6a-4083-8856-8a6e6704d82a"
-version = "1.1.1"
+version = "1.1.2"
 
 [[deps.Preferences]]
 deps = ["TOML"]
 git-tree-sha1 = "7eb1686b4f04b82f96ed7a4ea5890a4f0c7a09f1"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.4.0"
-
-[[deps.PrettyTables]]
-deps = ["Crayons", "Formatting", "LaTeXStrings", "Markdown", "Reexport", "StringManipulation", "Tables"]
-git-tree-sha1 = "213579618ec1f42dea7dd637a42785a608b1ea9c"
-uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
-version = "2.2.4"
 
 [[deps.Printf]]
 deps = ["Unicode"]
@@ -1359,9 +1238,9 @@ version = "0.3.2"
 
 [[deps.Ratios]]
 deps = ["Requires"]
-git-tree-sha1 = "6d7bb727e76147ba18eed998700998e17b8e4911"
+git-tree-sha1 = "1342a47bf3260ee108163042310d26f2be5ec90b"
 uuid = "c84ed2f1-dad5-54f0-aa8e-dbefe2724439"
-version = "0.4.4"
+version = "0.4.5"
 
 [[deps.Reexport]]
 git-tree-sha1 = "45e428421666073eab6f2da5c9d310d99bb12f9b"
@@ -1414,12 +1293,6 @@ git-tree-sha1 = "30449ee12237627992a99d5e30ae63e4d78cd24a"
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
 version = "1.2.0"
 
-[[deps.SentinelArrays]]
-deps = ["Dates", "Random"]
-git-tree-sha1 = "77d3c4726515dca71f6d80fbb5e251088defe305"
-uuid = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
-version = "1.3.18"
-
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
 
@@ -1432,11 +1305,6 @@ version = "1.1.1"
 [[deps.SharedArrays]]
 deps = ["Distributed", "Mmap", "Random", "Serialization"]
 uuid = "1a1011a3-84de-559e-8e89-a11a2f7dc383"
-
-[[deps.ShiftedArrays]]
-git-tree-sha1 = "503688b59397b3307443af35cd953a13e8005c16"
-uuid = "1277b4bf-5013-50f5-be3d-901d8477a67a"
-version = "2.0.0"
 
 [[deps.Showoff]]
 deps = ["Dates", "Grisu"]
@@ -1461,12 +1329,6 @@ deps = ["Dates", "FileIO", "ImageCore", "IndirectArrays", "OffsetArrays", "REPL"
 git-tree-sha1 = "8fb59825be681d451c246a795117f317ecbcaa28"
 uuid = "45858cf5-a6b0-47a3-bbea-62219f50df47"
 version = "0.1.2"
-
-[[deps.SnoopPrecompile]]
-deps = ["Preferences"]
-git-tree-sha1 = "e760a70afdcd461cf01a575947738d359234665c"
-uuid = "66db9d55-30c0-4569-8b51-7e840670fc0c"
-version = "1.0.3"
 
 [[deps.Sockets]]
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
@@ -1501,9 +1363,9 @@ version = "0.1.1"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]
-git-tree-sha1 = "8982b3607a212b070a5e46eea83eb62b4744ae12"
+git-tree-sha1 = "832afbae2a45b4ae7e831f86965469a24d1d8a83"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.5.25"
+version = "1.5.26"
 
 [[deps.StaticArraysCore]]
 git-tree-sha1 = "6b7ba252635a5eff6a0b0664a41ee140a1c9e72a"
@@ -1522,21 +1384,15 @@ version = "1.6.0"
 
 [[deps.StatsBase]]
 deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
-git-tree-sha1 = "d1bf48bfcc554a3761a133fe3a9bb01488e06916"
+git-tree-sha1 = "75ebe04c5bed70b91614d684259b661c9e6274a4"
 uuid = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-version = "0.33.21"
+version = "0.34.0"
 
 [[deps.StatsFuns]]
 deps = ["ChainRulesCore", "HypergeometricFunctions", "InverseFunctions", "IrrationalConstants", "LogExpFunctions", "Reexport", "Rmath", "SpecialFunctions"]
 git-tree-sha1 = "f625d686d5a88bcd2b15cd81f18f98186fdc0c9a"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "1.3.0"
-
-[[deps.StatsModels]]
-deps = ["DataAPI", "DataStructures", "LinearAlgebra", "Printf", "REPL", "ShiftedArrays", "SparseArrays", "StatsBase", "StatsFuns", "Tables"]
-git-tree-sha1 = "8cc7a5385ecaa420f0b3426f9b0135d0df0638ed"
-uuid = "3eaba693-59b7-5ba5-a881-562e759f1c8d"
-version = "0.7.2"
 
 [[deps.Strided]]
 deps = ["LinearAlgebra", "TupleTools"]
@@ -1549,11 +1405,6 @@ deps = ["Libiconv_jll"]
 git-tree-sha1 = "33c0da881af3248dafefb939a21694b97cfece76"
 uuid = "69024149-9ee7-55f6-a4c4-859efe599b68"
 version = "0.3.6"
-
-[[deps.StringManipulation]]
-git-tree-sha1 = "46da2434b41f41ac3594ee9816ce5541c6096123"
-uuid = "892a3eda-7b42-436c-8928-eab12a02cf0e"
-version = "0.3.0"
 
 [[deps.StructArrays]]
 deps = ["Adapt", "DataAPI", "GPUArraysCore", "StaticArraysCore", "Tables"]
@@ -1780,28 +1631,10 @@ version = "3.5.0+0"
 """
 
 # ╔═╡ Cell order:
-# ╠═10b03640-f3c7-11ed-3945-29ebe6424909
-# ╠═34772700-4de5-4379-9d09-fbd4d22b40c1
-# ╠═9f9afac9-b181-434f-a661-49c0264736e7
-# ╠═7b18813a-35c8-4909-a94e-f941c9d1a28e
-# ╠═f3bf8812-4061-402b-b333-cc7ded15d785
-# ╠═7b6150cb-575a-4502-b646-2c1673b42398
-# ╠═ce6b28aa-78ba-4994-a03c-d99bed2d9e06
-# ╠═d0ab4b56-2b23-43e1-8214-c828ddf0a62b
-# ╠═2ed2681b-a03a-43bb-a169-1e34b25b1f33
-# ╠═796b9ebe-9666-4d31-b9ac-acddeca08879
-# ╠═1de717b2-a153-45fe-ac8a-62cc847f55b9
-# ╠═3ac3ee93-f70e-4f05-9cb9-aba2825faa18
-# ╟─8ad7a71c-660e-43d4-ab3a-d7115153157a
-# ╠═9a090b37-89f9-43ac-9503-def9186034e1
-# ╠═40f2010d-bea4-4b6d-9659-e450d684a39f
-# ╠═f3e5348c-b54a-451a-a657-390c8da5da0d
-# ╟─1ed08797-1c04-44e8-91aa-3252364dcaac
-# ╠═d27be157-7c65-4f43-86d0-d078d95acab1
-# ╠═ebb84f23-7f61-43d7-82fd-58cd5903b403
-# ╠═5e710d84-65aa-4271-b85f-ebb9d050af82
-# ╠═5fe0dca5-1510-46af-ba24-df671bffa6a4
-# ╠═0a954a67-f183-4562-af16-99bebdad81d3
-# ╠═fea5e25a-542b-44a4-94ac-c021e6a24d64
+# ╠═d63cbd90-0919-11ee-0a0f-79cd06d42808
+# ╠═3dd596d2-f226-4f0e-b523-8460caf217a7
+# ╠═aff5cd65-114d-4631-9670-e3b40759d30c
+# ╠═1dcd2d79-a522-4b06-b13b-012c6293856f
+# ╠═db66738b-b19a-4545-8339-ed5012de8509
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
