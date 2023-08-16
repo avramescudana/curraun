@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -25,7 +25,7 @@ allevents = true
 
 # ╔═╡ 7b18813a-35c8-4909-a94e-f941c9d1a28e
 # folder with events, labeled by initialization type, pT and quark
-folder = "RAA_charm_fonll_Qs_1.4"
+folder = "old_RAA_charm_fonll_Qs_1.4"
 
 # ╔═╡ f3bf8812-4061-402b-b333-cc7ded15d785
 begin
@@ -188,19 +188,19 @@ begin
 
 	linkxaxes!(ax[1], ax[2])
 	hidexdecorations!(ax[1], ticks = false, ticklabels = false)
-	# for i in 1:2
-		# xlims!(ax[i], 0, 20)
-	# end
-	# ylims!(ax[1], 0, 0.3)
-	# ylims!(ax[2], 0.6, 1.1)
+	for i in 1:2
+		xlims!(ax[i], 0, 10)
+	end
+	ylims!(ax[1], 0, 0.3)
+	ylims!(ax[2], 0.6, 1.1)
 
 	τₛ_label = [L"0.0", L"0.1", L"0.5", L"1.0"]
 
 	axislegend(ax[1], [elem_1, elem_2, elem_3, elem_4], τₛ_label, L"\Delta\tau\,\mathrm{[fm}/c\mathrm{]}", labelsize=14, titlesize=16, position = :rt, orientation =:vertical, bgcolor = (:white, 0.7), framecolor=(:grey80, 0))
 
-	if saveplots
-		save("plots/dNdpT_RAA_tau_dep.png", fig, px_per_unit = 5)
-	end
+	# if saveplots
+		save("plots/dNdpT_RAA_tau_dep_slow.png", fig, px_per_unit = 5)
+	# end
 
 	fig
 	
