@@ -9,34 +9,26 @@ begin
 	using Pickle
 	using DataFrames
 	using CairoMakie
-	# using Statistics
 	using KernelDensity
-	using StatsBase
-	using NumericalIntegration
 end
 
 # ╔═╡ 98cb0e8e-ec66-4ad4-860a-8fd2a53b55dd
 begin
 	using PyCall
-	ss = pyimport("scipy.stats")
-	# sk = pyimport("sklearn.neighbors")
+	scipystats = pyimport("scipy.stats")
 end
 
 # ╔═╡ 200b3001-f733-4bb5-bc57-1d563ba85603
-# folder_trial = "RAA_charm_fonll_Qs_1.4_trial"
-folder_trial = "RAA_charm_fonll_Qs_2.0_clcasimir"
+folder_test = "RAA_charm_fonll_Qs_2.0_qmcasimir"
 
 # ╔═╡ f3b4001f-d1a3-4f4e-b2a7-007330300d42
 begin
 	current_path = pwd()
-	filename_trial = current_path * "/results/" * folder_trial * "/event_1.pickle"
+	filename_test = current_path * "/results/" * folder_test * "/test_pTs_10_ev.pickle"
 end
 
 # ╔═╡ 62ba0eb0-4607-41a8-ada2-3278b4c72677
-τₛ = 0.3
-
-# ╔═╡ 056ed037-507d-4a3c-a1a8-0aa252083f5c
-ptmax = 10
+τₛ = [0.2, 0.6, 1.0]
 
 # ╔═╡ a1ba57c1-65fd-4187-a3f1-6f25a38d9f6f
 function findminindex(value, array)
@@ -44,253 +36,158 @@ function findminindex(value, array)
 end 
 
 # ╔═╡ 2e3d93f0-95a7-4fd6-9b2e-a20d5eac0ad2
-function read_file(filename)
+function read_file(filename, τₛ)
 	output = Pickle.npyload(filename)
 	parameters = output["parameters"]
-	pTs₀ = parameters["PTBINS"]
-	pTbins = parameters["NPTBINS"]
+	pTs = parameters["PTBINS"]
+	nevents = parameters["NEVENTS"]
+	# pTbins = parameters["NPTBINS"]
 
 	τ = output["tau"]
 	τᵢ = findminindex(τₛ, τ)
 
 	pT_spectra = Dict()
-	for pTbin in range(1, pTbins)
-		label = "bin"*string(pTbin)
+	for ipT in pTs
+		label = string(ipT)
+		pT_spectra[label] = zeros(0)
 
-		pT_spectra[label] = output[label]["pTs"][τᵢ,:]
+		for ev in range(1, nevents)
+		# for ev in range(1, 5)
+			append!(pT_spectra[label], output[label]["pTs_event_"*string(ev)][τᵢ,:])
+		end
 	end
 	return parameters, pT_spectra
 end
 
 # ╔═╡ 05f67077-858f-4675-a9a2-d4d25a41064a
-parameters_trial, pT_spectra_trial = read_file(filename_trial)
-
-# ╔═╡ 908cf47b-76a2-4169-a18c-e5991ea1f98d
 begin
-	δptbin = 20
-	nptbinsel = range(start = 1, step = δptbin, length = Int(round((parameters_trial["NPTBINS"]-1)/δptbin)))
-	ptbinsel = [parameters_trial["PTBINS"][Int(round(ipt))] for ipt in nptbinsel]
+	parameters_test, pT_spectra_test = Dict(), Dict()
+	for τᵢ in τₛ
+		parameters_test[string(τᵢ)], pT_spectra_test[string(τᵢ)] = read_file(filename_test, τᵢ)
+	end
+	pTs = parameters_test[string(τₛ[1])]["PTBINS"]
+	Ntp = parameters_test[string(τₛ[1])]["NTP"]
+end
+
+# ╔═╡ 3c326777-d2e4-4e73-a4a6-c433e0c9b66c
+begin
+	fig_test = Figure(resolution = (1200, 320), font = "CMU Serif")
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	# ax_test = Axis(fig_test[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
+	ax_test = [Axis(fig_test[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=20) for i in 1:4]
+	
+	colors = Makie.wong_colors()
+	
+	Ntpᵢ = range(1, Ntp, Ntp)
+	# transp = [0.2, 0.35, 0.5]
+
+	for (ipT, pT) in enumerate(pTs)
+
+		label = string(pT)
+		for (iτ, τᵢ) in enumerate(τₛ)
+			pT_spectraᵢ = pT_spectra_test[string(τₛ[iτ])][label]
+	
+			# kdeᵢ = kde(pT_spectraᵢ, npoints=2048*4)
+			
+			# low_pT, high_pT = findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1]
+			# kdeᵢ = kde(pT_spectraᵢ, boundary = (low_pT, high_pT))
+			
+			kdeᵢ = kde(pT_spectraᵢ)
+			
+			densᵢ = kdeᵢ.density
+			norm_densᵢ = densᵢ./findmax(densᵢ)[1].*Ntp
+	
+			band!(ax_test[ipT], kdeᵢ.x, zeros(length(norm_densᵢ)), densᵢ, color=(colors[iτ], 0.05))
+			lines!(ax_test[ipT], kdeᵢ.x, densᵢ, linewidth=2, color=(colors[iτ], 0.4))
+	
+			# scipy
+			# dens_ss = scipystats.kde.gaussian_kde(pT_spectraᵢ)
+			# pTs_py = range(findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1], 100)
+			# lines!(pTs_py, dens_ss(pTs_py), linewidth=2, color=colors[4])
+		end
+
+		# pT_spectra₀ = ones(Ntp).*pT
+		# lines!(ax_test[ipT], pT_spectra₀, Ntpᵢ./Ntp, linewidth=4, color=:silver)
+		
+	end
+
+	labels_legend = [L"0.2", L"0.6", L"1.0"]
+	elements= [LineElement(color = colors[1], linewidth=2), LineElement(color = colors[2], linewidth=2), LineElement(color = colors[3], linewidth=2)]
+	axislegend(ax_test[1], elements, labels_legend, L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}", position = :rt, labelsize=18, titlesize=20)
+
+	# xlims!(ax_test, 0, 6.5)
+	xlimits = [(0, 1), (0.2, 0.8), (0.7, 1.3), (4.7, 5.3)]
+	for i in 1:4
+		ylims!(ax_test[i], 0, nothing)
+		xlims!(ax_test[i], xlimits[i])
+	end
+
+	# linkyaxes!(ax_test[1], ax_test[2], ax_test[3])
+	# for i in 1:2
+	# 	hideydecorations!(ax_test[i], ticks = false, ticklabels = false)
+	# end
+	
+	# save("plots/dndpt_pT_tau_test_qmcas_10_ev.png", fig_test, px_per_unit = 10.0)
+	fig_test
+end
+
+# ╔═╡ 64f512c8-963a-432d-90db-a819c38f3a09
+begin
+	fig_test_hist = Figure(resolution = (1200, 320), font = "CMU Serif")
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	# ax_test = Axis(fig_test[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
+	ax_test_hist = [Axis(fig_test_hist[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=20) for i in 1:4]
+
+	nbins_pT = 50
+	for (ipT, pT) in enumerate(pTs)
+
+		label = string(pT)
+		for (iτ, τᵢ) in enumerate(τₛ)
+			pT_spectraᵢ = pT_spectra_test[string(τₛ[iτ])][label]
+				
+			low_pT, high_pT = findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1]
+
+			hist!(ax_test_hist[ipT], pT_spectraᵢ; normalization = :none, color = (colors[iτ], 0.4), bins=nbins_pT)
+		end
+
+		# pT_spectra₀ = ones(Ntp).*pT
+		# lines!(ax_test_hist[ipT], pT_spectra₀, Ntpᵢ./Ntp, linewidth=4, color=:silver)
+		
+	end
+
+	axislegend(ax_test_hist[1], elements, labels_legend, L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}", position = :rt, labelsize=18, titlesize=20)
+
+	# xlims!(ax_test, 0, 6.5)
+	# xlimits = [(0, 3), (2.5, 3.5), (4.5, 5.5)]
+	for i in 1:4
+		ylims!(ax_test_hist[i], 0, nothing)
+		# xlims!(ax_test[i], xlimits[i])
+	end
+
+	# linkyaxes!(ax_test[1], ax_test[2], ax_test[3])
+	# for i in 1:2
+	# 	hideydecorations!(ax_test[i], ticks = false, ticklabels = false)
+	# end
+	
+	# save("plots/dndpt_pT_tau_test.png", fig_test, px_per_unit = 5.0)
+	fig_test_hist
 end
 
 # ╔═╡ c6bba9a0-9d6d-4a13-a687-725667632621
 begin
-	nbins = 100
-	real_ipT_hist = findminindex(ptbinsel[2], parameters_trial["PTBINS"])
-	label_hist = "bin"*string(real_ipT_hist)
-	pT_spectraᵢ_hist = pT_spectra_trial[label_hist]
+	nbins = 50
+	label_hist = string(pTs[1])
+	pT_spectraᵢ_hist = pT_spectra_test[string(τₛ[2])][label_hist]
 	
 	normf = [:none, :pdf, :density, :probability]
-	colors = Makie.wong_colors()
+	# colors = Makie.wong_colors()
 	fig_hist = Figure(resolution = (800, 600), fonts = (; regular ="CMU Serif"))
 	axs_hist = [Axis(fig_hist[i, j], xlabel = i == 2 ? L"p_T" : "", ylabel = j == 1 ? L"\mathrm{d}N/\mathrm{d}p_T" : "", xlabelsize=24, ylabelsize=24) for i in 1:2 for j in 1:2]
 	[hist!(axs_hist[i], pT_spectraᵢ_hist; normalization = normf[i], color = colors[i],
 	    label = "$(normf[i])", bins=nbins) for i in 1:4]
 	[axislegend(axs_hist[i], position = :rt) for i in 1:4]
-	save("plots/dndpt_pT_hist_types_nbins_"*string(nbins)*".png", fig_hist, px_per_unit = 5.0)
+	# save("plots/dndpt_pT_hist_types_nbins_"*string(nbins)*".png", fig_hist, px_per_unit = 5.0)
 	fig_hist
-end
-
-# ╔═╡ 2a13f8c8-ad45-4448-930a-a2c631f78c22
-# pTs_py = range(findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1], 20)
-
-# ╔═╡ 949e719e-1c75-4dd0-a195-6ab2adf35271
-begin
-	@. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
-	p₀ =  [1.81517e8, 3.66738, 1.15575, 0.0341966]
-end
-
-# ╔═╡ 8408fd32-4730-4ee1-aded-bfb02d7d6974
-md"---"
-
-# ╔═╡ 4378f091-ceab-4209-9c03-67f59968da92
-folder = "RAA_charm_fonll_Qs_2.0_clcasimir"
-
-# ╔═╡ b9bfe411-7579-4743-8afc-455a1c90c7ee
-filename = current_path * "/results/" * folder * "/event_1.pickle"
-
-# ╔═╡ d7e6a051-6000-4c45-897e-4ee095a69048
-parameters, pT_spectra = read_file(filename)
-
-# ╔═╡ 3c326777-d2e4-4e73-a4a6-c433e0c9b66c
-begin
-	fig_trial = Figure(resolution = (500, 400))
-	set_theme!(fonts = (; regular = "CMU Serif"))
-	ax_trial = Axis(fig_trial[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}",
-    xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
-	
-	# colors = [:green, :dodgerblue, :purple, :orange, :crimson]
-
-	Ntp = parameters["NTP"]
-	Ntpᵢ = range(1, Ntp, Ntp)
-
-	# for (pTbin, pT) in enumerate(parameters_trial["PTBINS"])
-	
-	# for (pTbin, pT) in enumerate(ptbinsel)
-	pTbin = 2
-	pT = ptbinsel[2]
-		
-		pT_spectra₀ = ones(Ntp).*pT
-		real_ipT = findminindex(pT, parameters_trial["PTBINS"])
-
-		# lines!(pT_spectra₀, Ntpᵢ, color=colors[pTbin], linewidth=2)
-
-		# normalized by Ntp
-		lines!(pT_spectra₀, Ntpᵢ./Ntp, linewidth=2)
-
-		label = "bin"*string(real_ipT)
-		pT_spectraᵢ = pT_spectra_trial[label]
-
-		# kdeᵢ = kde(pT_spectraᵢ, npoints=2048)
-		kdeᵢ = kde(pT_spectraᵢ)
-		densᵢ = kdeᵢ.density
-		norm_densᵢ = densᵢ./findmax(densᵢ)[1].*Ntp
-		
-		# lines!(kdeᵢ.x, norm_densᵢ, color=colors[pTbin])
-		
-		# band!(kdeᵢ.x, zeros(length(norm_densᵢ)), norm_densᵢ; color = (colors[pTbin], 0.3))
-
-		band!(kdeᵢ.x, zeros(length(norm_densᵢ)), densᵢ)
-	
-		# print(integrate(kdeᵢ.x, densᵢ))
-		# print(length(kdeᵢ.x))
-
-		dens_ss = ss.kde.gaussian_kde(pT_spectraᵢ)
-		# kde_sk = sk.KernelDensity(kernel='gaussian')
-		# kde_sk.fit(x[:, None])
-		pTs_py = range(findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1], 100)
-		# pTs_py = range(0, 10, 100)
-		lines!(pTs_py, dens_ss(pTs_py), linewidth=2)
-		
-	# end
-	
-	# ylims!(ax_trial, 0, 3.5*Ntp)
-	# ax_trial.yticks = ([Ntp, 2*Ntp, 3*Ntp], [L"10^5", L"2\times 10^5", L"3\times 10^5"])
-
-	# pT_bins_fonll = range(0, 20, 200)
-	# fonll = powlaw(pT_bins_fonll, p₀)
-	# # lines!(pT_bins_fonll, fonll./findmax(fonll)[1].*1.7*Ntp, color=:silver, linewidth=2)
-	# fonll_norm = fonll./integrate(pT_bins_fonll, fonll)
-	# lines!(pT_bins_fonll, fonll_norm.*Ntp, color=:silver, linewidth=2)
-
-	# save("plots/dndpt_fast_raa.png", fig_trial, px_per_unit = 5.0)
-	fig_trial
-end
-
-# ╔═╡ 591cc9cc-0136-406c-9a1b-10288c3474fc
-integrate(pTs_py, dens_ss(pTs_py))
-
-# ╔═╡ d0fad4aa-b109-4f46-9079-ffa26e640da9
-parameters["PTBINS"]
-
-# ╔═╡ 3487f00a-c1af-423e-b8b7-8a941d262038
-begin
-	collect_pTs = zeros(0)
-	weights = zeros(0)
-	# test_weights = zeros(0)
-	
-	# pT_bins_fonll_w = range(0, ptmax, parameters["NPTBINS"])
-	# fonll_w = powlaw(pT_bins_fonll_w, p₀)
-	# fonll_norm_w = fonll_w./integrate(pT_bins_fonll_w, fonll_w)
-
-	fonll_w = powlaw(parameters["PTBINS"], p₀)
-	fonll_norm_w = fonll_w./integrate(parameters["PTBINS"], fonll_w)
-	
-	for (pTbin, pT) in enumerate(parameters["PTBINS"])	
-	# pTbin = 10
-	# pT = parameters["PTBINS"][pTbin]
-		
-		label = "bin"*string(pTbin)
-		pT_spectraᵢ = pT_spectra[label]
-
-		append!(collect_pTs, pT_spectraᵢ)
-		
-		# weightᵢ = powlaw(pT.*ones(parameters["NTP"]),p₀)
-		# weightᵢ = fonll_norm_w[pTbin].*ones(parameters["NTP"])./parameters["NTP"]
-
-		δpₜ = parameters["PTBINS"][2]
-		# weightᵢ = fonll_norm_w[pTbin].*ones(parameters["NTP"])./parameters["NTP"]./δpₜ./parameters["NPTBINS"]
-
-		# weightᵢ = ones(parameters["NTP"])./parameters["NTP"]./parameters["NPTBINS"]
-
-		kdeᵢ = kde(pT_spectraᵢ, boundary=(0, ptmax), npoints=parameters["NTP"])
-		# weightᵢ = kdeᵢ./parameters["NTP"]./parameters["NPTBINS"]
-
-		dens_kdeᵢ = kdeᵢ.density
-		pTs_kdeᵢ = kdeᵢ.x
-		weightᵢ = dens_kdeᵢ./parameters["NTP"]/ptmax
-		
-		append!(weights, weightᵢ)
-
-		# test_weightᵢ = fonll_norm_w[pTbin]
-		# append!(test_weights, test_weightᵢ)
-	end
-end
-
-# ╔═╡ 187e255f-fc6f-4718-a98d-be68449fbe5f
-collect_pTs
-
-# ╔═╡ 022feddd-8f33-4409-a106-1414f51eb631
-parameters["PTBINS"]
-
-# ╔═╡ ac95b857-478d-4931-942c-d7c2f6a50df8
-weights
-
-# ╔═╡ 1b0c21ed-e8a7-447d-b112-fb581261d702
-sum(weights)
-
-# ╔═╡ b2a42783-2447-4dc9-b104-132225e1eb6d
-StatsBase.Weights(weights)
-
-# ╔═╡ 2d9d397a-e91d-49a1-a9cf-f901253462bd
-begin
-	kde_all = kde(collect_pTs, weights=StatsBase.Weights(weights), boundary=(0, ptmax))
-	# kde_all = kde(collect_pTs, weights=StatsBase.Weights(weights))
-	dens_all = kde_all.density
-	pTs_all = kde_all.x
-
-	# pTs_all_pos = pTs_all[pTs_all .> 0]
-	# dens_all_pos = dens_all[pTs_all .> 0]
-
-	pTs_all_pos = pTs_all
-	dens_all_pos = dens_all
-
-	fonll_raa = powlaw(pTs_all_pos, p₀)
-	fonll_raa_norm = fonll_raa./integrate(pTs_all_pos, fonll_raa)
-	RAA_all = dens_all_pos./fonll_raa_norm
-end
-
-# ╔═╡ ccc4a4d5-4196-4366-b22d-256e81d96c24
-begin
-	set_theme!(fonts = (; regular = "CMU Serif"))
-	fig = Figure(resolution = (350, 470), font = "CMU Serif")
-	ylabels = [L"\mathrm{d}N/\mathrm{d}p_T", L"R_{AA}"]
-	ax = [Axis(fig[i,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14) for i in 1:2]
-
-	# lines!(ax[1], pTs_all, dens_all, color=:purple)
-	# band!(ax[1], pTs_all, zeros(length(dens_all)), dens_all, color=(:purple, 0.1))
-
-	l1 = lines!(ax[1], pTs_all_pos, fonll_raa_norm , color=:dodgerblue)
-	b1 = band!(ax[1], pTs_all_pos, zeros(length(fonll_raa_norm)), fonll_raa_norm, color=(:dodgerblue, 0.1))
-
-	l2 = lines!(ax[1], pTs_all_pos, dens_all_pos, color=:purple)
-	b2 = band!(ax[1], pTs_all_pos, zeros(length(dens_all_pos)), dens_all_pos, color=(:purple, 0.1))
-
-	lines!(ax[2], pTs_all_pos, ones(length(pTs_all_pos)), color=(:gray, 0.3))
-	lines!(ax[2], pTs_all_pos, ones(length(pTs_all_pos)), color=:gray, linestyle=:dash)
-	
-	lines!(ax[2], pTs_all_pos, RAA_all, color=:green)
-	
-	linkxaxes!(ax[1], ax[2])
-	hidexdecorations!(ax[1], ticks = false, ticklabels = false, grid=false)
-
-	axislegend(ax[2], [l1, l2], [L"\mathrm{FONLL}\,\delta\tau=0\,\mathrm{fm/}c", L"\mathrm{Glasma}\,\,\delta\tau=0.3\,\mathrm{fm/}c"], position = :rt, labelsize=14, titlesize=18)
-	
-	xlims!(ax[2], 0.05, 10)
-	ylims!(ax[2], 0.8, 1.2)
-
-	# save("plots/dNdpT_RAA_tau_dep_fast.png", fig, px_per_unit = 5.0)
-	
-	fig
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -299,19 +196,15 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 KernelDensity = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
-NumericalIntegration = "e7bfaba1-d571-5449-8927-abc22e82249b"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
-StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 CairoMakie = "~0.10.7"
 DataFrames = "~1.6.1"
 KernelDensity = "~0.6.7"
-NumericalIntegration = "~0.2.0"
 Pickle = "~0.3.3"
 PyCall = "~1.96.1"
-StatsBase = "~0.34.0"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -320,7 +213,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "a618096ee170d1a2bcccdf42a46c0861385a7767"
+project_hash = "308d002fcdf9d0f048d45c5be5f3bc79ab3d322c"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -1184,12 +1077,6 @@ version = "1.1.1"
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.2.0"
 
-[[deps.NumericalIntegration]]
-deps = ["InteractiveUtils", "LinearAlgebra", "Logging", "Test"]
-git-tree-sha1 = "71a5bf35469ec57e1bfdeec7dbb5757e51949bbb"
-uuid = "e7bfaba1-d571-5449-8927-abc22e82249b"
-version = "0.2.0"
-
 [[deps.Observables]]
 git-tree-sha1 = "6862738f9796b3edc1c09d0890afce4eca9e7e93"
 uuid = "510215fc-4207-5dde-b226-833fc4488ee2"
@@ -1888,29 +1775,12 @@ version = "3.5.0+0"
 # ╠═200b3001-f733-4bb5-bc57-1d563ba85603
 # ╠═f3b4001f-d1a3-4f4e-b2a7-007330300d42
 # ╠═62ba0eb0-4607-41a8-ada2-3278b4c72677
-# ╠═056ed037-507d-4a3c-a1a8-0aa252083f5c
 # ╠═a1ba57c1-65fd-4187-a3f1-6f25a38d9f6f
 # ╠═2e3d93f0-95a7-4fd6-9b2e-a20d5eac0ad2
 # ╠═05f67077-858f-4675-a9a2-d4d25a41064a
-# ╠═908cf47b-76a2-4169-a18c-e5991ea1f98d
 # ╠═98cb0e8e-ec66-4ad4-860a-8fd2a53b55dd
 # ╠═3c326777-d2e4-4e73-a4a6-c433e0c9b66c
-# ╠═591cc9cc-0136-406c-9a1b-10288c3474fc
+# ╠═64f512c8-963a-432d-90db-a819c38f3a09
 # ╠═c6bba9a0-9d6d-4a13-a687-725667632621
-# ╠═2a13f8c8-ad45-4448-930a-a2c631f78c22
-# ╠═949e719e-1c75-4dd0-a195-6ab2adf35271
-# ╠═8408fd32-4730-4ee1-aded-bfb02d7d6974
-# ╠═4378f091-ceab-4209-9c03-67f59968da92
-# ╠═b9bfe411-7579-4743-8afc-455a1c90c7ee
-# ╠═d7e6a051-6000-4c45-897e-4ee095a69048
-# ╠═d0fad4aa-b109-4f46-9079-ffa26e640da9
-# ╠═3487f00a-c1af-423e-b8b7-8a941d262038
-# ╠═187e255f-fc6f-4718-a98d-be68449fbe5f
-# ╠═022feddd-8f33-4409-a106-1414f51eb631
-# ╠═ac95b857-478d-4931-942c-d7c2f6a50df8
-# ╠═1b0c21ed-e8a7-447d-b112-fb581261d702
-# ╠═b2a42783-2447-4dc9-b104-132225e1eb6d
-# ╠═2d9d397a-e91d-49a1-a9cf-f901253462bd
-# ╠═ccc4a4d5-4196-4366-b22d-256e81d96c24
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -12,6 +12,9 @@ begin
 	using PyCall
 end
 
+# ╔═╡ 5df1f01b-54ba-4891-996d-dbe6ddeb9a2b
+using Interpolations
+
 # ╔═╡ 2123d08f-245e-4054-bd62-a2066166471e
 begin
 	quark = "charm"
@@ -39,7 +42,7 @@ md"#### Energy dependence of $p_T$-differential cross section, NNPDF and CTEQ"
 
 # ╔═╡ 9784e5b2-376b-4ef7-90c5-23e354a8f8e1
 begin
-	fig = Figure(resolution = (500, 400))
+	fig = Figure(resolution = (500, 400), font = "CMU Serif")
 	set_theme!(fonts = (; regular = "CMU Serif"))
 	ax = Axis(fig[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}\sigma/\mathrm{d}p_T\,\mathrm{[pb/GeV]}",
     xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
@@ -57,15 +60,17 @@ begin
 
 		if ((energies[e]==5500) && (pdfs[e]=="cteq"))
 			factor = 2*10
+			# factor = 1 ./ dfe[!, "pt"] .* 100
 		elseif ((energies[e]==5030) && (pdfs[e]=="cteq"))
 			factor = 2*10
+			# factor = 1 ./ dfe[!, "pt"] .* 100
 		else
 			factor = 1
 		end
 		
-		lines!(dfe[!, "pt"], dfe[!, "central"]*factor; color = (colors[e], 0.5), label = labels[e], linewidth=2, linestyle=linestyle)
+		lines!(dfe[!, "pt"], dfe[!, "central"] .* factor; color = (colors[e], 0.5), label = labels[e], linewidth=2, linestyle=linestyle)
 		if ((energies[e]!=5500) || (pdfs[e]!="cteq"))
-			band!(dfe[!, "pt"], dfe[!, "min"]*factor, dfe[!, "max"]*factor; color = (colors[e], 0.2))
+			band!(dfe[!, "pt"], dfe[!, "min"] .* factor, dfe[!, "max"] .* factor; color = (colors[e], 0.2))
 		end
 	end
 	axislegend(L"\sqrt{s_\mathrm{NN}}\,&\,\,\mathrm{PDF}", position = :rt, labelsize=14, titlesize=18)
@@ -86,33 +91,93 @@ begin
 	pdfs2 = ["nnpdf", "cteq", "cteq"]
 end
 
+# ╔═╡ 41787672-dc73-492f-99bd-054bff378c43
+md"Fit the spectra in either normal or logarithmic scale"
+
+# ╔═╡ 47128ff7-8ae7-4d7d-aecb-3ba691689759
+# fit_type = "normal"
+fit_type = "log"
+
+# ╔═╡ 46594d4b-ced8-469e-b6eb-b6d1de94ff89
+md"Fit either $\mathrm{d}\sigma/\mathrm{d}p_T$ or $\mathrm{d}^2\sigma/\mathrm{d}^2p_T$"
+
+# ╔═╡ 608e5c0b-243d-4417-8044-97ed62c7ee6f
+# version = "dsdpt"
+version = "d2sd2pt"
+
+# ╔═╡ 51dfbc86-fa1c-49e0-a99f-455cb3fe92da
+saveplots = true
+
 # ╔═╡ d4d7d828-f39b-4c28-b716-99b7ba9f073e
 begin
 	so = pyimport("scipy.optimize")
-	@. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
+	# @. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
+	if version == "dsdpt"
+		@. powlaw(x,p) = real(p[1]*x/(1+p[4]*Complex(x)^p[2])^p[3])
+	elseif version == "d2sd2pt"
+		@. powlaw(x,p) = real(p[1]/(1+p[4]*Complex(x)^p[2])^p[3])
+	end
 	fit = pyeval("""lambda fit: lambda a, b, c, d, e: fit(a, b, c, d, e)""")
 end
 
 # ╔═╡ f872bfed-1b0f-469c-8075-a3a55612334d
 begin
-	fig2 = Figure(resolution = (500, 400))
+	fig2 = Figure(resolution = (450, 700), font = "CMU Serif")
 	set_theme!(fonts = (; regular = "CMU Serif"))
-	ax2 = Axis(fig2[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}\sigma/\mathrm{d}p_T\,\mathrm{[pb/GeV]}",
-    xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
+	if version == "dsdpt"
+		ylabels = [L"\mathrm{d}\sigma/\mathrm{d}p_T\,\mathrm{[pb/GeV]}", L"\mathrm{logarithmic\,scale}", L"\mathrm{FONLL/fit}"]
+	elseif version == "d2sd2pt"
+		ylabels = [L"\mathrm{d}^2\sigma/\mathrm{d}^2p_T\,\mathrm{[pb/GeV]}", L"\mathrm{logarithmic\,scale}", L"\mathrm{FONLL/fit}"]
+	end
+	yscales = [identity, log10, identity]
+	ax2 = [Axis(fig2[i,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=ylabels[i],
+    xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xticksize = 3, yticksize = 3, yscale=yscales[i]) for i in 1:3]
 	
 	colors2 = [:green, :dodgerblue, :purple]
-	colors_fit = [:darkorchid, :deeppink4, :brown4]
-	labels2 = [L"5.03,\,\mathrm{NNPDF}", L"5.03,\,\mathrm{CTEQ}\,\times 20", L"5.5,\,\mathrm{CTEQ}\,\times 20"]
-	labels_fit = [L"\mathrm{fit}\,5.03,\,\mathrm{NNPDF}", L"\mathrm{fit}\,5.03,\,\mathrm{CTEQ}\,\times 20", L"\mathrm{fit}\,5.5,\,\mathrm{CTEQ}\,\times 20"]
 
 	popt_fit = Vector{Vector{Float64}}(undef,length(energies2))
+	# upper_bounds = [[Inf, 5, 10, 1], [Inf, 5, 10, 1], [Inf, 5, 10, 1]]
+	if version == "dsdpt"
+		p0s = [[10^8, 3, 3, 0.1], [10^6, 2, 4, 0.1], [10^6, 2, 4, 0.1]]
+	elseif version == "d2sd2pt"
+		p0s = [[10^8, 3, 4, 0.1], [10^8, 3, 4, 0.1], [10^8, 3, 4, 0.1]]
+	end
 	for (e, energy) in enumerate(energies2)
 		dfe = df(quark, energies2[e], pdfs2[e])
 
-		xdata = dfe[!, "pt"]
-		ydata = dfe[!, "central"]
+		
+		if version == "dsdpt"
+			xdata = dfe[!, "pt"]
+			ydata = dfe[!, "central"]
+	
+			xdata_log = xdata[2:length(xdata)]
+			ydata_log = ydata[2:length(ydata)]
+		elseif version == "d2sd2pt"
+			xdata = dfe[!, "pt"][2:length(dfe[!, "pt"])]
+			ydata = dfe[!, "central"][2:length(dfe[!, "central"])]
+	
+			ydata = ydata ./ xdata
 
-		popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. x₀*pₜ/(1.0+x₃*pₜ^x₁)^x₂), xdata, ydata, bounds=(0, [Inf, 5, 10, 1]))
+			xdata_log = xdata[2:length(xdata)]
+			ydata_log = ydata[2:length(ydata)]
+		end
+
+		if fit_type == "normal"
+			if version == "dsdpt"
+				# popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. x₀*pₜ/(1.0+x₃*pₜ^x₁)^x₂), xdata, ydata, bounds=(0, upper_bounds[e]))
+				# popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. x₀*pₜ/(1.0+x₃*pₜ^x₁)^x₂), xdata, ydata, bounds=(0, [Inf, 5, 10, 1]))
+				popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. real(x₀*pₜ/(1.0+x₃*Complex(pₜ)^x₁+0im)^x₂)), xdata, ydata, p0s[e])
+			elseif version == "d2sd2pt"
+				popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. real(x₀/(1.0+x₃*Complex(pₜ)^x₁+0im)^x₂)), xdata, ydata, p0s[e])
+			end
+		elseif fit_type == "log"
+			if version == "dsdpt"
+				# popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. log10(x₀*pₜ/(1.0+x₃*pₜ^x₁)^x₂)), xdata[2:length(xdata)], log10.(ydata[2:length(ydata)]), bounds=(0, [Inf, 5, 10, 1]))
+				popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. real(log10(Complex(x₀*pₜ/(1.0+x₃*Complex(pₜ)^x₁)^x₂)))), xdata[2:length(xdata)], log10.(ydata[2:length(ydata)]), p0s[e])
+			elseif version == "d2sd2pt"
+				popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. real(log10(Complex(x₀/(1.0+x₃*Complex(pₜ)^x₁)^x₂)))), xdata[2:length(xdata)], log10.(ydata[2:length(ydata)]), p0s[e], bounds=(0, Inf))
+			end
+		end
 		popt_fit[e] = popt
 
 		if ((energies2[e]==5500) && (pdfs2[e]=="cteq"))
@@ -123,27 +188,70 @@ begin
 			factor = 1
 		end
 		
-		lines!(dfe[!, "pt"], dfe[!, "central"]*factor; color = (colors2[e], 0.5), label = labels2[e], linewidth=2)
+		lines!(ax2[1], xdata, ydata*factor; color = (colors2[e], 0.5), linewidth=2)
 
 		if ((energies2[e]!=5500) || (pdfs2[e]!="cteq"))
-			band!(dfe[!, "pt"], dfe[!, "min"]*factor, dfe[!, "max"]*factor; color = (colors2[e], 0.2))
+			if version == "dsdpt"
+				ydata_min = dfe[!, "min"]
+				ydata_max = dfe[!, "max"]
+			elseif version == "d2sd2pt"
+				ydata_min = dfe[!, "min"][2:length(dfe[!, "min"])]
+				ydata_max = dfe[!, "max"][2:length(dfe[!, "max"])]
+
+				ydata_min = ydata_min ./ xdata
+				ydata_max = ydata_max ./ xdata
+			end
+			band!(ax2[1],xdata, ydata_min*factor, ydata_max*factor; color = (colors2[e], 0.2))
 		end
 
 		xdata_mp = range(xdata[1], xdata[length(xdata)], 200)
-		if e==3
-			lines!(xdata_mp, powlaw(xdata_mp, popt)*factor; color = (:red, 0.5), label = L"\mathrm{fit}\,x_0\cdot p_T/(1+x_3\cdot {p_T}^{x_1})^{x_2}", linewidth=2, linestyle=:dash)
-		else
-			lines!(xdata_mp, powlaw(xdata_mp, popt)*factor; color = (:red, 0.5), linewidth=2, linestyle=:dash)
-		end
+		lines!(ax2[1],xdata_mp, powlaw(xdata_mp, popt)*factor; color = (:red, 0.5), linewidth=2, linestyle=:dash)
+
+		# log plot
+
+		lines!(ax2[2], xdata_log, ydata_log*factor; color = (colors2[e], 0.5), linewidth=2)
+
+		# if ((energies2[e]!=5500) || (pdfs2[e]!="cteq"))
+		# 	band!(ax2[2], xdata_log, dfe[!, "min"][2:length(dfe[!, "min"])]*factor, dfe[!, "max"][2:length(dfe[!, "max"])]*factor; color = (colors2[e], 0.2))
+		# end
+
+		xdata_mp_log = range(xdata[2], xdata[length(xdata)], 200)
+		lines!(ax2[2], xdata_mp_log, powlaw(xdata_mp_log, popt)*factor; color = (:red, 0.5), linewidth=2, linestyle=:dash)
+	
+		ratio = ydata./powlaw(xdata, popt)
+		lines!(ax2[3], xdata, ratio; color = (colors2[e], 0.5), linewidth=2)
 	
 	end
-	axislegend(L"\sqrt{s_\mathrm{NN}}\,&\,\,\mathrm{PDF}", position = :rt, labelsize=14, titlesize=18)
-	save("plots/dsdpt_fonll_pdf_dep_energy_5030_5500_fit.png", fig2, px_per_unit = 5.0)
+
+	linkxaxes!(ax2[1], ax2[2], ax2[3])
+	hidexdecorations!(ax2[1], ticks = false, ticklabels = false, grid=false)
+	hidexdecorations!(ax2[2], ticks = false, ticklabels = false, grid=false)
+	rowsize!(fig2.layout, 1, Relative(3/6))
+	rowsize!(fig2.layout, 2, Relative(2/6))
+	rowsize!(fig2.layout, 3, Relative(1/6))
+
+	for i in 1:3
+		xlims!(ax2[i], 0, 20)
+	end
+
+	labels_legend = [L"5.03,\,\mathrm{NNPDF}", L"5.03,\,\mathrm{CTEQ}\,\times 20", L"5.5,\,\mathrm{CTEQ}\,\times 20", L"\mathrm{fit}\,x_0\cdot p_T/(1+x_3\cdot {p_T}^{x_1})^{x_2}"]
+	elements= [LineElement(color = (colors2[1], 0.5), linewidth=2), LineElement(color = (colors2[2], 0.5), linewidth=2), LineElement(color = (colors2[3], 0.5), linewidth=2), LineElement(color = (:red, 0.5), linewidth=2, linestyle=:dash)]
+	axislegend(ax2[1], elements, labels_legend, L"\sqrt{s_\mathrm{NN}}\,&\,\,\mathrm{PDF}", position = :rt, labelsize=14, titlesize=18
+	)
+	if saveplots
+		save("plots/"*version*"_fonll_pdf_dep_energy_5030_5500_"*fit_type*"_fit_ratio.png", fig2, px_per_unit = 5.0)
+	end
 	fig2
 end
 
 # ╔═╡ 51b25e29-5153-497a-8e78-427c21fcf132
 popt_fit
+
+# ╔═╡ 9de6f846-d388-46b2-b32a-e6628f00f919
+md"#### Interpolate the spectra"
+
+# ╔═╡ f16138e5-9f14-4d34-a2e3-cebf1ac8d956
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -151,11 +259,13 @@ PLUTO_PROJECT_TOML_CONTENTS = """
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+Interpolations = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 
 [compat]
 CairoMakie = "~0.10.7"
 DataFrames = "~1.6.1"
+Interpolations = "~0.14.7"
 PyCall = "~1.96.1"
 """
 
@@ -165,7 +275,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "2987d76f60941bf9df00e97c788375311ab28a59"
+project_hash = "ca979806f129567b993d0eef62014a8fba3636c9"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -1701,8 +1811,16 @@ version = "3.5.0+0"
 # ╠═60aaed36-53af-4542-a658-f8a445fbb25b
 # ╠═d2053831-9f35-4b07-8822-8d1cfd8c6e62
 # ╠═a07096a7-851c-4a76-812d-6c03810f0ef3
+# ╠═41787672-dc73-492f-99bd-054bff378c43
+# ╠═47128ff7-8ae7-4d7d-aecb-3ba691689759
+# ╠═46594d4b-ced8-469e-b6eb-b6d1de94ff89
+# ╠═608e5c0b-243d-4417-8044-97ed62c7ee6f
+# ╠═51dfbc86-fa1c-49e0-a99f-455cb3fe92da
 # ╠═d4d7d828-f39b-4c28-b716-99b7ba9f073e
 # ╠═f872bfed-1b0f-469c-8075-a3a55612334d
 # ╠═51b25e29-5153-497a-8e78-427c21fcf132
+# ╠═9de6f846-d388-46b2-b32a-e6628f00f919
+# ╠═5df1f01b-54ba-4891-996d-dbe6ddeb9a2b
+# ╠═f16138e5-9f14-4d34-a2e3-cebf1ac8d956
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
