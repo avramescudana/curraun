@@ -1,5 +1,4 @@
 import numpy as np
-import argparse
 
 # hbar * c [GeV * fm]
 hbarc = 0.197326 
@@ -7,12 +6,11 @@ hbarc = 0.197326
 # Simulation box 
 L = 10      
 N = 512 
-tau_sim = 0.5     
+tau_sim = 1     
 DTS = 8     
 
 # Glasma
 su_group = 'su3'
-# Qs = 1.4 
 Qs = 2.0     
 ns = 50      
 factor = 0.8        
@@ -20,34 +18,38 @@ uv = 10.0
 
 # Wong
 quark = 'charm'    
-mass = 1.275       
+mass = 1.275   
+tau_form = 1/(2*mass)*hbarc    
 
-# tau_form = 0
+# tau_sim += tau_form
+
 initialization = 'pT'         
 ntp = 10**5  
 
-nevents = 10   
-npTbins = 100 
-pTmax = 10
+nevents = 1
 
-# representation = 'quantum fundamental'     
-representation = 'fundamental' 
+representation = 'quantum fundamental'     
+# representation = 'fundamental' 
 boundary = 'periodic'  
 
-# pTs = np.linspace(0, pTmax, npTbins)
-pTs = [1, 3, 5]
+# pTs = [0, 0.5, 1, 5]
+npTbins = 20 
+pTmax = 10
+pTs = np.linspace(0, pTmax, npTbins)
 
 # Store relevant parameters in a dictionary
 p = {
     'QUARK': quark,
     'MASS': mass,   
+    'TFORM': tau_form,
+    'TSIM': tau_sim,
     'QS': Qs,            
     'NEVENTS': nevents,
-    # 'NPTBINS': npTbins,   
     'NTP': ntp,   
-    # 'PT': pTmax,   
-    'PTBINS': pTs,
+    'PTS': pTs,
     }
+
+import argparse
 
 """
     Argument parsing
@@ -79,8 +81,12 @@ tau_form = 1/(2*p["MASS"])*hbarc
 tau_sim += tau_form
 
 # Results folder
-folder = 'RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_clcasimir'
-filename = 'test_pTs.pickle'
+if representation == 'quantum fundamental':
+    folder = 'RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_qfund'
+elif representation == 'fundamental':
+    folder = 'RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_fund'
+
+filename = 'all_pTs.pickle'
 
 import os
 os.environ["MY_NUMBA_TARGET"] = "cuda"
@@ -106,7 +112,7 @@ if use_cuda:
 from curraun import wong
 wong.BOUNDARY = boundary
 wong.WONG_TO_HOST = True
-from curraun.wong import init_pos, init_charge, init_mom_toy, init_mom_fonll
+from curraun.wong import init_pos, init_charge, init_mom_toy
 from curraun.particles_correlators import TransMom
 
 import pickle
@@ -118,18 +124,20 @@ if not os.path.isdir(results_folder):
     os.makedirs(results_folder)
 results_path = current_path + '/' + results_folder + '/'
 
-def simulate(p): 
-    os.chdir(results_path)
-
-    output = {}
-    output['parameters'] = p.copy()
-    output['pTs'] = p['PTBINS']
-    output['nevents'] = p["NEVENTS"]
-
+def simulate(p, ev, pT, output): 
     # Derived parameters
     a = L/N
     E0 = N/L * hbarc
     DT = 1.0 / DTS
+
+    # transverse mass
+    mT = np.sqrt(p["MASS"]**2+pT**2)   
+    # formation time given by inverse of transverse mass
+    tau_form = 1/(2*mT)*hbarc
+    p["TFORM"] = tau_form
+
+    tau_sim = p["TSIM"] + tau_form 
+
     formt = int(tau_form / a * DTS)
     maxt = int(tau_sim / a * DTS)
 
@@ -139,56 +147,66 @@ def simulate(p):
     vb = mv.wilson(s, mu=mu / E0, m=ir / E0, uv=uv / E0, num_sheets=ns)
     initial.init(s, va, vb)
 
-    for ipT, pT in enumerate(p['PTBINS']):
-        print("pT = " + str(pT) + " GeV")
+   
+    # Initialize the Wong solver
+    wong_solver = wong.WongSolver(s, ntp)
+    x0s, p0s, q0s = np.zeros((ntp, 3)), np.zeros((ntp, 5)), np.zeros((ntp, su.ALGEBRA_ELEMENTS))
+    masses = p["MASS"] / E0 * np.ones(ntp)
 
-        output[str(pT)] = {}
-        
-        for ev in range(0, p["NEVENTS"]):
-            # Initialize the Wong solver
-            wong_solver = wong.WongSolver(s, ntp)
-            x0s, p0s, q0s = np.zeros((ntp, 3)), np.zeros((ntp, 5)), np.zeros((ntp, su.ALGEBRA_ELEMENTS))
-            masses = p["MASS"] / E0 * np.ones(ntp)
+    for i in range(ntp):
+        x0, p0, q0 = init_pos(s.n), init_mom_toy('pT', pT / E0), init_charge(representation)
+        x0s[i, :], p0s[i, :], q0s[i, :] = x0, p0, q0
+    
+    wong_solver.initialize(x0s, p0s, q0s, masses)
 
-            for i in range(ntp):
-                x0, p0, q0 = init_pos(s.n), init_mom_toy('pT', pT / E0), init_charge(representation)
-                x0s[i, :], p0s[i, :], q0s[i, :] = x0, p0, q0
-            
-            wong_solver.initialize(x0s, p0s, q0s, masses)
+    pTs = np.zeros((maxt-formt, ntp))
+    compute_pT = TransMom(wong_solver, ntp)
 
-            pTs = np.zeros((maxt-formt, ntp))
-            compute_pT = TransMom(wong_solver, ntp)
+    with tqdm(total=maxt) as pbar:
+        for t in range(maxt):
+            # Evolve Glasma fields
+            core.evolve_leapfrog(s)
 
-            with tqdm(total=maxt) as pbar:
-                for t in range(maxt):
-                    # Evolve Glasma fields
-                    core.evolve_leapfrog(s)
+            # Solve Wong's equations
+            if t>=formt:  
+                compute_pT.compute()
+                pTs[t-formt] = compute_pT.pT.copy() * E0
 
-                    # Solve Wong's equations
-                    if t>=formt:  
-                        compute_pT.compute()
-                        pTs[t-formt] = compute_pT.pT.copy() * E0
-                        
-                        wong_solver.evolve()
+                wong_solver.compute_mom_broad()
+                
+                wong_solver.evolve()
 
-                    pbar.set_description("Event " + str(ev+1))
-                    pbar.update(1)
+            pbar.set_description("Event " + str(ev+1))
+            pbar.update(1)
 
-            output[str(pT)]['pTs_event_'+ str(ev+1)] = pTs
+    output[str(pT)]['pTs_event_'+ str(ev+1)] = pTs
 
     tau = np.linspace(0, tau_sim-tau_form, maxt-formt)
     output['tau'] = tau
 
-    wong_folder = folder
-    if not os.path.isdir(wong_folder):
-        os.makedirs(wong_folder)
-    wong_path = results_path + '/' + wong_folder + '/'
-    os.chdir(wong_path)
-
-    with open(filename, 'wb') as handle:
-        pickle.dump(output, handle)
     return output
 
-print(p['QUARK'].capitalize() + " quark")
 
-simulate(p)
+print(p['QUARK'].capitalize() + " quark")
+os.chdir(results_path)
+
+output = {}
+output['parameters'] = p.copy()
+output['pTs'] = p['PTS']
+output['nevents'] = p["NEVENTS"]
+
+for ipT, pT in enumerate(p['PTS']):
+    print("pT = " + str(pT) + " GeV")
+
+    output[str(pT)] = {}
+    for ev in range(0, p["NEVENTS"]):
+        output = simulate(p, ev, pT, output)
+
+wong_folder = folder
+if not os.path.isdir(wong_folder):
+    os.makedirs(wong_folder)
+wong_path = results_path + '/' + wong_folder + '/'
+os.chdir(wong_path)
+
+with open(filename, 'wb') as handle:
+    pickle.dump(output, handle)

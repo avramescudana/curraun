@@ -58,15 +58,17 @@ begin
 			linestyle = nothing
 		end
 
-		if ((energies[e]==5500) && (pdfs[e]=="cteq"))
-			factor = 2*10
-			# factor = 1 ./ dfe[!, "pt"] .* 100
-		elseif ((energies[e]==5030) && (pdfs[e]=="cteq"))
-			factor = 2*10
-			# factor = 1 ./ dfe[!, "pt"] .* 100
-		else
-			factor = 1
-		end
+		# if ((energies[e]==5500) && (pdfs[e]=="cteq"))
+		# 	factor = 2*10
+		# 	# factor = 1 ./ dfe[!, "pt"] .* 100
+		# elseif ((energies[e]==5030) && (pdfs[e]=="cteq"))
+		# 	factor = 2*10
+		# 	# factor = 1 ./ dfe[!, "pt"] .* 100
+		# else
+		# 	factor = 1
+		# end
+
+		factor = 1
 		
 		lines!(dfe[!, "pt"], dfe[!, "central"] .* factor; color = (colors[e], 0.5), label = labels[e], linewidth=2, linestyle=linestyle)
 		if ((energies[e]!=5500) || (pdfs[e]!="cteq"))
@@ -75,7 +77,7 @@ begin
 	end
 	axislegend(L"\sqrt{s_\mathrm{NN}}\,&\,\,\mathrm{PDF}", position = :rt, labelsize=14, titlesize=18)
 	xlims!(ax, 0, 20)
-	save("plots/dsdpt_fonll_pdf_energy_dep.png", fig, px_per_unit = 5.0)
+	save("plots/dsdpt_fonll_pdf_energy_dep_final.png", fig, px_per_unit = 5.0)
 	fig
 end
 
@@ -102,8 +104,8 @@ fit_type = "log"
 md"Fit either $\mathrm{d}\sigma/\mathrm{d}p_T$ or $\mathrm{d}^2\sigma/\mathrm{d}^2p_T$"
 
 # ╔═╡ 608e5c0b-243d-4417-8044-97ed62c7ee6f
-# version = "dsdpt"
-version = "d2sd2pt"
+version = "dsdpt"
+# version = "d2sd2pt"
 
 # ╔═╡ 51dfbc86-fa1c-49e0-a99f-455cb3fe92da
 saveplots = true
@@ -180,13 +182,15 @@ begin
 		end
 		popt_fit[e] = popt
 
-		if ((energies2[e]==5500) && (pdfs2[e]=="cteq"))
-			factor = 2*10
-		elseif ((energies2[e]==5030) && (pdfs2[e]=="cteq"))
-			factor = 2*10
-		else
-			factor = 1
-		end
+		# if ((energies2[e]==5500) && (pdfs2[e]=="cteq"))
+		# 	factor = 2*10
+		# elseif ((energies2[e]==5030) && (pdfs2[e]=="cteq"))
+		# 	factor = 2*10
+		# else
+		# 	factor = 1
+		# end
+
+		factor = 1
 		
 		lines!(ax2[1], xdata, ydata*factor; color = (colors2[e], 0.5), linewidth=2)
 
@@ -239,7 +243,7 @@ begin
 	axislegend(ax2[1], elements, labels_legend, L"\sqrt{s_\mathrm{NN}}\,&\,\,\mathrm{PDF}", position = :rt, labelsize=14, titlesize=18
 	)
 	if saveplots
-		save("plots/"*version*"_fonll_pdf_dep_energy_5030_5500_"*fit_type*"_fit_ratio.png", fig2, px_per_unit = 5.0)
+		save("plots/"*version*"_fonll_pdf_dep_energy_5030_5500_"*fit_type*"_fit_ratio_final.png", fig2, px_per_unit = 5.0)
 	end
 	fig2
 end

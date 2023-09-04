@@ -19,16 +19,22 @@ begin
 end
 
 # ╔═╡ 200b3001-f733-4bb5-bc57-1d563ba85603
-folder_test = "RAA_charm_fonll_Qs_2.0_qmcasimir"
+# folder_test = "RAA_charm_fonll_Qs_2.0_su2"
+folder_test = "RAA_charm_fonll_Qs_2.0_qfund"
 
 # ╔═╡ f3b4001f-d1a3-4f4e-b2a7-007330300d42
 begin
 	current_path = pwd()
-	filename_test = current_path * "/results/" * folder_test * "/test_pTs_10_ev.pickle"
+	# filename_test = current_path * "/results/" * folder_test * "/test_pTs_5_ev.pickle"
+	filename_test = current_path * "/results/" * folder_test * "/test_pTs.pickle"
 end
 
 # ╔═╡ 62ba0eb0-4607-41a8-ada2-3278b4c72677
-τₛ = [0.2, 0.6, 1.0]
+begin
+	τₛ = [0.2, 0.6, 1.0]
+	# τₛ = [0.4]
+	pTs = [0, 1, 5]
+end
 
 # ╔═╡ a1ba57c1-65fd-4187-a3f1-6f25a38d9f6f
 function findminindex(value, array)
@@ -39,7 +45,7 @@ end
 function read_file(filename, τₛ)
 	output = Pickle.npyload(filename)
 	parameters = output["parameters"]
-	pTs = parameters["PTBINS"]
+	pTs = parameters["PTS"]
 	nevents = parameters["NEVENTS"]
 	# pTbins = parameters["NPTBINS"]
 
@@ -65,7 +71,7 @@ begin
 	for τᵢ in τₛ
 		parameters_test[string(τᵢ)], pT_spectra_test[string(τᵢ)] = read_file(filename_test, τᵢ)
 	end
-	pTs = parameters_test[string(τₛ[1])]["PTBINS"]
+	# pTs = parameters_test[string(τₛ[1])]["PTS"]
 	Ntp = parameters_test[string(τₛ[1])]["NTP"]
 end
 
@@ -74,7 +80,7 @@ begin
 	fig_test = Figure(resolution = (1200, 320), font = "CMU Serif")
 	set_theme!(fonts = (; regular = "CMU Serif"))
 	# ax_test = Axis(fig_test[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
-	ax_test = [Axis(fig_test[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=20) for i in 1:4]
+	ax_test = [Axis(fig_test[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=20) for i in 1:3]
 	
 	colors = Makie.wong_colors()
 	
@@ -116,10 +122,11 @@ begin
 	axislegend(ax_test[1], elements, labels_legend, L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}", position = :rt, labelsize=18, titlesize=20)
 
 	# xlims!(ax_test, 0, 6.5)
-	xlimits = [(0, 1), (0.2, 0.8), (0.7, 1.3), (4.7, 5.3)]
-	for i in 1:4
+	# xlimits = [(0, 1), (0.2, 0.8), (0.7, 1.3), (4.7, 5.3)]
+	# xlimits = [(0, 1), (0.2, 0.8), (0.7, 1.3), (4.7, 5.3)]
+	for i in 1:3
 		ylims!(ax_test[i], 0, nothing)
-		xlims!(ax_test[i], xlimits[i])
+		# xlims!(ax_test[i], xlimits[i])
 	end
 
 	# linkyaxes!(ax_test[1], ax_test[2], ax_test[3])
@@ -127,16 +134,58 @@ begin
 	# 	hideydecorations!(ax_test[i], ticks = false, ticklabels = false)
 	# end
 	
-	# save("plots/dndpt_pT_tau_test_qmcas_10_ev.png", fig_test, px_per_unit = 10.0)
+	# save("plots/dndpt_pT_tau_test_fundrepr.png", fig_test, px_per_unit = 10.0)
+	save("plots/dndpt_pT_tau_test_su2.png", fig_test, px_per_unit = 10.0)
 	fig_test
 end
+
+# ╔═╡ 5d02a3ce-dae0-45f8-a146-07c94c807ca2
+# begin
+# 	fig_test = Figure(resolution = (400, 320), font = "CMU Serif")
+# 	set_theme!(fonts = (; regular = "CMU Serif"))
+
+# 	ax_test = Axis(fig_test[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, titlesize=20)
+	
+# 	colors = Makie.wong_colors()
+	
+# 	Ntpᵢ = range(1, Ntp, Ntp)
+
+# 	for (ipT, pT) in enumerate(pTs)
+
+# 		label = string(pT)
+# 		for (iτ, τᵢ) in enumerate(τₛ)
+# 			pT_spectraᵢ = pT_spectra_test[string(τₛ[iτ])][label]
+			
+# 			kdeᵢ = kde(pT_spectraᵢ)
+			
+# 			densᵢ = kdeᵢ.density
+# 			norm_densᵢ = densᵢ./findmax(densᵢ)[1].*Ntp
+	
+# 			band!(ax_test, kdeᵢ.x, zeros(length(norm_densᵢ)), densᵢ, color=(colors[iτ], 0.05))
+# 			lines!(ax_test, kdeᵢ.x, densᵢ, linewidth=2, color=(colors[iτ], 0.4))
+
+# 			# scipy
+# 			# dens_ss = scipystats.kde.gaussian_kde(pT_spectraᵢ)
+# 			# pTs_py = range(findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1], 100)
+# 			# lines!(pTs_py, dens_ss(pTs_py), linewidth=2, color=colors[4])
+
+# 		end	
+# 	end
+
+# 	# xlimits = [(0, 1), (0.2, 0.8), (0.7, 1.3), (4.7, 5.3)]
+# 	# ylims!(ax_test, 0, nothing)
+# 	# xlims!(ax_test, xlimits[i])
+
+# 	# save("plots/dndpt_pT_tau_test_su2.png", fig_test, px_per_unit = 10.0)
+# 	fig_test
+# end
 
 # ╔═╡ 64f512c8-963a-432d-90db-a819c38f3a09
 begin
 	fig_test_hist = Figure(resolution = (1200, 320), font = "CMU Serif")
 	set_theme!(fonts = (; regular = "CMU Serif"))
 	# ax_test = Axis(fig_test[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
-	ax_test_hist = [Axis(fig_test_hist[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=20) for i in 1:4]
+	ax_test_hist = [Axis(fig_test_hist[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=20) for i in 1:3]
 
 	nbins_pT = 50
 	for (ipT, pT) in enumerate(pTs)
@@ -159,7 +208,7 @@ begin
 
 	# xlims!(ax_test, 0, 6.5)
 	# xlimits = [(0, 3), (2.5, 3.5), (4.5, 5.5)]
-	for i in 1:4
+	for i in 1:3
 		ylims!(ax_test_hist[i], 0, nothing)
 		# xlims!(ax_test[i], xlimits[i])
 	end
@@ -172,6 +221,30 @@ begin
 	# save("plots/dndpt_pT_tau_test.png", fig_test, px_per_unit = 5.0)
 	fig_test_hist
 end
+
+# ╔═╡ 237fc3ac-118f-45c8-9947-b7b519e04982
+# begin
+# 	fig_test_hist = Figure(resolution = (400, 320), font = "CMU Serif")
+# 	set_theme!(fonts = (; regular = "CMU Serif"))
+	
+# 	ax_test_hist = Axis(fig_test_hist[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, titlesize=20) 
+
+# 	nbins_pT = 100
+# 	for (ipT, pT) in enumerate(pTs)
+
+# 		label = string(pT)
+# 		for (iτ, τᵢ) in enumerate(τₛ)
+# 			pT_spectraᵢ = pT_spectra_test[string(τₛ[iτ])][label]
+				
+# 			low_pT, high_pT = findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1]
+
+# 			hist!(ax_test_hist, pT_spectraᵢ; normalization = :none, color = (colors[iτ], 0.4), bins=nbins_pT)
+# 		end
+		
+# 	end
+
+# 	fig_test_hist
+# end
 
 # ╔═╡ c6bba9a0-9d6d-4a13-a687-725667632621
 begin
@@ -1780,7 +1853,9 @@ version = "3.5.0+0"
 # ╠═05f67077-858f-4675-a9a2-d4d25a41064a
 # ╠═98cb0e8e-ec66-4ad4-860a-8fd2a53b55dd
 # ╠═3c326777-d2e4-4e73-a4a6-c433e0c9b66c
+# ╠═5d02a3ce-dae0-45f8-a146-07c94c807ca2
 # ╠═64f512c8-963a-432d-90db-a819c38f3a09
+# ╠═237fc3ac-118f-45c8-9947-b7b519e04982
 # ╠═c6bba9a0-9d6d-4a13-a687-725667632621
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
