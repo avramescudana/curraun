@@ -19,20 +19,17 @@ begin
 end
 
 # ╔═╡ 200b3001-f733-4bb5-bc57-1d563ba85603
-# folder_test = "RAA_charm_fonll_Qs_2.0_su2"
-folder_test = "RAA_charm_fonll_Qs_2.0_qfund"
+folder_charm_qfund = "RAA_charm_fonll_Qs_2.0_qfund"
 
 # ╔═╡ f3b4001f-d1a3-4f4e-b2a7-007330300d42
 begin
 	current_path = pwd()
-	# filename_test = current_path * "/results/" * folder_test * "/test_pTs_5_ev.pickle"
-	filename_test = current_path * "/results/" * folder_test * "/test_pTs.pickle"
+	filename_charm_qfund = current_path * "/results/" * folder_charm_qfund * "/test_pTs.pickle"
 end
 
 # ╔═╡ 62ba0eb0-4607-41a8-ada2-3278b4c72677
 begin
-	τₛ = [0.2, 0.6, 1.0]
-	# τₛ = [0.4]
+	τₛ = [0.2, 0.4, 0.6, 1.0]
 	pTs = [0, 1, 5]
 end
 
@@ -47,7 +44,6 @@ function read_file(filename, τₛ)
 	parameters = output["parameters"]
 	pTs = parameters["PTS"]
 	nevents = parameters["NEVENTS"]
-	# pTbins = parameters["NPTBINS"]
 
 	τ = output["tau"]
 	τᵢ = findminindex(τₛ, τ)
@@ -58,7 +54,6 @@ function read_file(filename, τₛ)
 		pT_spectra[label] = zeros(0)
 
 		for ev in range(1, nevents)
-		# for ev in range(1, 5)
 			append!(pT_spectra[label], output[label]["pTs_event_"*string(ev)][τᵢ,:])
 		end
 	end
@@ -67,31 +62,30 @@ end
 
 # ╔═╡ 05f67077-858f-4675-a9a2-d4d25a41064a
 begin
-	parameters_test, pT_spectra_test = Dict(), Dict()
+	parameters_charm_qfund, pT_spectra_charm_qfund = Dict(), Dict()
 	for τᵢ in τₛ
-		parameters_test[string(τᵢ)], pT_spectra_test[string(τᵢ)] = read_file(filename_test, τᵢ)
+		parameters_charm_qfund[string(τᵢ)], pT_spectra_charm_qfund[string(τᵢ)] = read_file(filename_charm_qfund, τᵢ)
 	end
 	# pTs = parameters_test[string(τₛ[1])]["PTS"]
-	Ntp = parameters_test[string(τₛ[1])]["NTP"]
+	Ntp = parameters_charm_qfund[string(τₛ[1])]["NTP"]
 end
 
 # ╔═╡ 3c326777-d2e4-4e73-a4a6-c433e0c9b66c
 begin
-	fig_test = Figure(resolution = (1200, 320), font = "CMU Serif")
+	fig_charm_qfund = Figure(resolution = (1000, 350), font = "CMU Serif")
 	set_theme!(fonts = (; regular = "CMU Serif"))
-	# ax_test = Axis(fig_test[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
-	ax_test = [Axis(fig_test[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=20) for i in 1:3]
+
+	ax_charm_qfund = [Axis(fig_charm_qfund[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 22, ylabelsize= 22, xticklabelsize=18, yticklabelsize=18, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=22) for i in 1:3]
 	
 	colors = Makie.wong_colors()
 	
 	Ntpᵢ = range(1, Ntp, Ntp)
-	# transp = [0.2, 0.35, 0.5]
 
 	for (ipT, pT) in enumerate(pTs)
 
 		label = string(pT)
 		for (iτ, τᵢ) in enumerate(τₛ)
-			pT_spectraᵢ = pT_spectra_test[string(τₛ[iτ])][label]
+			pT_spectraᵢ = pT_spectra_charm_qfund[string(τₛ[iτ])][label]
 	
 			# kdeᵢ = kde(pT_spectraᵢ, npoints=2048*4)
 			
@@ -103,8 +97,8 @@ begin
 			densᵢ = kdeᵢ.density
 			norm_densᵢ = densᵢ./findmax(densᵢ)[1].*Ntp
 	
-			band!(ax_test[ipT], kdeᵢ.x, zeros(length(norm_densᵢ)), densᵢ, color=(colors[iτ], 0.05))
-			lines!(ax_test[ipT], kdeᵢ.x, densᵢ, linewidth=2, color=(colors[iτ], 0.4))
+			band!(ax_charm_qfund[ipT], kdeᵢ.x, zeros(length(norm_densᵢ)), densᵢ, color=(colors[iτ], 0.02))
+			lines!(ax_charm_qfund[ipT], kdeᵢ.x, densᵢ, linewidth=2, color=(colors[iτ], 0.6))
 	
 			# scipy
 			# dens_ss = scipystats.kde.gaussian_kde(pT_spectraᵢ)
@@ -117,140 +111,146 @@ begin
 		
 	end
 
-	labels_legend = [L"0.2", L"0.6", L"1.0"]
-	elements= [LineElement(color = colors[1], linewidth=2), LineElement(color = colors[2], linewidth=2), LineElement(color = colors[3], linewidth=2)]
-	axislegend(ax_test[1], elements, labels_legend, L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}", position = :rt, labelsize=18, titlesize=20)
+	labels_legend = [L"0.2", L"0.4", L"0.6", L"1.0"]
+	elements= [LineElement(color = colors[1], linewidth=2), LineElement(color = colors[2], linewidth=2), LineElement(color = colors[3], linewidth=2), LineElement(color = colors[4], linewidth=2)]
+	axislegend(ax_charm_qfund[1], elements, labels_legend, L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}", position = :rt, labelsize=18, titlesize=20)
 
-	# xlims!(ax_test, 0, 6.5)
-	# xlimits = [(0, 1), (0.2, 0.8), (0.7, 1.3), (4.7, 5.3)]
-	# xlimits = [(0, 1), (0.2, 0.8), (0.7, 1.3), (4.7, 5.3)]
+	xlimits = [(0, 4), (0, 5), (2, 8)]
 	for i in 1:3
-		ylims!(ax_test[i], 0, nothing)
-		# xlims!(ax_test[i], xlimits[i])
+		ylims!(ax_charm_qfund[i], 0, nothing)
+		xlims!(ax_charm_qfund[i], xlimits[i])
 	end
 
 	# linkyaxes!(ax_test[1], ax_test[2], ax_test[3])
 	# for i in 1:2
 	# 	hideydecorations!(ax_test[i], ticks = false, ticklabels = false)
 	# end
+
+	text!(ax_charm_qfund[2], L"\mathrm{charm\,quarks}", position = (2.6, 0.66), fontsize=20)
+	text!(ax_charm_qfund[2], L"q_2=4/3,\,q_3=0", position = (2.4, 0.56), fontsize=20)
 	
-	# save("plots/dndpt_pT_tau_test_fundrepr.png", fig_test, px_per_unit = 10.0)
-	save("plots/dndpt_pT_tau_test_su2.png", fig_test, px_per_unit = 10.0)
-	fig_test
+	save("plots/dndpt_pT_tau_charm_qfund_qs_2.png", fig_charm_qfund, px_per_unit = 10.0)
+	fig_charm_qfund
 end
 
-# ╔═╡ 5d02a3ce-dae0-45f8-a146-07c94c807ca2
-# begin
-# 	fig_test = Figure(resolution = (400, 320), font = "CMU Serif")
-# 	set_theme!(fonts = (; regular = "CMU Serif"))
+# ╔═╡ cee01b53-c429-44b0-890d-c2ea1ff4515d
+md"---"
 
-# 	ax_test = Axis(fig_test[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, titlesize=20)
-	
-# 	colors = Makie.wong_colors()
-	
-# 	Ntpᵢ = range(1, Ntp, Ntp)
-
-# 	for (ipT, pT) in enumerate(pTs)
-
-# 		label = string(pT)
-# 		for (iτ, τᵢ) in enumerate(τₛ)
-# 			pT_spectraᵢ = pT_spectra_test[string(τₛ[iτ])][label]
-			
-# 			kdeᵢ = kde(pT_spectraᵢ)
-			
-# 			densᵢ = kdeᵢ.density
-# 			norm_densᵢ = densᵢ./findmax(densᵢ)[1].*Ntp
-	
-# 			band!(ax_test, kdeᵢ.x, zeros(length(norm_densᵢ)), densᵢ, color=(colors[iτ], 0.05))
-# 			lines!(ax_test, kdeᵢ.x, densᵢ, linewidth=2, color=(colors[iτ], 0.4))
-
-# 			# scipy
-# 			# dens_ss = scipystats.kde.gaussian_kde(pT_spectraᵢ)
-# 			# pTs_py = range(findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1], 100)
-# 			# lines!(pTs_py, dens_ss(pTs_py), linewidth=2, color=colors[4])
-
-# 		end	
-# 	end
-
-# 	# xlimits = [(0, 1), (0.2, 0.8), (0.7, 1.3), (4.7, 5.3)]
-# 	# ylims!(ax_test, 0, nothing)
-# 	# xlims!(ax_test, xlimits[i])
-
-# 	# save("plots/dndpt_pT_tau_test_su2.png", fig_test, px_per_unit = 10.0)
-# 	fig_test
-# end
-
-# ╔═╡ 64f512c8-963a-432d-90db-a819c38f3a09
+# ╔═╡ 9588358a-d6c9-4e79-b9d6-1bd9b2e3d681
 begin
-	fig_test_hist = Figure(resolution = (1200, 320), font = "CMU Serif")
-	set_theme!(fonts = (; regular = "CMU Serif"))
-	# ax_test = Axis(fig_test[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
-	ax_test_hist = [Axis(fig_test_hist[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=20) for i in 1:3]
+	folder_charm_fund = "RAA_charm_fonll_Qs_2.0_fund"
+	filename_charm_fund = current_path * "/results/" * folder_charm_fund * "/test_pTs.pickle"
+	parameters_charm_fund, pT_spectra_charm_fund = Dict(), Dict()
+	for τᵢ in τₛ
+		parameters_charm_fund[string(τᵢ)], pT_spectra_charm_fund[string(τᵢ)] = read_file(filename_charm_fund, τᵢ)
+	end
+end
 
-	nbins_pT = 50
+# ╔═╡ 2ab4bb2b-6415-4ab3-8330-4a23b98bdbaa
+begin
+	fig_charm_qfund_vs_fund = Figure(resolution = (1000, 350), font = "CMU Serif")
+	set_theme!(fonts = (; regular = "CMU Serif"))
+
+	ax_charm_qfund_vs_fund = [Axis(fig_charm_qfund_vs_fund[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 22, ylabelsize= 22, xticklabelsize=18, yticklabelsize=18, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=22) for i in 1:3]
+
 	for (ipT, pT) in enumerate(pTs)
 
 		label = string(pT)
 		for (iτ, τᵢ) in enumerate(τₛ)
-			pT_spectraᵢ = pT_spectra_test[string(τₛ[iτ])][label]
-				
-			low_pT, high_pT = findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1]
+			pT_spectraᵢ_qfund = pT_spectra_charm_qfund[string(τₛ[iτ])][label]
+			kdeᵢ_qfund = kde(pT_spectraᵢ_qfund)	
+			lines!(ax_charm_qfund_vs_fund[ipT], kdeᵢ_qfund.x, kdeᵢ_qfund.density, linewidth=2, color=(colors[iτ], 0.6))
 
-			hist!(ax_test_hist[ipT], pT_spectraᵢ; normalization = :none, color = (colors[iτ], 0.4), bins=nbins_pT)
+			pT_spectraᵢ_fund = pT_spectra_charm_fund[string(τₛ[iτ])][label]
+			kdeᵢ_fund = kde(pT_spectraᵢ_fund)	
+			lines!(ax_charm_qfund_vs_fund[ipT], kdeᵢ_fund.x, kdeᵢ_fund.density, linewidth=2, color=(colors[iτ], 0.6), linestyle=:dash)
 		end
-
-		# pT_spectra₀ = ones(Ntp).*pT
-		# lines!(ax_test_hist[ipT], pT_spectra₀, Ntpᵢ./Ntp, linewidth=4, color=:silver)
-		
 	end
 
-	axislegend(ax_test_hist[1], elements, labels_legend, L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}", position = :rt, labelsize=18, titlesize=20)
+	labels_legend_τ_comp = [L"0.2", L"0.4", L"0.6", L"1.0"]
+	elements_τ_comp = [LineElement(color = colors[1], linewidth=2), LineElement(color = colors[2], linewidth=2), LineElement(color = colors[3], linewidth=2), LineElement(color = colors[4], linewidth=2)]
+	axislegend(ax_charm_qfund_vs_fund[2], elements_τ_comp, labels_legend_τ_comp, L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}", position = :rt, labelsize=18, titlesize=20)
 
-	# xlims!(ax_test, 0, 6.5)
-	# xlimits = [(0, 3), (2.5, 3.5), (4.5, 5.5)]
+	labels_legend_comp = [L"q_2=4/3,\,q_3=0", L"q_2=4,\,q_3=10/3"]
+	elements_comp = [LineElement(color = colors[1], linewidth=2), LineElement(color = colors[1], linewidth=2, linestyle=:dash)]
+	axislegend(ax_charm_qfund_vs_fund[1], elements_comp, labels_legend_comp, position = :rt, labelsize=18, titlesize=20)
+
+	xlimits_comp = [(0, 4), (0, 5), (2, 8)]
 	for i in 1:3
-		ylims!(ax_test_hist[i], 0, nothing)
-		# xlims!(ax_test[i], xlimits[i])
+		ylims!(ax_charm_qfund_vs_fund[i], 0, nothing)
+		xlims!(ax_charm_qfund_vs_fund[i], xlimits_comp[i])
 	end
 
-	# linkyaxes!(ax_test[1], ax_test[2], ax_test[3])
-	# for i in 1:2
-	# 	hideydecorations!(ax_test[i], ticks = false, ticklabels = false)
-	# end
+	text!(ax_charm_qfund_vs_fund[3], L"\mathrm{charm\,quarks}", position = (2.25, 0.51), fontsize=20)
+	# text!(ax_charm_qfund_vs_fund[2], L"q_2=4/3,\,q_3=0", position = (2.4, 0.56), fontsize=20)
 	
-	# save("plots/dndpt_pT_tau_test.png", fig_test, px_per_unit = 5.0)
-	fig_test_hist
+	save("plots/dndpt_pT_tau_charm_qfund_vs_fund_qs_2.png", fig_charm_qfund_vs_fund, px_per_unit = 10.0)
+	fig_charm_qfund_vs_fund
 end
 
-# ╔═╡ 237fc3ac-118f-45c8-9947-b7b519e04982
-# begin
-# 	fig_test_hist = Figure(resolution = (400, 320), font = "CMU Serif")
-# 	set_theme!(fonts = (; regular = "CMU Serif"))
+# ╔═╡ 05614dc5-9969-4b60-aa7c-9f293bae7d20
+md"---"
+
+# ╔═╡ 705f6748-e9c5-4b8e-8223-9f1f31ae8a53
+begin
+	folder_beauty_qfund = "RAA_beauty_fonll_Qs_2.0_qfund"
+	filename_beauty_qfund = current_path * "/results/" * folder_beauty_qfund * "/test_pTs.pickle"
+	parameters_beauty_qfund, pT_spectra_beauty_qfund = Dict(), Dict()
+	for τᵢ in τₛ
+		parameters_beauty_qfund[string(τᵢ)], pT_spectra_beauty_qfund[string(τᵢ)] = read_file(filename_beauty_qfund, τᵢ)
+	end
+end
+
+# ╔═╡ f51df950-bcc6-455a-9839-391990242233
+begin
+	fig_charm_vs_beauty_qfund = Figure(resolution = (1000, 350), font = "CMU Serif")
+	set_theme!(fonts = (; regular = "CMU Serif"))
+
+	ax_charm_vs_beauty_qfund = [Axis(fig_charm_vs_beauty_qfund[1,i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = i == 1 ? L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}" : "", xlabelsize = 22, ylabelsize= 22, xticklabelsize=18, yticklabelsize=18, title=L"p_T\,(\tau_\mathrm{form})=%$(pTs[i])\,\mathrm{GeV}", titlesize=22) for i in 1:3]
+
+	indices_colors = [1, 2, 4]
+	for (ipT, pT) in enumerate(pTs)
+
+		label = string(pT)
+		for (iτ, τᵢ) in enumerate([0.2, 0.4, 1.0])
+			pT_spectraᵢ_charm = pT_spectra_charm_qfund[string(τₛ[iτ])][label]
+			kdeᵢ_charm = kde(pT_spectraᵢ_charm)	
+			lines!(ax_charm_vs_beauty_qfund[ipT], kdeᵢ_charm.x, kdeᵢ_charm.density, linewidth=2, color=(colors[indices_colors[iτ]], 0.6))
+
+			pT_spectraᵢ_beauty = pT_spectra_beauty_qfund[string(τₛ[iτ])][label]
+			kdeᵢ_beauty = kde(pT_spectraᵢ_beauty)	
+			lines!(ax_charm_vs_beauty_qfund[ipT], kdeᵢ_beauty.x, kdeᵢ_beauty.density, linewidth=2, color=(colors[indices_colors[iτ]], 0.6), linestyle=:dash)
+			lines!(ax_charm_vs_beauty_qfund[ipT], kdeᵢ_beauty.x, kdeᵢ_beauty.density, linewidth=2, color=(colors[indices_colors[iτ]], 0.2))
+		end
+	end
+
+	labels_legend_τ_comp_cb = [L"0.2", L"0.4", L"1.0"]
+	elements_τ_comp_cb = [LineElement(color = colors[1], linewidth=2), LineElement(color = colors[2], linewidth=2), LineElement(color = colors[4], linewidth=2)]
+	axislegend(ax_charm_vs_beauty_qfund[2], elements_τ_comp_cb, labels_legend_τ_comp_cb, L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}", position = :rt, labelsize=18, titlesize=20)
+
+	labels_legend_comp_cb = [L"\mathrm{charm}", L"\mathrm{beauty}"]
+	elements_comp_cb = [LineElement(color = colors[1], linewidth=2), [LineElement(color = colors[1], linewidth=2, linestyle=:dash),LineElement(color = (colors[1], 0.2), linewidth=2)]]
+	axislegend(ax_charm_vs_beauty_qfund[1], elements_comp_cb, labels_legend_comp_cb, position = :rt, labelsize=18, titlesize=20)
+
+	for i in 1:3
+		ylims!(ax_charm_vs_beauty_qfund[i], 0, nothing)
+		xlims!(ax_charm_vs_beauty_qfund[i], xlimits_comp[i])
+	end
+
+	text!(ax_charm_vs_beauty_qfund[3], L"q_2=4/3,\,q_3=0", position = (2.3, 0.51), fontsize=20)
 	
-# 	ax_test_hist = Axis(fig_test_hist[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel = L"\mathrm{d}N/\mathrm{d}p_T\,\mathrm{[GeV}^{-1}\mathrm{]}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, titlesize=20) 
+	save("plots/dndpt_pT_tau_charm_vs_beauty_qfund_qs_2.png", fig_charm_vs_beauty_qfund, px_per_unit = 10.0)
+	fig_charm_vs_beauty_qfund
+end
 
-# 	nbins_pT = 100
-# 	for (ipT, pT) in enumerate(pTs)
-
-# 		label = string(pT)
-# 		for (iτ, τᵢ) in enumerate(τₛ)
-# 			pT_spectraᵢ = pT_spectra_test[string(τₛ[iτ])][label]
-				
-# 			low_pT, high_pT = findmin(pT_spectraᵢ)[1], findmax(pT_spectraᵢ)[1]
-
-# 			hist!(ax_test_hist, pT_spectraᵢ; normalization = :none, color = (colors[iτ], 0.4), bins=nbins_pT)
-# 		end
-		
-# 	end
-
-# 	fig_test_hist
-# end
+# ╔═╡ 66a47cef-484b-4a9c-bf3f-c4cf68c47f3e
+md"---"
 
 # ╔═╡ c6bba9a0-9d6d-4a13-a687-725667632621
 begin
 	nbins = 50
 	label_hist = string(pTs[1])
-	pT_spectraᵢ_hist = pT_spectra_test[string(τₛ[2])][label_hist]
+	pT_spectraᵢ_hist = pT_spectra_charm_qfund[string(τₛ[2])][label_hist]
 	
 	normf = [:none, :pdf, :density, :probability]
 	# colors = Makie.wong_colors()
@@ -1853,9 +1853,13 @@ version = "3.5.0+0"
 # ╠═05f67077-858f-4675-a9a2-d4d25a41064a
 # ╠═98cb0e8e-ec66-4ad4-860a-8fd2a53b55dd
 # ╠═3c326777-d2e4-4e73-a4a6-c433e0c9b66c
-# ╠═5d02a3ce-dae0-45f8-a146-07c94c807ca2
-# ╠═64f512c8-963a-432d-90db-a819c38f3a09
-# ╠═237fc3ac-118f-45c8-9947-b7b519e04982
+# ╠═cee01b53-c429-44b0-890d-c2ea1ff4515d
+# ╠═9588358a-d6c9-4e79-b9d6-1bd9b2e3d681
+# ╠═2ab4bb2b-6415-4ab3-8330-4a23b98bdbaa
+# ╠═05614dc5-9969-4b60-aa7c-9f293bae7d20
+# ╠═705f6748-e9c5-4b8e-8223-9f1f31ae8a53
+# ╠═f51df950-bcc6-455a-9839-391990242233
+# ╠═66a47cef-484b-4a9c-bf3f-c4cf68c47f3e
 # ╠═c6bba9a0-9d6d-4a13-a687-725667632621
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

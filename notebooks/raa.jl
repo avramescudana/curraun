@@ -25,7 +25,7 @@ allevents = true
 
 # ╔═╡ 7b18813a-35c8-4909-a94e-f941c9d1a28e
 # folder with events, labeled by initialization type, pT and quark
-folder = "old_RAA_charm_fonll_Qs_1.4"
+folder = "old_RAA_charm_fonll_Qs_2.0"
 
 # ╔═╡ f3bf8812-4061-402b-b333-cc7ded15d785
 begin

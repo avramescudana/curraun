@@ -6,7 +6,7 @@ hbarc = 0.197326
 # Simulation box 
 L = 10      
 N = 512 
-tau_sim = 1     
+tau_sim = 0.5     
 DTS = 8     
 
 # Glasma
@@ -26,16 +26,17 @@ tau_form = 1/(2*mass)*hbarc
 initialization = 'pT'         
 ntp = 10**5  
 
-nevents = 1
+nevents = 2
 
-representation = 'quantum fundamental'     
-# representation = 'fundamental' 
+# representation = 'quantum fundamental'     
+representation = 'fundamental' 
 boundary = 'periodic'  
 
 # pTs = [0, 0.5, 1, 5]
-npTbins = 20 
-pTmax = 10
+npTbins = 25 
+pTmax = 12
 pTs = np.linspace(0, pTmax, npTbins)
+deltapT = pTs[1] - pTs[0]
 
 # Store relevant parameters in a dictionary
 p = {
@@ -86,7 +87,7 @@ if representation == 'quantum fundamental':
 elif representation == 'fundamental':
     folder = 'RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_fund'
 
-filename = 'all_pTs.pickle'
+filename = 'all_pTs_pT_bins.pickle'
 
 import os
 os.environ["MY_NUMBA_TARGET"] = "cuda"
@@ -124,7 +125,7 @@ if not os.path.isdir(results_folder):
     os.makedirs(results_folder)
 results_path = current_path + '/' + results_folder + '/'
 
-def simulate(p, ev, pT, output): 
+def simulate(p, ev, pT, deltapT, output): 
     # Derived parameters
     a = L/N
     E0 = N/L * hbarc
@@ -153,8 +154,13 @@ def simulate(p, ev, pT, output):
     x0s, p0s, q0s = np.zeros((ntp, 3)), np.zeros((ntp, 5)), np.zeros((ntp, su.ALGEBRA_ELEMENTS))
     masses = p["MASS"] / E0 * np.ones(ntp)
 
+    # pT bins
+    pTlow, pThigh = pT, pT+deltapT
+    initial_pTs = np.sort(np.random.uniform(pTlow, pThigh, ntp))
+
     for i in range(ntp):
-        x0, p0, q0 = init_pos(s.n), init_mom_toy('pT', pT / E0), init_charge(representation)
+        # x0, p0, q0 = init_pos(s.n), init_mom_toy('pT', pT / E0), init_charge(representation)
+        x0, p0, q0 = init_pos(s.n), init_mom_toy('pT', initial_pTs[i] / E0), init_charge(representation)
         x0s[i, :], p0s[i, :], q0s[i, :] = x0, p0, q0
     
     wong_solver.initialize(x0s, p0s, q0s, masses)
@@ -180,6 +186,7 @@ def simulate(p, ev, pT, output):
             pbar.update(1)
 
     output[str(pT)]['pTs_event_'+ str(ev+1)] = pTs
+    output[str(pT)]['initial_pTs_event_'+ str(ev+1)] = initial_pTs
 
     tau = np.linspace(0, tau_sim-tau_form, maxt-formt)
     output['tau'] = tau
@@ -200,7 +207,7 @@ for ipT, pT in enumerate(p['PTS']):
 
     output[str(pT)] = {}
     for ev in range(0, p["NEVENTS"]):
-        output = simulate(p, ev, pT, output)
+        output = simulate(p, ev, pT, deltapT, output)
 
 wong_folder = folder
 if not os.path.isdir(wong_folder):
