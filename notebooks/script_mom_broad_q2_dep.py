@@ -178,17 +178,16 @@ def simulate(p, ev):
 
     return output
 
-# q2s = [4/3, 4.0]
-q2s = np.linspace(0, 6, 19)
+# casimir scaling
+q2s = [4/3, 4.0]
+nevents = 20    
+quarks = ['infmass', 'beauty', 'charm', 'any']
+quark_masses = [10**6, 4.18, 1.27, 1.0]
 
-quarks = ['infmass', 'beauty', 'charm']
-quark_masses = [10**6, 4.18, 1.27]
-
-# quarks = ['beauty', 'charm']
-# quark_masses = [4.18, 1.27]
-
-# quarks = ['infmass']
-# quark_masses = [10**6]
+# q2 dependence
+# q2s = np.linspace(0, 6, 19)
+# quarks = ['infmass', 'beauty', 'charm']
+# quark_masses = [10**6, 4.18, 1.27]
 
 psq, tau = {}, {}
 for iq, quark in enumerate(quarks):
@@ -222,6 +221,7 @@ output = {}
 output["psq"], output["tau"] = psq, tau
 output["quarks"], output["q2s"] = quarks, q2s
 
-filename = 'mom_broad_q2_dep_more_events.pickle'
+# filename = 'mom_broad_q2_dep_more_events.pickle'
+filename = 'mom_broad_casimir_scaling_finer_lattice_more_events.pickle'
 with open(filename, 'wb') as handle:
     pickle.dump(output, handle)
