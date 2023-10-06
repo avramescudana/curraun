@@ -224,6 +224,15 @@ end
 # ╔═╡ f71b92d6-ac96-4280-ba7b-21936835af05
 weights
 
+# ╔═╡ 39ad92db-443a-4f13-8054-010a4920a56a
+sum(weights["fit"]["normal"])
+
+# ╔═╡ cfe49a8e-d868-4b50-8128-700687265d3e
+sum(weights["fit"]["log"])
+
+# ╔═╡ c2624951-ccba-4c18-9c33-a48f07aea285
+sum(weights["interp"])
+
 # ╔═╡ 0090f0ae-9d77-4a22-b95a-8de08b5ded45
 md"---
 #### Construct Glasma spectra at $\tau_s$ as KDE weighted with FONLL"
@@ -236,7 +245,7 @@ pyqt_fit = pyimport("pyqt_fit")
 
 # ╔═╡ 0e9cf966-f7ad-4432-bd21-7bc7ce537dea
 begin
-	pTs_kde = range(findmin(collect_pTs)[1], findmax(collect_pTs)[1], 400)
+	pTs_kde = range(findmin(collect_pTs)[1], findmax(collect_pTs)[1], 100)
 	
 	kde, dens, dens_fonll, raa =  Dict(), Dict(), Dict(), Dict()
 	for fonll_type in ["fit", "interp"]
@@ -264,6 +273,15 @@ begin
 		end
 	end
 end
+
+# ╔═╡ 38f4003d-66d4-435d-af62-a6843a6da889
+integrate(dens["fit"]["normal"], pTs_kde)
+
+# ╔═╡ a6c034b8-f1ea-4bf2-bb69-86670f47fd91
+integrate(dens["fit"]["log"], pTs_kde)
+
+# ╔═╡ 3488e271-ef0f-44b6-9b52-76cbb931c078
+integrate(dens["interp"], pTs_kde)
 
 # ╔═╡ bb2ee53e-99b3-4efe-a7e3-db1c83ed9f5c
 begin
@@ -347,6 +365,18 @@ begin
 	dens_test_unity = kde_test_unity(pTs_kde)
 end
 
+# ╔═╡ a1877d01-a9dd-4506-be25-248d4183af9a
+begin
+	@. pow(x) = 1/2*exp(-x/2)
+
+	pow_weights = pow(pTs_kde)
+	pow_weights = pow_weights./sum(pow_weights)
+
+	kde_test_pow = pyqt_fit.kde.KDE1D(pTs_kde, lower=0, method=pyqt_fit.kde_methods.linear_combination, weights=pow_weights)
+
+	dens_test_pow = kde_test_pow(pTs_kde)
+end
+
 # ╔═╡ 5a1719d1-2235-4d69-a739-bb7157930990
 begin
 	set_theme!(fonts = (; regular = "CMU Serif"))
@@ -357,10 +387,12 @@ begin
 	test_initial = lines!(ax_test_initial, pTs_kde, dens_test_initial, color=colors[4], linestyle=:dash)
 	test_unity = lines!(ax_test_initial, pTs_kde, dens_test_unity, color=colors[1])
 
+	test_pow = lines!(ax_test_initial, pTs_kde, dens_test_pow, color=colors[2])
+
 	xlims!(ax_test_initial, 0, 20)
 	ylims!(ax_test_initial, 0, nothing)
 
-	axislegend(ax_test_initial, [fonll, test_initial, test_unity], [L"\mathrm{FONLL}",L"\mathrm{Weighting\,at\,}\,\Delta\tau=0\,\mathrm{fm/}c", L"\mathrm{Unity\,weights\,at}\,\Delta\tau=0\,\mathrm{fm/}c"], position = :rt, labelsize=12)
+	axislegend(ax_test_initial, [fonll, test_initial, test_unity, test_pow], [L"\mathrm{FONLL}",L"\mathrm{FONLL\,weights}", L"\mathrm{Unity\,weights}", L"\mathrm{Exponential\,decay\,weights}"], position = :rt, labelsize=12)
 
 	save("plots/dNdpT_RAA_tau_dep_fast_pT_bins_pyqt_fonll_tests_initial_unity.png", fig_test_initial, px_per_unit = 5.0)
 
@@ -2006,14 +2038,21 @@ version = "3.5.0+0"
 # ╠═ee04622e-6492-4bec-8688-36af0e5b4a8b
 # ╠═a15f6ce7-6497-45b1-adc5-72a75107e55e
 # ╠═f71b92d6-ac96-4280-ba7b-21936835af05
+# ╠═39ad92db-443a-4f13-8054-010a4920a56a
+# ╠═cfe49a8e-d868-4b50-8128-700687265d3e
+# ╠═c2624951-ccba-4c18-9c33-a48f07aea285
 # ╠═0090f0ae-9d77-4a22-b95a-8de08b5ded45
 # ╠═963e563d-fa24-4783-b59c-20570b8015d9
 # ╠═c0cb2831-b5b6-4148-92ea-a5bea86d2eac
 # ╠═0e9cf966-f7ad-4432-bd21-7bc7ce537dea
+# ╠═38f4003d-66d4-435d-af62-a6843a6da889
+# ╠═a6c034b8-f1ea-4bf2-bb69-86670f47fd91
+# ╠═3488e271-ef0f-44b6-9b52-76cbb931c078
 # ╠═bb2ee53e-99b3-4efe-a7e3-db1c83ed9f5c
 # ╠═4df8388b-2fe8-40ff-a272-5b72ee7c1a21
 # ╠═b31291e4-af16-4889-bd30-e27b8f07e02a
 # ╠═df1a8d4e-700f-4586-a05a-fff2a76e9553
+# ╠═a1877d01-a9dd-4506-be25-248d4183af9a
 # ╠═5a1719d1-2235-4d69-a739-bb7157930990
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

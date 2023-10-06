@@ -6,7 +6,7 @@ hbarc = 0.197326
 # Simulation box 
 L = 10      
 N = 512 
-tau_sim = 0.5     
+tau_sim = 1.0     
 DTS = 8     
 
 # Glasma
@@ -26,15 +26,15 @@ tau_form = 1/(2*mass)*hbarc
 initialization = 'pT'         
 ntp = 10**5  
 
-nevents = 2
+nevents = 5
 
-# representation = 'quantum fundamental'     
-representation = 'fundamental' 
+representation = 'quantum fundamental'     
+# representation = 'fundamental' 
 boundary = 'periodic'  
 
 # pTs = [0, 0.5, 1, 5]
-npTbins = 25 
-pTmax = 12
+npTbins = 45 
+pTmax = 22
 pTs = np.linspace(0, pTmax, npTbins)
 deltapT = pTs[1] - pTs[0]
 
@@ -48,6 +48,8 @@ p = {
     'NEVENTS': nevents,
     'NTP': ntp,   
     'PTS': pTs,
+    'NPTBINS': npTbins,
+    'PTMAX': pTmax,
     }
 
 import argparse
@@ -62,8 +64,8 @@ parser.add_argument('-QUARK',   type=str,   help="Quark name")
 parser.add_argument('-MASS',    type=float, help="Quark mass [GeV]")
 parser.add_argument('-QS',    type=float,   help="Saturation momentum [GeV]")
 parser.add_argument('-NEVENTS',    type=int,   help="Number of events")
-# parser.add_argument('-NPTBINS',    type=int,   help="Number of pT bins")
-# parser.add_argument('-PT',    type=int,   help="Maximum value of pT [GeV]")
+parser.add_argument('-NPTBINS',    type=int,   help="Number of pT bins")
+parser.add_argument('-PTMAX',    type=int,   help="Maximum value of pT [GeV]")
 
 # parse args and update parameters dict
 args = parser.parse_args()
