@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.25
 
 using Markdown
 using InteractiveUtils
@@ -13,16 +13,29 @@ begin
 	using Distributions
 end
 
-# ╔═╡ e256ae5e-2e09-458a-b13e-17f0f8b5c3af
-# save figures
-saveplots = true
-
 # ╔═╡ c118b374-b2e3-4c2c-bd7b-a5a8eabd101f
-# go through all events in a given folder
-allevents = false
+begin
+	# save figures
+	saveplots = true
+	# go through all events in a given folder
+	allevents = false
+	# folder with events, labeled by initialization type, pT and quark
+	folder = "corr_toy_pT_2_charm_q2_1.33"
+end
 
-# ╔═╡ 246624d6-a824-40b9-9d49-e13c078ab74d
-current_path = pwd()
+# ╔═╡ eda45304-03ec-468f-892c-37410ebecb0f
+begin
+	current_path = pwd()
+	if allevents == true
+		folder_path = current_path * "/notebooks/results/" * folder * "/"
+		cd(folder_path)
+		events = readdir()
+		filenames = current_path * "/notebooks/results/" * folder * "/" .* events
+		cd(current_path)
+	else
+		filename = current_path * "/notebooks/results/" * folder * "/event_1.pickle"
+	end
+end
 
 # ╔═╡ 87b6f649-f960-420d-827d-2b3a8fd38cdc
 function findminindex(value, array)
@@ -35,111 +48,38 @@ function dfslice(output, τₛ)
 	τ = output["tau"]
 	τᵢ = findminindex(τₛ, τ)
 	Δη, Δϕ, pₜ = output["deta"], output["dphi"], output["pTs"]
-	# df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = Δϕ[τᵢ,:], pₜᵢ = pₜ[τᵢ,:, 1], pbarₜᵢ = pₜ[τᵢ,:, 2])
-	# df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = rad2deg.(Δϕ[τᵢ,:]))
-	df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = Δϕ[τᵢ,:])
-	
-	# Make Δηᵢ, Δϕᵢ∈[0,1], could be useful for kde normalization
-	# df.Δηᵢ = df.Δηᵢ./maximum(df.Δηᵢ)
-	# df.Δϕᵢ = df.Δϕᵢ./maximum(df.Δϕᵢ)
-	
-	# df[!,"τₛ"] .= string(τₛ);
+	df = DataFrame(Δηᵢ = Δη[τᵢ,:], Δϕᵢ = Δϕ[τᵢ,:], pₜᵢ = pₜ[τᵢ,:, 1], pbarₜᵢ = pₜ[τᵢ,:, 2])
 	return df
 end
 
-# ╔═╡ 2539a0f4-1905-4a23-bc1c-155a9c20716d
-dependence = "pT"
-# dependence = "Qs"
+# ╔═╡ 5e5f3693-563d-472c-aa47-7749e10ee6d9
+output = Pickle.npyload(filename)
+
+# ╔═╡ 14c9c37a-d191-4872-a153-f1b1550fde4f
+q3s = output["q3s"]
+
+# ╔═╡ 3a9aa3ec-f12c-4907-bea4-1efb3b5b933d
+q2 = output["q2"]
+
+# ╔═╡ 8cdfa5de-7c30-43ea-b708-f7d9da582654
+τ_sim = output[q3s[1]]["tau"]
 
 # ╔═╡ be0db94c-32a7-4e39-8dbe-1d740616419f
 begin
 	σϕ, ση = Dict(), Dict()
-	τ_sim = Dict()
-	quarks = ["charm", "beauty"]
-	for quark in quarks
-		σϕ[quark], ση[quark] = Dict(), Dict()
-		if dependence=="pT"
-			folder = "corr_toy_"*dependence*"_dep_"*quark*"_Qs_2.0"
-		elseif dependence=="Qs"
-			folder = "corr_toy_"*dependence*"_dep_"*quark*"_pT_2"
-		end
-
-		if allevents == true
-			folder_path = current_path * "/results/" * folder * "/"
-			cd(folder_path)
-			events = readdir()
-			filenames = current_path * "/results/" * folder * "/" .* events
-			cd(current_path)
-		else
-			filename = current_path * "/results/" * folder * "/event_1.pickle"
-		end
-		
-		output = Pickle.npyload(filename)
-
-		if dependence=="pT"
-			global pTs = output["pTs"]
-			global τ_sim = output[pTs[1]]["tau"]
-			# global τ_sel = LinRange(τ_sim[1],τ_sim[length(τ_sim)],40)
-			
-			for (i, pT) in enumerate(pTs)
-				σϕ[quark][pT], ση[quark][pT] = Float64[], Float64[]
-				# for τₛᵢ in τ_sel
-				for τₛᵢ in τ_sim
-					dfₛᵢ = dfslice(output[pTs[i]], τₛᵢ)
-			
-					df_dNdΔϕᵢ = dfₛᵢ[!, "Δϕᵢ"]
-					σϕᵢ = std(Distributions.fit(Normal, df_dNdΔϕᵢ))
-					append!(σϕ[quark][pT],σϕᵢ)
-			
-					df_dNdΔηᵢ = dfₛᵢ[!, "Δηᵢ"]
-					σηᵢ = std(Distributions.fit(Normal, df_dNdΔηᵢ))
-					append!(ση[quark][pT],σηᵢ)
-				end
-			end
-		end
-
-		if dependence=="Qs"
-			τ_sim[quark] = Dict()
-			global Qss = output["Qss"]
-			# global τ_sel = LinRange(τ_sim[1],τ_sim[length(τ_sim)],40)
-			
-			for (i, Qs) in enumerate(Qss)
-				τ_sim[quark][Qs] = output[Qss[i]]["tau"]
-				σϕ[quark][Qs], ση[quark][Qs] = Float64[], Float64[]
-				# for τₛᵢ in τ_sel
-				for τₛᵢ in τ_sim[quark][Qs]
-					dfₛᵢ = dfslice(output[Qss[i]], τₛᵢ)
-			
-					df_dNdΔϕᵢ = dfₛᵢ[!, "Δϕᵢ"]
-					σϕᵢ = std(Distributions.fit(Normal, df_dNdΔϕᵢ))
-					append!(σϕ[quark][Qs],σϕᵢ)
-			
-					df_dNdΔηᵢ = dfₛᵢ[!, "Δηᵢ"]
-					σηᵢ = std(Distributions.fit(Normal, df_dNdΔηᵢ))
-					append!(ση[quark][Qs],σηᵢ)
-				end
-			end
-		end
-	end
-end
-
-# ╔═╡ ae10ab58-41e2-4763-8c68-85757d32d64c
-τ_sim
-
-# ╔═╡ 03428407-6f6f-4c12-8f20-293a97321980
-begin
-	lens = [20, 20]
-	τ_sel, ind_sel =  Dict(), Dict()
-	for (iq, quark) in enumerate(quarks)
-		τ_sel[quark], ind_sel[quark] =  Dict(), Dict()
-		if dependence=="pT"
-			τ_sel[quark] = LinRange(τ_sim[1],τ_sim[length(τ_sim)],lens[iq])
-			ind_sel[quark] = floor.(Int, LinRange(1,length(τ_sim),lens[iq]))
-		elseif dependence=="Qs"
-			for (iQs, Qs) in enumerate(Qss)
-				τ_sel[quark][Qs] = LinRange(τ_sim[quark][Qs][1],τ_sim[quark][Qs][length(τ_sim[quark][Qs])],lens[iq])
-				ind_sel[quark][Qs] = floor.(Int, LinRange(1,length(τ_sim[quark][Qs]),lens[iq]))
-			end
+	for (i, q3) in enumerate(q3s)
+		σϕ[q3], ση[q3] = Float64[], Float64[]
+		# for τₛᵢ in τs
+		for τₛᵢ in τ_sim
+			dfₛᵢ = dfslice(output[q3s[i]], τₛᵢ)
+	
+			df_dNdΔϕᵢ = dfₛᵢ[!, "Δϕᵢ"]
+			σϕᵢ = std(Distributions.fit(Normal, df_dNdΔϕᵢ))
+			append!(σϕ[q3],σϕᵢ)
+	
+			df_dNdΔηᵢ = dfₛᵢ[!, "Δηᵢ"]
+			σηᵢ = std(Distributions.fit(Normal, df_dNdΔηᵢ))
+			append!(ση[q3],σηᵢ)
 		end
 	end
 end
@@ -150,314 +90,56 @@ function string_as_varname(s::AbstractString,v::Any)
     return @eval (($s) = ($v))
 end
 
-# ╔═╡ 653813e9-13db-4bbc-89de-151a8f4a777b
-function square_grid(ax, ngrids)
-	xlims, ylims = ax.xaxis.attributes.limits[], ax.yaxis.attributes.limits[]
-	δx, δy = (xlims[2]-xlims[1])/ngrids, (ylims[2]-ylims[1])/ngrids
-	xticks, yticks = [xlims[1]+i*δx for i in range(0, ngrids)], [ylims[1]+i*δy for i in range(0, ngrids)]
-
-	if (xticks[1]==0) && (yticks[1]==0) 
-		deleteat!(yticks, findall(x->x==0,yticks))
-	end
-
-	xtickslabels, ytickslabels = [isinteger(value) ? trunc(Int, value) : round(value; digits = 2) for value in xticks], [isinteger(value) ? trunc(Int, value) : round(value; digits = 2) for value in yticks]
-	
-	ax.xticks, ax.yticks = (xticks, string.(xtickslabels)), (yticks, string.(ytickslabels))
-end
-
 # ╔═╡ 91986a61-7f49-4e46-9973-2da3a9835091
 begin
 	set_theme!(fonts = (; regular ="CMU Serif"))
-	fig_σ = Figure(resolution = (800, 380), font = "CMU Serif")
-	ylabels = [L"\sigma_{\Delta\phi}", L"\sigma_{\Delta\eta}"]
-	ax_σ = [Axis(fig_σ[1, i], xlabel=L"\Delta \tau\,\mathrm{[fm/}c\,\mathrm{]}", ylabel=ylabels[i], xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, 
-		aspect=1, xminorgridvisible=true, yminorgridvisible=true,
-	) for i in 1:2]
+	fig_σ = Figure(resolution = (450, 350), font = "CMU Serif")
+	ax_σ = Axis(fig_σ[1, 1], xlabel=L"\Delta \tau\,\mathrm{[fm/}c\,\mathrm{]}", ylabel=L"\sigma_{\Delta\eta,\,\Delta\phi}", xlabelsize = 18, ylabelsize = 20, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1
+	)
 
-	markers = [:circle, :utriangle]
-	# linestyles = [nothing, :dot]
-	quark_labels = [L"\mathrm{charm}", L"\mathrm{beauty}"]
-
-	if dependence=="pT"
-		dep_labels = [L"%$pTᵢ" for pTᵢ in pTs]
-
-		segmented_cmap = cgrad(:tempo, 14, categorical = true)
-		custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7], segmented_cmap[9], segmented_cmap[11]]
-
-		for (i, pT) in enumerate(pTs)
-			for (iq, quark) in enumerate(quarks)
-				lines!(ax_σ[1], τ_sim, σϕ[quarks[iq]][pT], color=(custom_colors[i], 0.6), label=dep_labels[i], linewidth=1.5)
-				
-				scatter!(ax_σ[1], τ_sel[quark], σϕ[quark][pT][ind_sel[quark]], color=custom_colors[i], marker=markers[iq], markersize=10)
-
-				scatter!(ax_σ[2], τ_sel[quark], ση[quark][pT][ind_sel[quark]], color=custom_colors[i], marker=markers[iq], markersize=10)
-				
-				lines!(ax_σ[2], τ_sim, ση[quarks[iq]][pT], color=(custom_colors[i], 0.6), linewidth=1.5)
-
-				# lines!(ax_σ[1], τ_sel, σϕ[quarks[iq]][pT], color=custom_colors[i], label=dep_labels[i], linewidth=1.7, linestyle=linestyles[iq])
-
-				# lines!(ax_σ[2], τ_sel, ση[quarks[iq]][pT], color=custom_colors[i], linewidth=1.7, linestyle=linestyles[iq])
-			end
-		end
-
-		linkaxes!(ax_σ[1], ax_σ[2])
-		for i in 1:2
-			xlims!(ax_σ[i], 0, 1.5)
-			ax_σ[i].xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
-			ylims!(ax_σ[i], 0, 2.4)
-			# ax_σ[i].yticks = ([0.5, 1, 1.5, 2], ["0.5", "1", "1.5", "2"])
-			square_grid(ax_σ[i], 3)
-		end
-
-		color_index = 2
-		for (iq, quark) in enumerate(quarks)
-			string_as_varname("line_"*quark, [LineElement(color = (custom_colors[color_index], 0.6), linestyle = nothing), MarkerElement(color = custom_colors[color_index], marker = markers[iq], markersize = 10, strokecolor = custom_colors[color_index])])
-		end
-
-		axislegend(ax_σ[1], [line_charm, line_beauty], quark_labels, labelsize=18, titlesize=18, position = :ct, orientation = :horizontal, bgcolor = (:white, 0), framecolor=(:grey80, 0))
-
-		cbar = Colorbar(fig_σ[1, 3], colormap =  cgrad(reverse(custom_colors), 5, categorical = true), limits = (1, 6),size = 25, labelsize = 22, width = 10, flipaxis = true,ticksize=3, tickalign = 0, ticklabelsize = 14, height = Relative(0.92), label=L"p_T\,(\tau_\mathrm{form})\,\mathrm{[GeV]}")
-		cbar.ticks = ([1.5, 2.5, 3.5, 4.5, 5.5],  string.(reverse(pTs)))
-
-		text!(ax_σ[2], L"Q_s=2\,\mathrm{GeV}", position = (0.95, 2.1), fontsize=18)
-
-		if saveplots
-			# save("plots/sigma_dphideta_tau_"*quark*"_pT_dep.png", fig_σ, px_per_unit = 5)
-			save("plots/sigma_dphideta_tau_charm_beauty_pT_dep_final.png", fig_σ, px_per_unit = 5)
-		end
-
+	if q2==4
+		segmented_cmap = cgrad(:dense, 14, categorical = true)
+	elseif q2==1.33
+		segmented_cmap = cgrad(:deep, 14, categorical = true)
 	end
+	custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7], segmented_cmap[9], segmented_cmap[11]]
 
-	# plot for is
-	# set_theme!(fonts = (; regular ="CMU Serif"))
-	# fig_σ = Figure(resolution = (750, 300), font = "CMU Serif",
-	# # backgroundcolor=:transparent
-	# )
-	# ylabels = [L"\sigma_{\Delta\phi}", L"\sigma_{\Delta\eta}"]
-	# ax_σ = [Axis(fig_σ[1, i], xlabel=L"\Delta \tau\,\mathrm{[fm/}c\,\mathrm{]}", ylabel=ylabels[i], xlabelsize = 22, ylabelsize = 30, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, 
-	# 	# backgroundcolor=:transparent
-	# ) for i in 1:2]
-
-	# markers = [:circle, :utriangle]
-	# # linestyles = [nothing, :dot]
-	# quark_labels = [L"\mathrm{charm}", L"\mathrm{beauty}"]
-
-	# if dependence=="pT"
-	# 	dep_labels = [L"%$pTᵢ" for pTᵢ in pTs]
-
-	# 	segmented_cmap = cgrad(:tempo, 14, categorical = true)
-	# 	custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7], segmented_cmap[9], segmented_cmap[11]]
-
-	# 	for (i, pT) in enumerate(pTs)
-	# 		for (iq, quark) in enumerate(quarks)
-	# 			lines!(ax_σ[1], τ_sim, σϕ[quarks[iq]][pT], color=(custom_colors[i], 0.6), label=dep_labels[i], linewidth=2)
-				
-	# 			scatter!(ax_σ[1], τ_sel[quark], σϕ[quark][pT][ind_sel[quark]], color=custom_colors[i], marker=markers[iq], markersize=9)
-
-	# 			scatter!(ax_σ[2], τ_sel[quark], ση[quark][pT][ind_sel[quark]], color=custom_colors[i], marker=markers[iq], markersize=9)
-				
-	# 			lines!(ax_σ[2], τ_sim, ση[quarks[iq]][pT], color=(custom_colors[i], 0.6), linewidth=2)
-
-	# 			# lines!(ax_σ[1], τ_sel, σϕ[quarks[iq]][pT], color=custom_colors[i], label=dep_labels[i], linewidth=1.7, linestyle=linestyles[iq])
-
-	# 			# lines!(ax_σ[2], τ_sel, ση[quarks[iq]][pT], color=custom_colors[i], linewidth=1.7, linestyle=linestyles[iq])
-	# 		end
-	# 	end
-
-	# 	linkaxes!(ax_σ[1], ax_σ[2])
-	# 	for i in 1:2
-	# 		xlims!(ax_σ[i], 0, 1.5)
-	# 		ax_σ[i].xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
-	# 		ylims!(ax_σ[i], 0, 2.3)
-	# 		ax_σ[i].yticks = ([0.5, 1, 1.5, 2], ["0.5", "1", "1.5", "2"])
-	# 	end
-
-	# 	color_index = 2
-	# 	for (iq, quark) in enumerate(quarks)
-	# 		string_as_varname("line_"*quark, [LineElement(color = (custom_colors[color_index], 0.6), linestyle = nothing), MarkerElement(color = custom_colors[color_index], marker = markers[iq], markersize = 10, strokecolor = custom_colors[color_index])])
-	# 	end
-
-	# 	axislegend(ax_σ[1], [line_charm, line_beauty], quark_labels, labelsize=18, titlesize=18, position = (0.4,1.05), orientation = :horizontal, bgcolor = (:white, 0), framecolor=(:grey80, 0))
-
-	# 	cbar = Colorbar(fig_σ[1, 3], colormap =  cgrad(reverse(custom_colors), 5, categorical = true), limits = (1, 6),size = 25, labelsize = 24, width = 10, flipaxis = true,ticksize=3, tickalign = 0, ticklabelsize = 14, height = Relative(1), label=L"p_T\,(\tau_\mathrm{form})\,\mathrm{[GeV]}")
-	# 	cbar.ticks = ([1.5, 2.5, 3.5, 4.5, 5.5],  string.(reverse(pTs)))
-
-	# 	text!(ax_σ[2], L"Q_s=1.4\,\mathrm{GeV}", position = (0.85, 2), fontsize=18)
-
-	# 	if saveplots
-	# 		# save("plots/sigma_dphideta_tau_"*quark*"_pT_dep.png", fig_σ, px_per_unit = 5)
-	# 		save("plots/sigma_dphideta_tau_charm_beauty_pT_dep_is.png", fig_σ, px_per_unit = 10)
-	# 		save("plots/sigma_dphideta_tau_charm_beauty_pT_dep_is.svg", fig_σ)
-	# 	end
-
-	# end
-
-	if dependence=="Qs"
-		dep_labels = [L"%$Qsᵢ" for Qsᵢ in Qss]
-
-		segmented_cmap = cgrad(:lapaz, 14, categorical = true)
-		custom_colors = reverse([segmented_cmap[3], segmented_cmap[5], segmented_cmap[7], segmented_cmap[9], segmented_cmap[11]])
-
-		for (i, Qs) in enumerate(Qss)
-			for (iq, quark) in enumerate(quarks)
-				lines!(ax_σ[1], τ_sim[quark][Qs], σϕ[quarks[iq]][Qs], color=(custom_colors[i], 0.6), label=dep_labels[i], linewidth=1.5)
-
-				lines!(ax_σ[2], τ_sim[quark][Qs], ση[quarks[iq]][Qs], color=(custom_colors[i], 0.6), linewidth=1.5)
-				
-
-				scatter!(ax_σ[1], τ_sel[quark][Qs], σϕ[quark][Qs][ind_sel[quark][Qs]], color=custom_colors[i], marker=markers[iq], markersize=7)
-
-				scatter!(ax_σ[2], τ_sel[quark][Qs], ση[quark][Qs][ind_sel[quark][Qs]], color=custom_colors[i], marker=markers[iq], markersize=7)
-
-				# lines!(ax_σ[1], τ_sel, σϕ[quarks[iq]][pT], color=custom_colors[i], label=dep_labels[i], linewidth=1.7, linestyle=linestyles[iq])
-
-				# lines!(ax_σ[2], τ_sel, ση[quarks[iq]][pT], color=custom_colors[i], linewidth=1.7, linestyle=linestyles[iq])
-			end
-		end
-
-		linkaxes!(ax_σ[1], ax_σ[2])
-		for i in 1:2
-			xlims!(ax_σ[i], 0, 1.5)
-			ax_σ[i].xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
-			ylims!(ax_σ[i], 0, 1.5)
-			ax_σ[i].yticks = ([0.4, 0.8, 1.2], ["0.4", "0.8", "1.2"])
-		end
-
-		color_index = 4
-		for (iq, quark) in enumerate(quarks)
-			string_as_varname("line_"*quark, [LineElement(color = (custom_colors[color_index], 0.6), linestyle = nothing), MarkerElement(color = custom_colors[color_index], marker = markers[iq], markersize = 10, strokecolor = custom_colors[color_index])])
-		end
-
-		axislegend(ax_σ[1], [line_charm, line_beauty], quark_labels, labelsize=14, titlesize=18, position = :ct, orientation = :horizontal, bgcolor = (:white, 0), framecolor=(:grey80, 0))
-
-		cbar = Colorbar(fig_σ[1, 3], colormap =  cgrad(custom_colors, 5, categorical = true), limits = (1, 6),size = 25, labelsize = 22, width = 10, flipaxis = true,ticksize=3, tickalign = 0, ticklabelsize = 14, height = Relative(1), label=L"Q_s\,\mathrm{[GeV]}")
-		cbar.ticks = ([1.5, 2.5, 3.5, 4.5, 5.5],  string.(Qss))
-
-		text!(ax_σ[2], L"p_T\,(\tau_\mathrm{form})=2\,\mathrm{GeV}", position = (0.75, 0.07), fontsize=16)
-
-		if saveplots
-			# save("plots/sigma_dphideta_tau_"*quark*"_pT_dep.png", fig_σ, px_per_unit = 5)
-			save("plots/sigma_dphideta_tau_charm_beauty_Qs_dep_final.png", fig_σ, px_per_unit = 5)
-		end
-		
+	q₃_labels = [L"%$q3ᵢ" for q3ᵢ in q3s]
+	
+	for (i, q3) in enumerate(q3s)
+		# string_as_varname("line"*string(i), lines!(ax_σ, τs, σϕ[q3], color=custom_colors[i], label=q₃_labels[i]))
+		# lines!(ax_σ, τs, ση[q3], color=custom_colors[i])
+		string_as_varname("line"*string(i), lines!(ax_σ, τ_sim, σϕ[q3], color=custom_colors[i], label=q₃_labels[i]))
+		lines!(ax_σ, τ_sim, ση[q3], color=custom_colors[i])
 	end
+	
+	xlims!(0, 1.5)
+	ax_σ.xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
 
+	ylims!(0, 1.6)
+		ax_σ.yticks = ([0.5, 1, 1.5], ["0.5", "1", "1.5"])
+
+	if q2==4
+		legend_pos = :rb
+		text!(ax_σ, L"q_2=4", position = (1.25, 1.4), fontsize=18)
+		text!(ax_σ, L"\Delta\phi", position = (0.5, 0.92), fontsize=18)
+		text!(ax_σ, L"\Delta\eta", position = (0.5, 1.36), fontsize=18)
+		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.08, 0.08), fontsize=18)
+	elseif q2==1.33
+		legend_pos = :lt
+		text!(ax_σ, L"q_2=4/3", position = (1.2, 1.4), fontsize=18)
+		text!(ax_σ, L"\Delta\phi", position = (0.5, 0.42), fontsize=18)
+		text!(ax_σ, L"\Delta\eta", position = (0.5, 0.88), fontsize=18)
+		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.82, 0.08), fontsize=18)
+	end
+	
+	# Legend(fig_σ[1,2], ax_σ, labelsize=14)
+	axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = legend_pos, orientation = :vertical)
+	
+	if saveplots
+		save("notebooks/plots/sigma_dphideta_tau_charm_pT_2_q2_"*string(q2)*"_q3_dep.png", fig_σ, px_per_unit = 5)
+	end
 	fig_σ
-end
-
-# ╔═╡ e3381fd7-e012-45ec-a35d-5739f1b0b288
-begin
-	# [Gev * fm]
-	hbarc = 0.197326 
-	
-	if dependence=="Qs"
-		set_theme!(fonts = (; regular ="CMU Serif"))
-		fig_σ_Qsτ = Figure(resolution = (800, 380), font = "CMU Serif")
-		ax_σ_Qsτ = [Axis(fig_σ_Qsτ[1, i], xlabel=L"Q_s\,\Delta \tau", ylabel=ylabels[i], xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1,
-			aspect=1, xminorgridvisible=true, yminorgridvisible=true,
-		) for i in 1:2]
-	
-		for (i, Qs) in enumerate(Qss)
-			for (iq, quark) in enumerate(quarks)
-				lines!(ax_σ_Qsτ[1], τ_sim[quark][Qs]*Qs/hbarc, σϕ[quarks[iq]][Qs], color=(custom_colors[i], 0.6), label=dep_labels[i], linewidth=1.5)
-	
-				lines!(ax_σ_Qsτ[2], τ_sim[quark][Qs]*Qs/hbarc, ση[quarks[iq]][Qs], color=(custom_colors[i], 0.6), linewidth=1.5)
-				
-	
-				scatter!(ax_σ_Qsτ[1], τ_sel[quark][Qs]*Qs/hbarc, σϕ[quark][Qs][ind_sel[quark][Qs]], color=custom_colors[i], marker=markers[iq], markersize=10)
-	
-				scatter!(ax_σ_Qsτ[2], τ_sel[quark][Qs]*Qs/hbarc, ση[quark][Qs][ind_sel[quark][Qs]], color=custom_colors[i], marker=markers[iq], markersize=10)
-	
-				# lines!(ax_σ[1], τ_sel, σϕ[quarks[iq]][pT], color=custom_colors[i], label=dep_labels[i], linewidth=1.7, linestyle=linestyles[iq])
-	
-				# lines!(ax_σ[2], τ_sel, ση[quarks[iq]][pT], color=custom_colors[i], linewidth=1.7, linestyle=linestyles[iq])
-			end
-		end
-	
-		linkaxes!(ax_σ_Qsτ[1], ax_σ[2])
-		for i in 1:2
-			xlims!(ax_σ_Qsτ[i], 0, 21)
-			# ax_σ_Qsτ[i].xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
-			ylims!(ax_σ_Qsτ[i], 0, 1.5)
-			# ax_σ_Qsτ[i].yticks = ([0.4, 0.8, 1.2], ["0.4", "0.8", "1.2"])
-			square_grid(ax_σ_Qsτ[i], 3)
-		end
-	
-		for (iq, quark) in enumerate(quarks)
-			string_as_varname("line_"*quark, [LineElement(color = (custom_colors[color_index], 0.6), linestyle = nothing), MarkerElement(color = custom_colors[color_index], marker = markers[iq], markersize = 10, strokecolor = custom_colors[color_index])])
-		end
-	
-		axislegend(ax_σ_Qsτ[1], [line_charm, line_beauty], quark_labels, labelsize=18, titlesize=18, position = :ct, orientation = :horizontal, bgcolor = (:white, 0), framecolor=(:grey80, 0))
-	
-		cbar_Qsτ = Colorbar(fig_σ_Qsτ[1, 3], colormap =  cgrad(custom_colors, 5, categorical = true), limits = (1, 6),size = 25, labelsize = 22, width = 10, flipaxis = true,ticksize=3, tickalign = 0, ticklabelsize = 14, height = Relative(0.92), label=L"Q_s\,\mathrm{[GeV]}")
-		cbar_Qsτ.ticks = ([1.5, 2.5, 3.5, 4.5, 5.5],  string.(Qss))
-
-		text!(ax_σ_Qsτ[2], L"p_T\,(\tau_\mathrm{form})=2\,\mathrm{GeV}", position = (10.2, 0.07), fontsize=18)
-	
-		if saveplots
-			save("plots/sigma_dphideta_tau_charm_beauty_Qs_dep_scaled_final.png", fig_σ_Qsτ, px_per_unit = 5)
-		end
-	
-		fig_σ_Qsτ
-	end
-
-	# plot for is
-	# # [Gev * fm]
-	# hbarc = 0.197326 
-	
-	# if dependence=="Qs"
-	# 	set_theme!(fonts = (; regular ="CMU Serif"))
-	# 	fig_σ_Qsτ = Figure(resolution = (750, 300), font = "CMU Serif",
-	# 		backgroundcolor=:transparent
-	# 	)
-	# 	ax_σ_Qsτ = [Axis(fig_σ_Qsτ[1, i], xlabel=L"Q_s\,\Delta \tau", ylabel=ylabels[i], xlabelsize = 22, ylabelsize = 30, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, 
-	# 		# backgroundcolor=:transparent
-	# 	) for i in 1:2]
-	
-	# 	for (i, Qs) in enumerate(Qss)
-	# 		for (iq, quark) in enumerate(quarks)
-	# 			lines!(ax_σ_Qsτ[1], τ_sim[quark][Qs]*Qs/hbarc, σϕ[quarks[iq]][Qs], color=(custom_colors[i], 0.6), label=dep_labels[i], linewidth=2)
-	
-	# 			lines!(ax_σ_Qsτ[2], τ_sim[quark][Qs]*Qs/hbarc, ση[quarks[iq]][Qs], color=(custom_colors[i], 0.6), linewidth=2)
-				
-	
-	# 			scatter!(ax_σ_Qsτ[1], τ_sel[quark][Qs]*Qs/hbarc, σϕ[quark][Qs][ind_sel[quark][Qs]], color=custom_colors[i], marker=markers[iq], markersize=9)
-	
-	# 			scatter!(ax_σ_Qsτ[2], τ_sel[quark][Qs]*Qs/hbarc, ση[quark][Qs][ind_sel[quark][Qs]], color=custom_colors[i], marker=markers[iq], markersize=9)
-	
-	# 			# lines!(ax_σ[1], τ_sel, σϕ[quarks[iq]][pT], color=custom_colors[i], label=dep_labels[i], linewidth=1.7, linestyle=linestyles[iq])
-	
-	# 			# lines!(ax_σ[2], τ_sel, ση[quarks[iq]][pT], color=custom_colors[i], linewidth=1.7, linestyle=linestyles[iq])
-	# 		end
-	# 	end
-	
-	# 	linkaxes!(ax_σ_Qsτ[1], ax_σ[2])
-	# 	for i in 1:2
-	# 		xlims!(ax_σ_Qsτ[i], 0, 20)
-	# 		# ax_σ_Qsτ[i].xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
-	# 		ylims!(ax_σ_Qsτ[i], 0, 1.5)
-	# 		ax_σ_Qsτ[i].yticks = ([0.4, 0.8, 1.2], ["0.4", "0.8", "1.2"])
-	# 	end
-	
-	# 	for (iq, quark) in enumerate(quarks)
-	# 		string_as_varname("line_"*quark, [LineElement(color = (custom_colors[color_index], 0.6), linestyle = nothing), MarkerElement(color = custom_colors[color_index], marker = markers[iq], markersize = 10, strokecolor = custom_colors[color_index])])
-	# 	end
-	
-	# 	axislegend(ax_σ_Qsτ[1], [line_charm, line_beauty], quark_labels, labelsize=18, titlesize=18, position = :ct, orientation = :horizontal, bgcolor = (:white, 0), framecolor=(:grey80, 0))
-	
-	# 	cbar_Qsτ = Colorbar(fig_σ_Qsτ[1, 3], colormap =  cgrad(custom_colors, 5, categorical = true), limits = (1, 6),size = 25, labelsize = 24, width = 10, flipaxis = true,ticksize=3, tickalign = 0, ticklabelsize = 14, height = Relative(1), label=L"Q_s\,\mathrm{[GeV]}")
-	# 	cbar_Qsτ.ticks = ([1.5, 2.5, 3.5, 4.5, 5.5],  string.(Qss))
-
-	# 	text!(ax_σ_Qsτ[2], L"p_T\,(\tau_\mathrm{form})=2\,\mathrm{GeV}", position = (8.5, 0.07), fontsize=18)
-	
-	# 	if saveplots
-	# 		save("plots/sigma_dphideta_tau_charm_beauty_Qs_dep_scaled_is.png", fig_σ_Qsτ, px_per_unit = 10)
-	# 		save("plots/sigma_dphideta_tau_charm_beauty_Qs_dep_scaled_is.svg", fig_σ_Qsτ)
-	# 	end
-	
-	# 	fig_σ_Qsτ
-	# end
-	
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1819,18 +1501,17 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╠═c4272e5a-f23b-11ed-3247-892db586e050
-# ╠═e256ae5e-2e09-458a-b13e-17f0f8b5c3af
 # ╠═c118b374-b2e3-4c2c-bd7b-a5a8eabd101f
-# ╠═246624d6-a824-40b9-9d49-e13c078ab74d
+# ╠═eda45304-03ec-468f-892c-37410ebecb0f
 # ╠═87b6f649-f960-420d-827d-2b3a8fd38cdc
 # ╠═3789a5dc-5cf4-4bfb-ab8c-14d980c1940b
-# ╠═2539a0f4-1905-4a23-bc1c-155a9c20716d
+# ╠═df04743a-b780-47d7-bdcb-3cf4c582e15f
+# ╠═5e5f3693-563d-472c-aa47-7749e10ee6d9
+# ╠═14c9c37a-d191-4872-a153-f1b1550fde4f
+# ╠═3a9aa3ec-f12c-4907-bea4-1efb3b5b933d
+# ╠═8cdfa5de-7c30-43ea-b708-f7d9da582654
 # ╠═be0db94c-32a7-4e39-8dbe-1d740616419f
-# ╠═ae10ab58-41e2-4763-8c68-85757d32d64c
-# ╠═03428407-6f6f-4c12-8f20-293a97321980
 # ╠═8acc6907-04ec-49ff-8516-254712f98ffe
-# ╠═653813e9-13db-4bbc-89de-151a8f4a777b
 # ╠═91986a61-7f49-4e46-9973-2da3a9835091
-# ╠═e3381fd7-e012-45ec-a35d-5739f1b0b288
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

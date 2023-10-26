@@ -26,7 +26,7 @@ end
 # ╔═╡ 882c03f2-2b05-4ce9-9746-4c902eea0b5e
 begin
 	current_path = pwd()
-	folder_trial = "RAA_charm_fonll_Qs_2.0_fund"
+	folder_trial = "RAA_charm_fonll_Qs_2.0_fund_oldbutnewer"
 	filename_trial = current_path * "/results/" * folder_trial * "/all_pTs.pickle"
 end
 
@@ -249,17 +249,17 @@ begin
 	l2 = lines!(ax[1], pTs_all, dens_all, color=:purple)
 	b2 = band!(ax[1], pTs_all, zeros(length(dens_all)), dens_all, color=(:purple, 0.1))
 
-	l2_pyqt = lines!(ax[1], pTs_pyqt, dens_pyqt, color=:magenta)
+	l2_pyqt = lines!(ax[1], pTs_pyqt, dens_pyqt, color=:green)
 
 	# l2_scipy = lines!(ax[1], pTs_scipy, dens_scipy, color=:magenta, linestyle=:dash)
 	# b2_scipy = band!(ax[1], pTs_scipy, zeros(length(dens_scipy(pTs_scipy))), dens_scipy(pTs_scipy), color=(:magenta, 0.1))
 
 	# l2_scipy_refl = lines!(ax[1], pTs_scipy_refl[pTs_scipy_refl.>0], dens_scipy_refl_pos, color=:green)
 
-	l_test = lines!(ax[1], pTs_test, dens_test, color=:orange)
-	b_test = band!(ax[1], pTs_test, zeros(length(dens_test)), dens_test, color=(:orange, 0.1))
+	# l_test = lines!(ax[1], pTs_test, dens_test, color=:orange)
+	# b_test = band!(ax[1], pTs_test, zeros(length(dens_test)), dens_test, color=(:orange, 0.1))
 
-	l_test_pyqt = lines!(ax[1], pTs_pyqt_test, dens_pyqt_test, color=:rosybrown)
+	# l_test_pyqt = lines!(ax[1], pTs_pyqt_test, dens_pyqt_test, color=:rosybrown)
 
 	# l_refl_test = lines!(ax[1], pTs_scipy_refl[pTs_scipy_refl.>0], test_dens_scipy_refl_pos, color=:orange, linestyle=:dash)
 	# b_refl_test = band!(ax[1], pTs_scipy_refl[pTs_scipy_refl.>0], zeros(length(test_dens_scipy_refl_pos)), test_dens_scipy_refl_pos, color=(:orange, 0.1))
@@ -268,7 +268,7 @@ begin
 	lines!(ax[2], pTs_all, ones(length(pTs_all)), color=:gray, linestyle=:dash)
 	
 	lines!(ax[2], pTs_all, RAA_all, color=:purple)
-	lines!(ax[2], pTs_pyqt[2:length(pTs_pyqt)], RAA_pyqt[2:length(RAA_pyqt)], color=:magenta)
+	lines!(ax[2], pTs_pyqt[2:length(pTs_pyqt)], RAA_pyqt[2:length(RAA_pyqt)], color=:green)
 	
 	# lines!(ax[2], pTs_all[20:length(pTs_all)], RAA_all[20:length(pTs_all)], color=:purple)
 	# lines!(ax[2], pTs_all_pos[4:length(pTs_all_pos)], RAA_all[4:length(RAA_all)], color=:green)
@@ -282,7 +282,8 @@ begin
 	axislegend(ax[2], [l1, l2], [L"\mathrm{FONLL}\,\Delta\tau=0\,\mathrm{fm/}c", L"\mathrm{Glasma}\,\,\Delta\tau=0.3\,\mathrm{fm/}c"], position = :rb, labelsize=14, titlesize=18)
 	# axislegend(ax[2], [l1, l2], [L"\mathrm{FONLL}\,\Delta\tau=0\,\mathrm{fm/}c", L"\mathrm{Glasma}\,\,\Delta\tau=0\,\mathrm{fm/}c"], position = :rt, labelsize=14, titlesize=18)
 
-	axislegend(ax[1], [l2, l2_pyqt, l_test, l_test_pyqt], [L"\mathrm{FONLL\,weights\,KDE}_1",L"\mathrm{FONLL\,weights\,KDE}_2",   L"\mathrm{Unity\,weights\,KDE}_1", L"\mathrm{Unity\,weights\,KDE}_2"], position = :rt, labelsize=12)
+	# axislegend(ax[1], [l2, l2_pyqt, l_test, l_test_pyqt], [L"\mathrm{FONLL\,weights\,KDE}_1",L"\mathrm{FONLL\,weights\,KDE}_2",   L"\mathrm{Unity\,weights\,KDE}_1", L"\mathrm{Unity\,weights\,KDE}_2"], position = :rt, labelsize=12)
+	axislegend(ax[1], [l2, l2_pyqt], [L"\mathrm{FONLL\,weights\,KDE}_1",L"\mathrm{FONLL\,weights\,KDE}_2"], position = :rt, labelsize=12)
 
 	for i in 1:2
 		xlims!(ax[i], 0, 10)
@@ -291,7 +292,7 @@ begin
 	ylims!(ax[1], 0, nothing)
 	ylims!(ax[2], 0, 2)
 
-	save("plots/dNdpT_RAA_tau_dep_fast_pT_bins_pyqt_powlaw.png", fig, px_per_unit = 5.0)
+	save("plots/dNdpT_RAA_tau_dep_fast_pT_bins_pyqt_powlaw_final.png", fig, px_per_unit = 5.0)
 	# save("plots/dNdpT_RAA_tau_dep_fast_initial_tau_pT_bins_pyqt.png", fig, px_per_unit = 5.0)
 	
 	fig

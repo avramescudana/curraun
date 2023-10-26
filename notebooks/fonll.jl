@@ -104,11 +104,11 @@ fit_type = "normal"
 md"Fit either $\mathrm{d}\sigma/\mathrm{d}p_T$ or $\mathrm{d}^2\sigma/\mathrm{d}^2p_T$"
 
 # ╔═╡ 608e5c0b-243d-4417-8044-97ed62c7ee6f
-version = "dsdpt"
-# version = "d2sd2pt"
+# version = "dsdpt"
+version = "d2sd2pt"
 
 # ╔═╡ 51dfbc86-fa1c-49e0-a99f-455cb3fe92da
-saveplots = true
+saveplots = false
 
 # ╔═╡ d4d7d828-f39b-4c28-b716-99b7ba9f073e
 begin
@@ -144,7 +144,7 @@ begin
 	elseif version == "d2sd2pt"
 		p0s = [[10^8, 3, 4, 0.1], [10^8, 3, 4, 0.1], [10^8, 3, 4, 0.1]]
 	end
-	for (e, energy) in enumerate(energies2)
+	for (e, energy) in enumerate(energies2[1])
 		dfe = df(quark, energies2[e], pdfs2[e])
 
 		
@@ -236,6 +236,7 @@ begin
 
 	for i in 1:3
 		xlims!(ax2[i], 0, 20)
+		# xlims!(ax2[i], 0, 2)
 	end
 
 	labels_legend = [L"5.03,\,\mathrm{NNPDF}", L"5.03,\,\mathrm{CTEQ}", L"5.5,\,\mathrm{CTEQ}", L"\mathrm{fit}\,x_0\cdot p_T/(1+x_3\cdot {p_T}^{x_1})^{x_2}"]
@@ -257,13 +258,18 @@ md"#### Interpolate the spectra"
 # ╔═╡ f16138e5-9f14-4d34-a2e3-cebf1ac8d956
 begin
 # for (e, energy) in enumerate(energies2)
-	e = 1
+	e = 3
 	dfe = df(quark, energies2[e], pdfs2[e])
 
 	xdata = dfe[!, "pt"]
 	ydata = dfe[!, "central"]
 
-	interpe = CubicSpline(ydata, xdata)
+	if version == "dsdpt"
+		interpe = CubicSpline(ydata, xdata)
+	elseif version == "d2sd2pt"
+		ydata ./= xdata
+		interpe = CubicSpline(ydata, xdata)
+	end
 # end
 end
 
@@ -281,18 +287,20 @@ begin
 	ax_interp = Axis(fig_interp[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}\sigma/\mathrm{d}p_T\,\mathrm{[pb/GeV]}",
     xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
 	
-	lines!(dfe[!, "pt"], dfe[!, "central"]; color = (colors2[e], 0.5), label = L"\mathrm{data}", linewidth=2)
+	scatter!(dfe[!, "pt"], dfe[!, "central"]; color = (colors2[e], 0.5), label = L"\mathrm{data}", markersize = 10)
 
-	lines!(finer_pt, interp_finer_fonll; color = (colors2[e], 0.5), label = L"\mathrm{interpolation}", linewidth=2, linestyle=:dash)
+	lines!(finer_pt, interp_finer_fonll; color = (colors2[e], 0.5), label = L"\mathrm{interpolation}", linewidth=2)
 
-	finite_range = range(3, 6, 20)
-	lines!(finite_range, interpe(finite_range); color = (colors2[3], 0.5), label = L"\mathrm{range}", linewidth=2)
+	finite_range = range(0, 1, 20)
+	lines!(finite_range, interpe(finite_range); color = (colors2[1], 0.5), label = L"\mathrm{range}", linewidth=2)
+
+	lines!(finer_pt, powlaw(finer_pt, popt_fit[1]); color = (colors2[2], 0.5), label = L"\mathrm{fit}", linewidth=2)
 
 
-	axislegend(L"\sqrt{s_\mathrm{NN}}\,&\,\,\mathrm{PDF}", position = :rt, labelsize=14, titlesize=18)
+	axislegend(L"\sqrt{s_\mathrm{NN}}\,&\,\,\mathrm{PDF}", position = :rb, labelsize=14, titlesize=18)
 	
 	
-	xlims!(ax_interp, 0, 20)
+	# xlims!(ax_interp, -0.05, 2)
 	# save("plots/dsdpt_fonll_pdf_energy_dep_final.png", fig, px_per_unit = 5.0)
 	fig_interp
 end

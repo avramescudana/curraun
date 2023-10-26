@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -20,6 +20,7 @@ begin
 	# go through all events in a given folder
 	allevents = false
 	# folder with events, labeled by initialization type, pT and quark
+	# folder = "corr_toy_pT_2_charm_q2_4.0"
 	folder = "corr_toy_pT_2_charm_q2_1.33"
 end
 
@@ -27,13 +28,13 @@ end
 begin
 	current_path = pwd()
 	if allevents == true
-		folder_path = current_path * "/notebooks/results/" * folder * "/"
+		folder_path = current_path * "/results/" * folder * "/"
 		cd(folder_path)
 		events = readdir()
-		filenames = current_path * "/notebooks/results/" * folder * "/" .* events
+		filenames = current_path * "/results/" * folder * "/" .* events
 		cd(current_path)
 	else
-		filename = current_path * "/notebooks/results/" * folder * "/event_1.pickle"
+		filename = current_path * "/results/" * folder * "/event_1.pickle"
 	end
 end
 
@@ -90,11 +91,27 @@ function string_as_varname(s::AbstractString,v::Any)
     return @eval (($s) = ($v))
 end
 
+# ╔═╡ 2d15f72f-0cb1-4a59-89fd-4aeb7a7c7c96
+function square_grid(ax, ngrids)
+	xlims, ylims = ax.xaxis.attributes.limits[], ax.yaxis.attributes.limits[]
+	δx, δy = (xlims[2]-xlims[1])/ngrids, (ylims[2]-ylims[1])/ngrids
+	xticks, yticks = [xlims[1]+i*δx for i in range(0, ngrids)], [ylims[1]+i*δy for i in range(0, ngrids)]
+
+	if (xticks[1]==0) && (yticks[1]==0) 
+		deleteat!(yticks, findall(x->x==0,yticks))
+	end
+
+	xtickslabels, ytickslabels = [isinteger(value) ? trunc(Int, value) : round(value; digits = 2) for value in xticks], [isinteger(value) ? trunc(Int, value) : round(value; digits = 2) for value in yticks]
+	
+	ax.xticks, ax.yticks = (xticks, string.(xtickslabels)), (yticks, string.(ytickslabels))
+end
+
 # ╔═╡ 91986a61-7f49-4e46-9973-2da3a9835091
 begin
 	set_theme!(fonts = (; regular ="CMU Serif"))
-	fig_σ = Figure(resolution = (450, 350), font = "CMU Serif")
-	ax_σ = Axis(fig_σ[1, 1], xlabel=L"\Delta \tau\,\mathrm{[fm/}c\,\mathrm{]}", ylabel=L"\sigma_{\Delta\eta,\,\Delta\phi}", xlabelsize = 18, ylabelsize = 20, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1
+	fig_σ = Figure(resolution = (380, 380), font = "CMU Serif")
+	ax_σ = Axis(fig_σ[1, 1], xlabel=L"\Delta \tau\,\mathrm{[fm/}c\,\mathrm{]}", ylabel=L"\sigma_{\Delta\eta,\,\Delta\phi}", xlabelsize = 18, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, 
+	xminorgridvisible=true, yminorgridvisible=true,
 	)
 
 	if q2==4
@@ -116,29 +133,44 @@ begin
 	xlims!(0, 1.5)
 	ax_σ.xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
 
-	ylims!(0, 1.6)
-		ax_σ.yticks = ([0.5, 1, 1.5], ["0.5", "1", "1.5"])
+	# Legend(fig_σ[1,2], ax_σ, labelsize=14)
+	
 
 	if q2==4
-		legend_pos = :rb
-		text!(ax_σ, L"q_2=4", position = (1.25, 1.4), fontsize=18)
-		text!(ax_σ, L"\Delta\phi", position = (0.5, 0.92), fontsize=18)
-		text!(ax_σ, L"\Delta\eta", position = (0.5, 1.36), fontsize=18)
-		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.08, 0.08), fontsize=18)
+		# legend_pos = :rb
+		text!(ax_σ, L"q_2=4", position = (1.2, 1.6), fontsize=20)
+		text!(ax_σ, L"\Delta\phi", position = (0.5, 0.9), fontsize=18)
+		text!(ax_σ, L"\Delta\eta", position = (0.5, 1.4), fontsize=18)
+		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.1, 0.08), fontsize=18)
+
+		ylims!(0, 1.8)
+		square_grid(ax_σ, 3)
+		# ax_σ.yticks = ([2/3, 4/3, 2], ["2/3", "4/3", "2"])
+
+		axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, framecolor=:grey)
+
+		if saveplots
+			save("plots/sigma_dphideta_tau_charm_pT_2_q2_4.0_q3_dep.png", fig_σ, px_per_unit = 5)
+		end
+		
 	elseif q2==1.33
-		legend_pos = :lt
-		text!(ax_σ, L"q_2=4/3", position = (1.2, 1.4), fontsize=18)
+		# legend_pos = :rt
+		text!(ax_σ, L"q_2=4/3", position = (0.05, 1.78), fontsize=18)
 		text!(ax_σ, L"\Delta\phi", position = (0.5, 0.42), fontsize=18)
 		text!(ax_σ, L"\Delta\eta", position = (0.5, 0.88), fontsize=18)
-		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.82, 0.08), fontsize=18)
+		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.65, 0.08), fontsize=18)
+
+		ylims!(0, 2)
+		square_grid(ax_σ, 3)
+		ax_σ.yticks = ([2/3, 4/3, 2], ["2/3", "4/3", "2"])
+
+		axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = :rt, orientation = :vertical, framecolor=:grey)
+
+		if saveplots
+			save("plots/sigma_dphideta_tau_charm_pT_2_q2_1.33_q3_dep.png", fig_σ, px_per_unit = 5)
+		end
 	end
 	
-	# Legend(fig_σ[1,2], ax_σ, labelsize=14)
-	axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = legend_pos, orientation = :vertical)
-	
-	if saveplots
-		save("notebooks/plots/sigma_dphideta_tau_charm_pT_2_q2_"*string(q2)*"_q3_dep.png", fig_σ, px_per_unit = 5)
-	end
 	fig_σ
 end
 
@@ -1505,13 +1537,13 @@ version = "3.5.0+0"
 # ╠═eda45304-03ec-468f-892c-37410ebecb0f
 # ╠═87b6f649-f960-420d-827d-2b3a8fd38cdc
 # ╠═3789a5dc-5cf4-4bfb-ab8c-14d980c1940b
-# ╠═df04743a-b780-47d7-bdcb-3cf4c582e15f
 # ╠═5e5f3693-563d-472c-aa47-7749e10ee6d9
 # ╠═14c9c37a-d191-4872-a153-f1b1550fde4f
 # ╠═3a9aa3ec-f12c-4907-bea4-1efb3b5b933d
 # ╠═8cdfa5de-7c30-43ea-b708-f7d9da582654
 # ╠═be0db94c-32a7-4e39-8dbe-1d740616419f
 # ╠═8acc6907-04ec-49ff-8516-254712f98ffe
+# ╠═2d15f72f-0cb1-4a59-89fd-4aeb7a7c7c96
 # ╠═91986a61-7f49-4e46-9973-2da3a9835091
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

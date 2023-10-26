@@ -1,12 +1,12 @@
 font.size:    18
 
-text.usetex: True
+text.usetex: False
 #text.color: D8DEE9
 
 axes.spines.left:   True  
 axes.spines.bottom: True
-axes.spines.top:    False
-axes.spines.right:  False
+axes.spines.top:    True
+axes.spines.right:  True
 axes.prop_cycle: cycler('color', ['8FBCBB', 'B48EAD', 'A3BE8C', 'EBCB8B', '81A1C1', '5E81AC'])
 
 #axes.facecolor:     2E3440  
@@ -17,7 +17,7 @@ axes.grid:          False
 #axes.grid.which:    major   
 #axes.titlecolor:    D8DEE9
 #axes.labelcolor:    D8DEE9
-axes.labelsize:     24
+axes.labelsize:     20
 axes.linewidth:     1.2
 #axes.titlepad:      10.0
 #axes.autolimit_mode: round_numbers

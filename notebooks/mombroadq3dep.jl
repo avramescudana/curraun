@@ -13,12 +13,12 @@ end
 
 # ╔═╡ b361316d-f9f2-42d6-a123-3fdbb65b75bd
 begin
-	choice_q2 = "4/3"
-	# choice_q2 = "4"
-	quark = "jet"
+	# choice_q2 = "4/3"
+	choice_q2 = "4"
+	# quark = "jet"
 	# quark = "infmass"
-	# quark = "charm"
-	pT = 5
+	quark = "charm"
+	pT = 2
 end
 
 # ╔═╡ b67f2833-492c-4c06-b734-db6eca2ca1a6
@@ -51,6 +51,21 @@ function string_as_varname(s::AbstractString,v::Any)
     return @eval (($s) = ($v))
 end
 
+# ╔═╡ 68eecdf3-4c25-465f-acc3-fa313dfac5d5
+function square_grid(ax, ngrids)
+	xlims, ylims = ax.xaxis.attributes.limits[], ax.yaxis.attributes.limits[]
+	δx, δy = (xlims[2]-xlims[1])/ngrids, (ylims[2]-ylims[1])/ngrids
+	xticks, yticks = [xlims[1]+i*δx for i in range(0, ngrids)], [ylims[1]+i*δy for i in range(0, ngrids)]
+
+	if (xticks[1]==0) && (yticks[1]==0) 
+		deleteat!(yticks, findall(x->x==0,yticks))
+	end
+
+	xtickslabels, ytickslabels = [isinteger(value) ? trunc(Int, value) : round(value; digits = 2) for value in xticks], [isinteger(value) ? trunc(Int, value) : round(value; digits = 2) for value in yticks]
+	
+	ax.xticks, ax.yticks = (xticks, string.(xtickslabels)), (yticks, string.(ytickslabels))
+end
+
 # ╔═╡ 31005ba1-029d-4173-9af3-1a863b64ebd7
 begin
 	set_theme!(fonts = (; regular ="CMU Serif"))
@@ -69,9 +84,10 @@ begin
 		ylabel = L"\langle \delta p^2\rangle/D_F\,\mathrm{[GeV^2]}"
 	end
 	
-	fig = Figure(resolution = (430, 400), font = "CMU Serif")
+	fig = Figure(resolution = (380, 380), font = "CMU Serif")
 	axes = Axis(fig[1, 1], 
-		xlabel=L"\delta\tau\,\mathrm{[fm/c]}", ylabel=ylabel, xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4
+		xlabel=L"\Delta\tau\,\mathrm{[fm/c]}", ylabel=ylabel, xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, 
+		aspect = 1
 	) 
 	
 	τ = results["tau"]
@@ -86,21 +102,26 @@ begin
 		)
 	end
 		
-	axislegend(axes, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = :rt, orientation = :vertical)
+	axislegend(axes, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = :rt, orientation = :vertical, framecolor=:grey)
 
 	xlims!(axes, 0, 1.5)
 	axes.xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
 
+	text!(axes, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.7, 0.1), fontsize=18)
+
 	if choice_q2=="4/3"
-		text!(axes, L"\langle\delta p_T^2\,\rangle", position = (1.3, 1.2), fontsize=18)
-		text!(axes, L"\langle\delta p_L^2\,\rangle", position = (1.3, 3), fontsize=18)
-		ylims!(axes, 0, 12)
-		axes.yticks = ([4, 8, 12], string.([4, 8, 12]))
+		text!(axes, L"\langle\delta p_T^2\,\rangle", position = (0.3, 0.4), fontsize=18)
+		text!(axes, L"\langle\delta p_L^2\,\rangle", position = (0.31, 1.6), fontsize=18)
+		ylims!(axes, 0, 6)
+		# axes.yticks = ([1, 2, 3, 4], string.([1, 2, 3, 4]))
+		square_grid(axes, 3)
 	else
-		text!(axes, L"\langle\delta p_T^2\,\rangle", position = (1.3, 0.45), fontsize=18)
-		text!(axes, L"\langle\delta p_L^2\,\rangle", position = (1.3, 6), fontsize=18)
-		ylims!(axes, 0, 21)
-		axes.yticks = ([4, 8, 12, 16, 20], ["4", "8", "12", "16", "20"])
+		text!(axes, L"\langle\delta p_T^2\,\rangle", position = (0.3, 0.45), fontsize=18)
+		text!(axes, L"\langle\delta p_L^2\,\rangle", position = (0.31, 2.0), fontsize=18)
+		# ylims!(axes, 0, 21)
+		# axes.yticks = ([4, 8, 12, 16, 20], ["4", "8", "12", "16", "20"])
+		ylims!(axes, 0, 6)
+		square_grid(axes, 3)
 	end
 
 	if choice_q2=="4/3"
@@ -109,7 +130,8 @@ begin
 		lower_box_bound = 110
 	end
 	ax_zoomin = Axis(fig, xlabel=L"\mathrm{KDE}\,(q_3\,)", ylabel=L"q_3",
-	        bbox = BBox(lower_box_bound, lower_box_bound+130, 240, 370), 
+	        bbox = BBox(lower_box_bound, lower_box_bound+130, 222, 352), 
+			xlabelsize = 18, ylabelsize = 18,
 	        xticklabelsize=0, yticklabelsize=14,
 	        xtickalign = 0, xticksize=0, ytickalign=1, yticksize=3, xlabelpadding = 0, xgridvisible = false, ygridvisible = false,
 	        ytickcolor = :grey, xtickcolor = :grey, yticklabelcolor = :grey, xticklabelcolor = :grey, ylabelcolor = :grey, xlabelcolor = :grey,
@@ -128,13 +150,15 @@ begin
 		xlims!(ax_zoomin, 0, 13)
 		ax_zoomin.yticks = ([-0.8, -0.4, 0, 0.4, 0.8], ["-0.8", "-0.4", "0", "0.4", "0.8"])
 		text!(ax_zoomin, L"q_2=4/3", position = (6, 0.4), fontsize=18)
-		save("plots/mom_broad_brute_force_q2_1.33_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		# save("plots/mom_broad_brute_force_q2_1.33_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		save("plots/mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_1.33_KDE_q3_dep.png", fig, px_per_unit = 5.0)
 	else
 		ylims!(ax_zoomin, -4.2, 4.2)
 		xlims!(ax_zoomin, 0, 2.6)
 		ax_zoomin.yticks = ([-4, -2, 0, 2, 4], ["-4", "-2", "0", "2", "4"])
 		text!(ax_zoomin, L"q_2=4", position = (1.5, 2), fontsize=18)
-		save("plots/mom_broad_brute_force_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		# save("plots/mom_broad_brute_force_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		save("plots/mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
 	end
 	
 	fig
@@ -1571,6 +1595,7 @@ version = "3.5.0+0"
 # ╠═b67f2833-492c-4c06-b734-db6eca2ca1a6
 # ╠═80bdca68-2408-47a9-a9d0-ca24f0e47669
 # ╠═922896f4-1be4-4046-945c-51d3f39f30dd
+# ╠═68eecdf3-4c25-465f-acc3-fa313dfac5d5
 # ╠═31005ba1-029d-4173-9af3-1a863b64ebd7
 # ╠═f63ea92f-77cb-4057-93b2-ffcb6a86cbed
 # ╠═27ad3673-7376-4db1-8a04-296d6e01c7ca
