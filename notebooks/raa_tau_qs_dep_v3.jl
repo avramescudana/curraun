@@ -221,6 +221,8 @@ end
 # ╔═╡ ff93c5b9-6998-4492-b772-5021590945d4
 begin
 	folder= "test_RAA_charm_fonll_Qs_2.0_fund_su2_formt_m"
+	# folder= "test_RAA_charm_fonll_Qs_2.0_fund_su3_formt_m"
+	
 	# folder= "RAA_charm_fonll_Qs_2.0_fund_su2_formt_m"
 	# folder= "RAA_charm_fonll_Qs_2.0_qfund"
 

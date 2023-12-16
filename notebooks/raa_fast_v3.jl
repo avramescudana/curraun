@@ -7,6 +7,7 @@ using InteractiveUtils
 # ╔═╡ 54e939fc-31e1-482d-ad6a-d8c9c0953d39
 begin
 	using Pickle
+	using NPZ
 	using DataFrames
 	using CairoMakie
 	using NumericalIntegration
@@ -117,7 +118,7 @@ md"---
 #### Read Glasma results from files"
 
 # ╔═╡ d27076d9-2a36-4341-ada5-5bba3259c5e9
-τₛ = 0.1
+τₛ = 0.3
 
 # ╔═╡ e1836cd7-8507-4f8c-9e9f-c32d65cdd66c
 function findminindex(value, array)
@@ -156,6 +157,82 @@ end
 
 # 	parameters, pT_spectra, initial_pTs = read_file(filename)
 # end
+
+# ╔═╡ 5ad3fac8-0aca-461d-936b-c3381ca3d4d5
+begin
+	folder= "test_RAA_charm_fonll_Qs_2.0_fund_su3_formt_m"
+	# folder= "RAA_charm_fonll_Qs_2.0_qfund"
+
+	pT_spectra = Dict()
+	initial_pTs = Dict()
+
+	function read_file(folder, pT_spectra, initial_pTs, τₛ, returnparams)
+		filename_param = current_path * "/results/" * folder * "/parameters.pickle"
+		parameters = Pickle.npyload(filename_param)
+		pTs = parameters["PTS"]
+		npTs = length(parameters["PTS"])
+		nevents = parameters["NEVENTS"]
+	
+		τ = parameters["TAU"]
+		τᵢ = findminindex(τₛ, τ)
+	
+		pT_spectra[string(τₛ)] = Dict()
+		initial_pTs[string(τₛ)] = Dict()
+		for (pTbin, pT) in enumerate(pTs)
+			label = string(pT)
+			pT_spectra[string(τₛ)][label] = zeros(0)
+			initial_pTs[string(τₛ)][label] = zeros(0)
+			
+			# for ev in range(1, nevents)
+			for ev in range(1, 1)
+				label_ev = "event_"*string(ev)
+
+				label_file = "/pT_bin_" * string(pTbin) * "_ev_" * string(ev) * ".npz"
+				filename_npz = current_path * "/results/" * folder * label_file
+				output_npz = npzread(filename_npz)
+				pT_spectra_npz = output_npz["pTs"]
+				initial_pTs_npz = output_npz["initial_pTs"]
+				
+				append!(pT_spectra[string(τₛ)][label], pT_spectra_npz[τᵢ,:])
+				append!(initial_pTs[string(τₛ)][label], initial_pTs_npz)
+			end
+		end
+		if returnparams
+			return parameters
+		end
+	end
+
+	parameters = read_file(folder, pT_spectra, initial_pTs, τₛ, true)
+end
+
+# ╔═╡ 2a4ff431-a5a0-49c5-a169-9d32ac22ca52
+begin
+	collect_pTs = zeros(0)
+	collect_initial_pTs = zeros(0)
+	
+	for (pTbin, pT) in enumerate(parameters["PTS"])		
+		label = string(pT)
+		pT_spectraᵢ = pT_spectra[string(τₛ)][label]
+		initial_pTsᵢ = initial_pTs[string(τₛ)][label]
+
+		append!(collect_pTs, pT_spectraᵢ)
+		append!(collect_initial_pTs, initial_pTsᵢ)
+	end
+end
+
+# ╔═╡ af81e5da-b637-4956-bfb5-5cb9dbc548e7
+pTs = parameters["PTS"]
+
+# ╔═╡ 0bb6ebee-7a4e-44c6-98f1-f69c087ef0e3
+begin
+	weights = Dict()
+	weights["fit"] = Dict()
+	for fit_type in ["normal", "log"]
+		weights["fit"][fit_type] = powlaw(collect_initial_pTs, popt[fit_type])
+	end
+
+	weights["interp"] = interp_map(collect_initial_pTs)
+end
 
 # ╔═╡ 615fd3f3-532f-47ae-b9ab-3b8daf3f3029
 # begin
@@ -328,7 +405,7 @@ begin
 	end
 	
 	ylims!(ax[1], 0, nothing)
-	ylims!(ax[2], 0, 2)
+	# ylims!(ax[2], 0, 2)
 
 	# save("plots/dNdpT_RAA_tau_dep_fast_pT_bins_pyqt_fonll_fit_vs_interp.png", fig, px_per_unit = 5.0)
 
@@ -340,19 +417,19 @@ md"Tests"
 
 # ╔═╡ b31291e4-af16-4889-bd30-e27b8f07e02a
 begin
-	collect_initial_pTs = zeros(0)
+	# collect_initial_pTs = zeros(0)
 
-	for (pTbin, pT) in enumerate(parameters["PTS"])	
-		label = string(pT)
+	# for (pTbin, pT) in enumerate(parameters["PTS"])	
+	# 	label = string(pT)
 
-		for ev in range(1, parameters["NEVENTS"])
-			label_ev = "event_" * string(ev)
-			initial_pTsᵢ = initial_pTs[label][label_ev]
+	# 	for ev in range(1, parameters["NEVENTS"])
+	# 		label_ev = "event_" * string(ev)
+	# 		initial_pTsᵢ = initial_pTs[label][label_ev]
 
-			append!(collect_initial_pTs, initial_pTsᵢ)
-		end
+	# 		append!(collect_initial_pTs, initial_pTsᵢ)
+	# 	end
 		
-	end
+	# end
 	
 	unity_weights = ones(length(weights["interp"]))./length(weights["interp"])
 end
@@ -414,6 +491,7 @@ DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
+NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
 NumericalIntegration = "e7bfaba1-d571-5449-8927-abc22e82249b"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
@@ -423,6 +501,7 @@ CairoMakie = "~0.10.9"
 DataFrames = "~1.6.1"
 DataInterpolations = "~4.0.1"
 LsqFit = "~0.13.0"
+NPZ = "~0.4.3"
 NumericalIntegration = "~0.3.3"
 Pickle = "~0.3.3"
 PyCall = "~1.96.1"
@@ -434,7 +513,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "36664bcc62fa4b9a925e08e12f16cfe0ec0c1568"
+project_hash = "8cb1a6e16992132c8bb424501fa0bf7097f938fe"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -1286,6 +1365,12 @@ git-tree-sha1 = "a0b464d183da839699f4c79e7606d9d186ec172c"
 uuid = "d41bc354-129a-5804-8e4c-c37616107c6c"
 version = "7.8.3"
 
+[[deps.NPZ]]
+deps = ["FileIO", "ZipFile"]
+git-tree-sha1 = "60a8e272fe0c5079363b28b0953831e2dd7b7e6f"
+uuid = "15e1cf62-19b3-5cfa-8e77-841668bca605"
+version = "0.4.3"
+
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
 git-tree-sha1 = "0877504529a3e5c3343c6f8b4c0381e57e4387e4"
@@ -2039,6 +2124,10 @@ version = "3.5.0+0"
 # ╠═d27076d9-2a36-4341-ada5-5bba3259c5e9
 # ╠═e1836cd7-8507-4f8c-9e9f-c32d65cdd66c
 # ╠═9b5c4df8-088a-4740-984c-a804f9f6cf0a
+# ╠═5ad3fac8-0aca-461d-936b-c3381ca3d4d5
+# ╠═2a4ff431-a5a0-49c5-a169-9d32ac22ca52
+# ╠═af81e5da-b637-4956-bfb5-5cb9dbc548e7
+# ╠═0bb6ebee-7a4e-44c6-98f1-f69c087ef0e3
 # ╠═615fd3f3-532f-47ae-b9ab-3b8daf3f3029
 # ╠═c4aedbc0-c96c-49ec-9beb-89def5c8758c
 # ╠═f9301b66-e3f9-4418-b621-2298ea50e168
