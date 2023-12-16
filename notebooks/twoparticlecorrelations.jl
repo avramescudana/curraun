@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -32,9 +32,9 @@ Input information
 # ╔═╡ d0bd3d08-025e-4b01-87ac-10a970781af5
 begin
 	# go through all events in a given folder
-	allevents = true
+	allevents = false
 	# folder with events, labeled by initialization type, pT and quark
-	folder = "corr_toy_pT_2_charm_Qs_1.4"
+	folder = "corr_toy_pT_1_charm_Qs_2.0"
 end
 
 # ╔═╡ 870fd761-68b2-422e-9467-3a79b560d62d
@@ -62,7 +62,7 @@ Proper time values at which the correlation are sliced
 """
 
 # ╔═╡ 8a7a86b8-e88a-4008-a71a-5e2b77f1a0a8
-τₛ = [0.01, 0.2, 0.5];
+τₛ = [0.01, 0.1, 0.3, 1.0];
 
 # ╔═╡ b3b6aa1a-075c-42de-b80d-698e206913ab
 md"""
@@ -142,7 +142,13 @@ Index of time slice from τₛ input array
 i = 3
 
 # ╔═╡ d28b01fe-cb91-42a3-9879-825b22ae30ec
-np = 2048*2
+np = 1024
+
+# ╔═╡ 841f3e52-977d-42ba-a927-b26cd773014e
+begin
+	dfᵢ = df[df.τₛ .== string(τₛ[i]), :]
+	set_aog_theme!(fonts = (; regular = "CMU Serif"))
+end
 
 # ╔═╡ 31fda3c2-181f-4db5-91bb-81939fda5eca
 md"""
@@ -150,29 +156,39 @@ Heatmap plot of dNdΔηdΔϕ as a function of Δη and Δϕ at a given Δτᵢ
 """
 
 # ╔═╡ a9554918-4c9c-4a8c-9891-e1405bac5876
-begin
-	dfᵢ = df[df.τₛ .== string(τₛ[i]), :]
-	set_aog_theme!(fonts = (; regular = "CMU Serif"))
-	axis = (width = 300, height = 300, ylabel=L"\Delta\eta", xlabel=L"\Delta\phi",
-		xlabelsize = 20, ylabelsize = 20, 
-		xticks = ([π/2, 3*π/4, π, 5*π/4, 3*π/2], [L"\pi/2", L"3\pi/4", L"\pi", L"5\pi/4", L"3\pi/2"]), 
-		limits = (π/2, 3*π/2, -2.2, 2.2), 
-		# limits = (nothing, nothing, nothing, nothing), 
-		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
-	)
-	# AlgebraOfGraphics.density(; bandwidth=(0.01, 0.01))
-	dNdΔηdΔϕ = data(dfᵢ) * AlgebraOfGraphics.density(npoints=np) * visual(Heatmap, colormap = reverse(cgrad(:beach))) * mapping(:Δϕᵢ, :Δηᵢ)
+# begin
+# 	axis = (width = 300, height = 300, ylabel=L"\Delta\eta", xlabel=L"\Delta\phi",
+# 		xlabelsize = 20, ylabelsize = 20, 
+# 		# xticks = ([π/2, 3*π/4, π, 5*π/4, 3*π/2], [L"\pi/2", L"3\pi/4", L"\pi", L"5\pi/4", L"3\pi/2"]), 
+# 		# limits = (π/2, 3*π/2, -2.2, 2.2), 
+# 		# limits = (nothing, nothing, nothing, nothing), 
+# 		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+# 	)
+# 	# AlgebraOfGraphics.density(; bandwidth=(0.01, 0.01))
+# 	dNdΔηdΔϕ = data(dfᵢ) * AlgebraOfGraphics.density(npoints=np) * visual(Heatmap, colormap = reverse(cgrad(:beach))) * mapping(:Δϕᵢ, :Δηᵢ)
 
-	fig = draw(dNdΔηdΔϕ, axis = axis, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=12, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10, tickcolor=:gray, width = 12), 
-	)
+# 	fig = draw(dNdΔηdΔϕ, axis = axis, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=12, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10, tickcolor=:gray, width = 12), 
+# 	)
 
-	text!(π/2+0.05*π, 1.8, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
+# 	text!(π/2+0.05*π, 1.8, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
 	
-	if saveplots
-		save("plots/Cdetadphi_heatmap_toy_charm_pT_2_tau_$(τₛ[i]).png", fig, px_per_unit = 5)
-	end
+# 	if saveplots
+# 		save("plots/Cdetadphi_heatmap_toy_charm_pT_2_tau_$(τₛ[i]).png", fig, px_per_unit = 5)
+# 	end
 
-	fig
+# 	fig
+# end
+
+# ╔═╡ 029e0c4b-fdb6-41d0-bcf9-4ed7376d19fb
+begin
+	cmap = cgrad(:beach, 16, categorical=true)
+	cmap_list = [cmap[i] for i in 1:16]
+	cmap_list[15] = ColorSchemes.RGBA{Float64}(0.8797670666666666,0.8923689333333333,0.9809609333333333,0.5)
+	cmap_list[16] = ColorSchemes.RGBA{Float64}(1, 1, 1,0)
+	cmap_transp = cgrad(cmap_list)
+
+	# using Colors
+	# print(RGBA(cmap_list[15]))
 end
 
 # ╔═╡ d4fe1ae1-b434-4370-87a1-7fb906735f45
@@ -181,15 +197,60 @@ Surface plot of dNdΔηdΔϕ as a function of Δη and Δϕ at a given Δτᵢ
 """
 
 # ╔═╡ adc33def-c60a-4883-91a0-5e65cf1ddff1
+begin
+	# \tau=0.01
+	# bandwidth_τ = (0.1, 0.1)
+	# limits_τ = ((0, 2*π), (-1.2, 1.2), (nothing, 4.5))
+	# yticks_τ = ([-1, 0, 1], ["-1", "0", "1"])
+
+	# \tau=0.1
+	# bandwidth_τ = (0.2, 0.2)
+	# limits_τ = ((0, 2*π), (-5, 5), (nothing, 0.22))
+	# yticks_τ = ([-4, 0, 4], ["-4", "0", "4"])
+
+	# \tau=0.3
+	bandwidth_τ = (0.25, 0.25)
+	limits_τ = ((0, 2*π), (-5.1, 5.1), (nothing, 0.15))
+	yticks_τ = ([-4, 0, 4], ["-4", "0", "4"])
+	
+	dNdΔηdΔϕ3D = data(dfᵢ) * mapping(:Δϕᵢ, :Δηᵢ) *
+		    AlgebraOfGraphics.density(npoints=np; bandwidth=bandwidth_τ) * visual(Surface, shading=false, colormap = reverse(cgrad(cmap_transp)))
+	axis3D = (width = 350, height = 320,
+		type=Axis3, 
+		protrusions=2,
+		# limits=(nothing, nothing, (nothing, nothing)), 
+		limits = limits_τ,
+		yticks = yticks_τ,
+		elevation=0.15π, azimuth=1.3π, 
+		ylabel=L"\Delta\eta", xlabel=L"\Delta\phi", zlabel="", xlabelsize = 20, ylabelsize = 20, zlabelsize = 0, 
+		xticks = ([0, π, 2*π], ["0", "π", "2π"]), 
+		xspinecolor_1 =:black, xtickcolor=(:white, 0), xticklabelpad=-5, xspinewidth=0.5,
+		yspinecolor_1 =:black, ytickcolor=(:white, 0), yticklabelpad=-5, yspinewidth=0.5,
+		zspinesvisible=false, zticklabelsvisible=false, zticksvisible=false,
+		titlegap = -18,
+		title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+	)
+
+	fig3D = draw(dNdΔηdΔϕ3D; axis = axis3D, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=12, ticksize=0, labelsize=20, flipaxis=true, labelpadding=10, width = 10, height = Relative(0.85), tickcolor=(:gray,0)))
+	# if saveplots
+	# save("plots/paper_Cdetadphi_3D_toy_charm_pT_1_tau_$(τₛ[i]).png", fig3D, px_per_unit = 10)
+	# end
+
+	# text!(1, 1, 1, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
+
+	fig3D
+end
+
+# ╔═╡ ce08c947-a871-4642-afed-427e04ae8485
 # begin
 # 	# ; bandwidth=(0.01, 0.01)
 # 	dNdΔηdΔϕ3D = data(dfᵢ) * mapping(:Δϕᵢ, :Δηᵢ) *
-# 		    AlgebraOfGraphics.density(npoints=np) * visual(Surface, shading=false, colormap = reverse(cgrad(:beach)))
+# 		    AlgebraOfGraphics.density(npoints=2048*4) * visual(Surface, shading=false, colormap = reverse(cgrad(:seaborn_rocket_gradient)))
 # 	axis3D = (width = 370, height = 350,
 # 		type=Axis3, 
 # 		# limits=(nothing, nothing, (nothing, nothing)), 
 # 		# limits = ((-9, 9), (0, 2*π), (nothing, nothing)),
-# 		limits = ((0, 2*π), (nothing, nothing), (nothing, nothing)),
+# 		limits = ((π/2, 3*π/2), (-3, 3), (0.05, nothing)),
 # 		elevation=0.15π, azimuth=1.3π, 
 # 		ylabel=L"\Delta\eta", xlabel=L"\Delta\phi", zlabel="", xlabelsize = 20, ylabelsize = 20, zlabelsize = 0, 
 # 		xticks = ([0, π, 2*π], ["0", "π", "2π"]), 
@@ -206,58 +267,32 @@ Surface plot of dNdΔηdΔϕ as a function of Δη and Δϕ at a given Δτᵢ
 # 	fig3D
 # end
 
-# ╔═╡ ce08c947-a871-4642-afed-427e04ae8485
-begin
-	# ; bandwidth=(0.01, 0.01)
-	dNdΔηdΔϕ3D = data(dfᵢ) * mapping(:Δϕᵢ, :Δηᵢ) *
-		    AlgebraOfGraphics.density(npoints=2048*4) * visual(Surface, shading=false, colormap = reverse(cgrad(:seaborn_rocket_gradient)))
-	axis3D = (width = 370, height = 350,
-		type=Axis3, 
-		# limits=(nothing, nothing, (nothing, nothing)), 
-		# limits = ((-9, 9), (0, 2*π), (nothing, nothing)),
-		limits = ((π/2, 3*π/2), (-3, 3), (0.05, nothing)),
-		elevation=0.15π, azimuth=1.3π, 
-		ylabel=L"\Delta\eta", xlabel=L"\Delta\phi", zlabel="", xlabelsize = 20, ylabelsize = 20, zlabelsize = 0, 
-		xticks = ([0, π, 2*π], ["0", "π", "2π"]), 
-		title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
-	)
-
-	fig3D = draw(dNdΔηdΔϕ3D; axis = axis3D, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=12, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10, width = 12, height = Relative(0.85), tickcolor=:gray))
-	if saveplots
-		save("plots/Cdetadphi_3D_toy_charm_pT_2_tau_$(τₛ[i]).png", fig3D, px_per_unit = 5)
-	end
-
-	# text!(0.5, 3, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
-	
-	fig3D
-end
-
 # ╔═╡ c9690245-e1dc-4d8f-add8-349d7e434b42
 md"""
 Heatmap plot of dNdpₜdpbarₜ as a function of pₜ and pbarₜ at a given Δτᵢ
 """
 
 # ╔═╡ 7ace61a1-f622-49b3-a479-32fe13a39c46
-begin
-	axispt = (width = 300, height = 300, xlabel=L"p_T^Q\,\mathrm{[GeV]}", ylabel=L"p_T^{\overline{Q}}\,\mathrm{[GeV]}",
-		xlabelsize = 20, ylabelsize = 20, 
-		# yticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
-		limits = (0, 4, 0, 4), 
-		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
-		)
-	dNdpₜdpbarₜ = data(dfᵢ) * mapping(:pₜᵢ, :pbarₜᵢ)
-	pltpt = dNdpₜdpbarₜ * AlgebraOfGraphics.density(npoints=np) * visual(Heatmap, colormap = reverse(cgrad(:beach)))
+# begin
+# 	axispt = (width = 300, height = 300, xlabel=L"p_T^Q\,\mathrm{[GeV]}", ylabel=L"p_T^{\overline{Q}}\,\mathrm{[GeV]}",
+# 		xlabelsize = 20, ylabelsize = 20, 
+# 		# yticks = ([0, π/2, π, 3*π/2, 2*π], ["0", L"\frac{\pi}{2}", L"\pi", L"\frac{3\pi}{2}", L"2\pi"]), 
+# 		limits = (0, 4, 0, 4), 
+# 		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+# 		)
+# 	dNdpₜdpbarₜ = data(dfᵢ) * mapping(:pₜᵢ, :pbarₜᵢ)
+# 	pltpt = dNdpₜdpbarₜ * AlgebraOfGraphics.density(npoints=np) * visual(Heatmap, colormap = reverse(cgrad(:beach)))
 
-	figpt = draw(pltpt; axis = axispt, colorbar=(position=:right, label = L"\mathcal{C}(p_T^Q,p_T^{\overline{Q}}\,)", ticklabelsize=12, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10, tickcolor=:gray, width = 12))
+# 	figpt = draw(pltpt; axis = axispt, colorbar=(position=:right, label = L"\mathcal{C}(p_T^Q,p_T^{\overline{Q}}\,)", ticklabelsize=12, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10, tickcolor=:gray, width = 12))
 
-	text!(0.15, 3.6, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
+# 	text!(0.15, 3.6, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
 	
-	if saveplots
-		save("plots/Cptpbart_heatmap_toy_charm_pT_2_tau_$(τₛ[i]).png", figpt, px_per_unit = 5)
-	end
+# 	if saveplots
+# 		save("plots/Cptpbart_heatmap_toy_charm_pT_2_tau_$(τₛ[i]).png", figpt, px_per_unit = 5)
+# 	end
 	
-	figpt
-end
+# 	figpt
+# end
 
 # ╔═╡ b11beb46-f670-4809-a1f5-6a12e50b0844
 md"""
@@ -265,25 +300,25 @@ Heatmap plot of dNdpₜdΔϕ as a function of pₜ and Δϕ at a given Δτᵢ
 """
 
 # ╔═╡ 43f91e80-99c9-4a3b-b2b4-b94c967d03fd
-begin
-	axis_dNdpₜdΔϕ = (width = 300, height = 300, xlabel=L"\Delta\phi", ylabel=L"p_T^Q\,\mathrm{[GeV]}",
-		xlabelsize = 20, ylabelsize = 20, 
-		xticks = ([π/2, 3*π/4, π, 5*π/4, 3*π/2], [L"\pi/2", L"3\pi/4", L"\pi", L"5\pi/4", L"3\pi/2"]), 
-		limits = (π/2, 3*π/2, 0, 4), 
-		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
-	)
-	dNdpₜdΔϕ = data(dfᵢ) * mapping(:Δϕᵢ, :pₜᵢ) * AlgebraOfGraphics.density(npoints=np) * visual(Heatmap, colormap = reverse(cgrad(:beach)))
+# begin
+# 	axis_dNdpₜdΔϕ = (width = 300, height = 300, xlabel=L"\Delta\phi", ylabel=L"p_T^Q\,\mathrm{[GeV]}",
+# 		xlabelsize = 20, ylabelsize = 20, 
+# 		xticks = ([π/2, 3*π/4, π, 5*π/4, 3*π/2], [L"\pi/2", L"3\pi/4", L"\pi", L"5\pi/4", L"3\pi/2"]), 
+# 		limits = (π/2, 3*π/2, 0, 4), 
+# 		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+# 	)
+# 	dNdpₜdΔϕ = data(dfᵢ) * mapping(:Δϕᵢ, :pₜᵢ) * AlgebraOfGraphics.density(npoints=np) * visual(Heatmap, colormap = reverse(cgrad(:beach)))
 
-	fig_dNdpₜdΔϕ = draw(dNdpₜdΔϕ; axis = axis_dNdpₜdΔϕ, colorbar=(position=:right, label = L"\mathcal{C}(p_T^Q,\Delta\phi)", ticklabelsize=12, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10, tickcolor=:gray, width = 12))
+# 	fig_dNdpₜdΔϕ = draw(dNdpₜdΔϕ; axis = axis_dNdpₜdΔϕ, colorbar=(position=:right, label = L"\mathcal{C}(p_T^Q,\Delta\phi)", ticklabelsize=12, ticksize=5, labelsize=20, flipaxis=true, labelpadding=10, tickcolor=:gray, width = 12))
 
-	text!(π/2+0.05*π, 3.6, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
+# 	text!(π/2+0.05*π, 3.6, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
 
-	if saveplots
-		save("plots/Cdphidpt_heatmap_toy_charm_pT_2_tau_$(τₛ[i]).png", fig_dNdpₜdΔϕ, px_per_unit = 5)
-	end
+# 	if saveplots
+# 		save("plots/Cdphidpt_heatmap_toy_charm_pT_2_tau_$(τₛ[i]).png", fig_dNdpₜdΔϕ, px_per_unit = 5)
+# 	end
 	
-	fig_dNdpₜdΔϕ
-end
+# 	fig_dNdpₜdΔϕ
+# end
 
 # ╔═╡ e680eddf-ba42-4cb2-b561-43a8b0cd7ff6
 md"""
@@ -291,27 +326,27 @@ Density plot of dNdΔϕ as a function of Δϕ at Δτ
 """
 
 # ╔═╡ b7498278-7582-4679-a69f-49bce37f1715
-begin
-	set_aog_theme!(fonts = (; regular = "CMU Serif"))
-	axis_dNdΔϕ = (width = 300, height = 300, xlabel=L"\Delta\phi", ylabel=L"1/N_\mathrm{pairs}\,\mathrm{d}N/\mathrm{d}\Delta\phi",
-		xlabelsize = 20, ylabelsize = 20, xticklabelsize = 14, yticklabelsize=14, 
-		# xticks = ([π/2, 3*π/4, π, 5*π/4, 3*π/2], [L"\pi/2", L"3\pi/4", L"\pi", L"5\pi/4", L"3\pi/2"]), 
-		# limits = (π/2, 3*π/2, nothing), 
-		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
-	)
-	dNdΔϕ = data(df) * mapping(:Δϕᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density() 
-	# * visual(Heatmap, colormap = reverse(cgrad(:beach)))
+# begin
+# 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
+# 	axis_dNdΔϕ = (width = 300, height = 300, xlabel=L"\Delta\phi", ylabel=L"1/N_\mathrm{pairs}\,\mathrm{d}N/\mathrm{d}\Delta\phi",
+# 		xlabelsize = 20, ylabelsize = 20, xticklabelsize = 14, yticklabelsize=14, 
+# 		# xticks = ([π/2, 3*π/4, π, 5*π/4, 3*π/2], [L"\pi/2", L"3\pi/4", L"\pi", L"5\pi/4", L"3\pi/2"]), 
+# 		# limits = (π/2, 3*π/2, nothing), 
+# 		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+# 	)
+# 	dNdΔϕ = data(df) * mapping(:Δϕᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density() 
+# 	# * visual(Heatmap, colormap = reverse(cgrad(:beach)))
 
-	segmented_cmap = cgrad(:beach, 16, categorical = true)
-	colors = [segmented_cmap[12], segmented_cmap[9], segmented_cmap[4]]
-	fig_dNdΔϕ = draw(dNdΔϕ; axis = axis_dNdΔϕ, legend=(;position=:right, linewidth=1.5), 
-		palettes=(; color=colors)
-	)
-	if saveplots
-		save("plots/dNdphi_tau_dep.png", fig_dNdΔϕ, px_per_unit = 5)
-	end
-	fig_dNdΔϕ
-end
+# 	segmented_cmap = cgrad(:beach, 16, categorical = true)
+# 	colors = [segmented_cmap[12], segmented_cmap[9], segmented_cmap[4]]
+# 	fig_dNdΔϕ = draw(dNdΔϕ; axis = axis_dNdΔϕ, legend=(;position=:right, linewidth=1.5), 
+# 		palettes=(; color=colors)
+# 	)
+# 	if saveplots
+# 		save("plots/dNdphi_tau_dep.png", fig_dNdΔϕ, px_per_unit = 5)
+# 	end
+# 	fig_dNdΔϕ
+# end
 
 # ╔═╡ d46c4198-3991-4626-9c18-443d6feb9c04
 md"""
@@ -1904,9 +1939,9 @@ version = "2.0.2+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
+git-tree-sha1 = "f7c281e9c61905521993a987d38b5ab1d4b53bef"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.38+0"
+version = "1.6.38+1"
 
 [[deps.libsixel_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]
@@ -1964,8 +1999,10 @@ version = "3.5.0+0"
 # ╟─eb50f420-4561-4772-9432-b5c55b346123
 # ╠═130464b5-6b4d-44ea-b055-d34ef5777f72
 # ╠═d28b01fe-cb91-42a3-9879-825b22ae30ec
+# ╠═841f3e52-977d-42ba-a927-b26cd773014e
 # ╟─31fda3c2-181f-4db5-91bb-81939fda5eca
 # ╠═a9554918-4c9c-4a8c-9891-e1405bac5876
+# ╠═029e0c4b-fdb6-41d0-bcf9-4ed7376d19fb
 # ╟─d4fe1ae1-b434-4370-87a1-7fb906735f45
 # ╠═adc33def-c60a-4883-91a0-5e65cf1ddff1
 # ╠═ce08c947-a871-4642-afed-427e04ae8485

@@ -16,9 +16,9 @@ begin
 
 	# PyCall using a local virtual environment with Python 2.7
 	# PyQt-Fit only work with Python 2.7, see https://stackoverflow.com/questions/62709018/pyqt-fit-installation-failed
-	using Pkg 
-	ENV["PYTHON"] = "/n/work00/davrames/python27/bin/python"
-	Pkg.build("PyCall")
+	# using Pkg 
+	# ENV["PYTHON"] = "/n/work00/davrames/python27/bin/python"
+	# Pkg.build("PyCall")
 	using PyCall
 end
 
@@ -125,87 +125,87 @@ function findminindex(value, array)
 end 
 
 # ╔═╡ 9b5c4df8-088a-4740-984c-a804f9f6cf0a
-begin
-	folder= "RAA_charm_fonll_Qs_2.0_fund_oldbutnewer"
-	filename = current_path * "/results/" * folder * "/all_pTs_pT_bins.pickle"
+# begin
+# 	folder= "RAA_charm_fonll_Qs_2.0_fund_oldbutnewer"
+# 	filename = current_path * "/results/" * folder * "/all_pTs_pT_bins.pickle"
 
-	function read_file(filename)
-		output = Pickle.npyload(filename)
-		parameters = output["parameters"]
-		pTs = parameters["PTS"]
-		npTs = length(parameters["PTS"])
-		nevents = parameters["NEVENTS"]
+# 	function read_file(filename)
+# 		output = Pickle.npyload(filename)
+# 		parameters = output["parameters"]
+# 		pTs = parameters["PTS"]
+# 		npTs = length(parameters["PTS"])
+# 		nevents = parameters["NEVENTS"]
 	
-		τ = output["tau"]
-		τᵢ = findminindex(τₛ, τ)
+# 		τ = output["tau"]
+# 		τᵢ = findminindex(τₛ, τ)
 	
-		pT_spectra = Dict()
-		initial_pTs = Dict()
-		for pT in pTs
-			label = string(pT)
-			pT_spectra[label] = zeros(0)
-			initial_pTs[label] = Dict()
-			for ev in range(1, nevents)
-				label_ev = "event_"*string(ev)
-				append!(pT_spectra[label], output[label]["pTs_event_"*string(ev)][τᵢ,:])
-				initial_pTs[label][label_ev] = output[label]["initial_pTs_event_"*string(ev)]
-			end
-		end
-		return parameters, pT_spectra, initial_pTs
-	end
+# 		pT_spectra = Dict()
+# 		initial_pTs = Dict()
+# 		for pT in pTs
+# 			label = string(pT)
+# 			pT_spectra[label] = zeros(0)
+# 			initial_pTs[label] = Dict()
+# 			for ev in range(1, nevents)
+# 				label_ev = "event_"*string(ev)
+# 				append!(pT_spectra[label], output[label]["pTs_event_"*string(ev)][τᵢ,:])
+# 				initial_pTs[label][label_ev] = output[label]["initial_pTs_event_"*string(ev)]
+# 			end
+# 		end
+# 		return parameters, pT_spectra, initial_pTs
+# 	end
 
-	parameters, pT_spectra, initial_pTs = read_file(filename)
-end
+# 	parameters, pT_spectra, initial_pTs = read_file(filename)
+# end
 
 # ╔═╡ 615fd3f3-532f-47ae-b9ab-3b8daf3f3029
-begin
-	collect_pTs = zeros(0)
-	weights = Dict()
-	weights["fit"], weights["interp"] = Dict(), zeros(0)
-	for fit_type in ["normal", "log"]
-		weights["fit"][fit_type] = zeros(0)
-	end
+# begin
+# 	collect_pTs = zeros(0)
+# 	weights = Dict()
+# 	weights["fit"], weights["interp"] = Dict(), zeros(0)
+# 	for fit_type in ["normal", "log"]
+# 		weights["fit"][fit_type] = zeros(0)
+# 	end
 
-	# collects_initial_pTs = zeros(0)
-	# unity_weights = Dict()
-	# unity_weights["fit"], unity_weights["interp"] = zeros(0), zeros(0)
+# 	# collects_initial_pTs = zeros(0)
+# 	# unity_weights = Dict()
+# 	# unity_weights["fit"], unity_weights["interp"] = zeros(0), zeros(0)
 
-	pTs = parameters["PTS"]
-	npoints_fonll = 10^3
-	pts_fonll = range(minimum(pT_spectra[string(pTs[1])]), maximum(pT_spectra[string(pTs[length(pTs)])]), npoints_fonll)
+# 	pTs = parameters["PTS"]
+# 	npoints_fonll = 10^3
+# 	pts_fonll = range(minimum(pT_spectra[string(pTs[1])]), maximum(pT_spectra[string(pTs[length(pTs)])]), npoints_fonll)
 
-	fonll_norm_w = Dict()
-	for fit_type in ["normal", "log"]
-		fonll_w = powlaw(pts_fonll, popt[fit_type])
-		fonll_norm_w[fit_type] = fonll_w./integrate(pts_fonll, fonll_w)
-	end
+# 	fonll_norm_w = Dict()
+# 	for fit_type in ["normal", "log"]
+# 		fonll_w = powlaw(pts_fonll, popt[fit_type])
+# 		fonll_norm_w[fit_type] = fonll_w./integrate(pts_fonll, fonll_w)
+# 	end
 
-	# ΔpT = parameters["PTS"][2] -  parameters["PTS"][1]
+# 	# ΔpT = parameters["PTS"][2] -  parameters["PTS"][1]
 
-	for (pTbin, pT) in enumerate(parameters["PTS"])	
+# 	for (pTbin, pT) in enumerate(parameters["PTS"])	
 	
-		label = string(pT)
-		pT_spectraᵢ = pT_spectra[label]
+# 		label = string(pT)
+# 		pT_spectraᵢ = pT_spectra[label]
 
-		append!(collect_pTs, pT_spectraᵢ)
+# 		append!(collect_pTs, pT_spectraᵢ)
 
-		for fit_type in ["normal", "log"]
-			fonll_ipt_norm = fonll_norm_w[fit_type][findminindex(pT, pts_fonll)]
-			weightᵢ_fit = fonll_ipt_norm.*ones(parameters["NTP"]*parameters["NEVENTS"])./parameters["NTP"]./parameters["NEVENTS"]
-			append!(weights["fit"][fit_type], weightᵢ_fit)
-		end
+# 		for fit_type in ["normal", "log"]
+# 			fonll_ipt_norm = fonll_norm_w[fit_type][findminindex(pT, pts_fonll)]
+# 			weightᵢ_fit = fonll_ipt_norm.*ones(parameters["NTP"]*parameters["NEVENTS"])./parameters["NTP"]./parameters["NEVENTS"]
+# 			append!(weights["fit"][fit_type], weightᵢ_fit)
+# 		end
 
-		weightᵢ_interp = zeros(0)
-		for ev in range(1, parameters["NEVENTS"])
-			label_ev = "event_" * string(ev)
-			initial_pTsᵢ = initial_pTs[label][label_ev]
-			append!(weightᵢ_interp, interp_map(initial_pTsᵢ))
-		end
+# 		weightᵢ_interp = zeros(0)
+# 		for ev in range(1, parameters["NEVENTS"])
+# 			label_ev = "event_" * string(ev)
+# 			initial_pTsᵢ = initial_pTs[label][label_ev]
+# 			append!(weightᵢ_interp, interp_map(initial_pTsᵢ))
+# 		end
 		
-		weightᵢ_interp = weightᵢ_interp./parameters["NEVENTS"]./parameters["NTP"]
-		append!(weights["interp"], weightᵢ_interp)
-	end
-end
+# 		weightᵢ_interp = weightᵢ_interp./parameters["NEVENTS"]./parameters["NTP"]
+# 		append!(weights["interp"], weightᵢ_interp)
+# 	end
+# end
 
 # ╔═╡ c4aedbc0-c96c-49ec-9beb-89def5c8758c
 parameters["NEVENTS"]
@@ -416,7 +416,6 @@ DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
 NumericalIntegration = "e7bfaba1-d571-5449-8927-abc22e82249b"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
-Pkg = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 
 [compat]
@@ -435,7 +434,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "bb1c0f0992dba7401d557e3fe0002f89068d3f89"
+project_hash = "36664bcc62fa4b9a925e08e12f16cfe0ec0c1568"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -1982,9 +1981,9 @@ version = "2.0.2+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
+git-tree-sha1 = "f7c281e9c61905521993a987d38b5ab1d4b53bef"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.38+0"
+version = "1.6.38+1"
 
 [[deps.libsixel_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]
