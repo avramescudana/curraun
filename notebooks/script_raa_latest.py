@@ -6,7 +6,7 @@ hbarc = 0.197326
 # Simulation box 
 L = 10      
 N = 512 
-tau_sim = 1.01     
+tau_sim = 0.5     
 DTS = 8     
 
 # Glasma
@@ -26,16 +26,16 @@ tau_form = 1/(2*mass)*hbarc
 initialization = 'pT'         
 ntp = 10**5  
 
-nevents = 2
+nevents = 1
 
-# representation = 'quantum fundamental'     
-representation = 'fundamental' 
+representation = 'quantum fundamental'     
+# representation = 'fundamental' 
 boundary = 'periodic'  
-form_time = 'mT'
+form_time = 'm'
 
 # pTs = [0, 0.5, 1, 5]
-npTbins = 25 
-pTmax = 12
+npTbins = 11 
+pTmax = 10
 pTs = np.linspace(0, pTmax, npTbins)
 deltapT = pTs[1] - pTs[0]
 

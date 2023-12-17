@@ -158,9 +158,17 @@ end
 # 	parameters, pT_spectra, initial_pTs = read_file(filename)
 # end
 
+# ╔═╡ 131acd53-92cb-466d-95bc-ef578e0887d8
+gauge_group = "su3"
+
+# ╔═╡ 487bcf80-3487-428c-965d-fa77e673a9ca
+representation = "qfund_q2_4"
+
 # ╔═╡ 5ad3fac8-0aca-461d-936b-c3381ca3d4d5
 begin
-	folder= "test_RAA_charm_fonll_Qs_2.0_fund_su3_formt_m"
+	folder= "test_RAA_charm_fonll_Qs_2.0_"*representation*"_"*gauge_group*"_formt_m"
+	# folder= "test_RAA_charm_fonll_Qs_2.0_fund_su3_formt_m"
+	# folder= "test_RAA_charm_fonll_Qs_2.0_fund_su2_formt_m"
 	# folder= "RAA_charm_fonll_Qs_2.0_qfund"
 
 	pT_spectra = Dict()
@@ -320,15 +328,21 @@ sum(weights["interp"])
 md"---
 #### Construct Glasma spectra at $\tau_s$ as KDE weighted with FONLL"
 
+# ╔═╡ 579d48ae-944f-4999-aeed-9fec8217d821
+kde_type = "pyqt"
+# kde_type = "jl"
+
 # ╔═╡ 963e563d-fa24-4783-b59c-20570b8015d9
 md"Import PyQt-Fit from Python"
 
 # ╔═╡ c0cb2831-b5b6-4148-92ea-a5bea86d2eac
-pyqt_fit = pyimport("pyqt_fit")
+if kde_type=="pyqt"
+	pyqt_fit = pyimport("pyqt_fit")
+end
 
 # ╔═╡ 0e9cf966-f7ad-4432-bd21-7bc7ce537dea
 begin
-	pTs_kde = range(findmin(collect_pTs)[1], findmax(collect_pTs)[1], 100)
+	pTs_kde = range(findmin(collect_pTs)[1], findmax(collect_pTs)[1], 200)
 	
 	kde, dens, dens_fonll, raa =  Dict(), Dict(), Dict(), Dict()
 	for fonll_type in ["fit", "interp"]
@@ -337,7 +351,9 @@ begin
 			dens_fonll[fonll_type], raa[fonll_type] = Dict(), Dict()
 			
 			for fit_type in ["normal", "log"]
-				kde[fonll_type][fit_type] = pyqt_fit.kde.KDE1D(collect_pTs, lower=0, method=pyqt_fit.kde_methods.linear_combination, weights=weights[fonll_type][fit_type])
+				if kde_type=="pyqt"
+					kde[fonll_type][fit_type] = pyqt_fit.kde.KDE1D(collect_pTs, lower=0, method=pyqt_fit.kde_methods.linear_combination, weights=weights[fonll_type][fit_type])
+				end
 
 				dens[fonll_type][fit_type] = kde[fonll_type][fit_type](pTs_kde)
 
@@ -347,7 +363,9 @@ begin
 				raa[fonll_type][fit_type] = dens[fonll_type][fit_type]./dens_fonll[fonll_type][fit_type]
 			end
 		else
-			kde[fonll_type] = pyqt_fit.kde.KDE1D(collect_pTs, lower=0, method=pyqt_fit.kde_methods.linear_combination, weights=weights[fonll_type])
+			if kde_type=="pyqt"
+				kde[fonll_type] = pyqt_fit.kde.KDE1D(collect_pTs, lower=0, method=pyqt_fit.kde_methods.linear_combination, weights=weights[fonll_type])
+			end
 
 			dens[fonll_type] = kde[fonll_type](pTs_kde)
 			
@@ -410,6 +428,30 @@ begin
 	# save("plots/dNdpT_RAA_tau_dep_fast_pT_bins_pyqt_fonll_fit_vs_interp.png", fig, px_per_unit = 5.0)
 
 	fig
+end
+
+# ╔═╡ 88883f2b-215e-44be-b0e4-dceb4d1f9da9
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig_raa = Figure(resolution = (350, 300), font = "CMU Serif")
+	ax_raa = Axis(fig_raa[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false)
+
+	lines!(ax_raa, pTs_kde, ones(length(pTs_kde)), color=(:gray, 0.3))
+	lines!(ax_raa, pTs_kde, ones(length(pTs_kde)), color=:gray, linestyle=:dash)
+	
+	glasma_fit_norm_raa = lines!(ax_raa, pTs_kde[2:length(pTs_kde)], raa["fit"]["normal"][2:length(raa["fit"]["normal"])], color=colors[2])
+	glasma_fit_log_raa = lines!(ax_raa, pTs_kde[2:length(pTs_kde)], raa["fit"]["log"][2:length(raa["fit"]["log"])], color=colors[2], linestyle=:dash)
+	glasma_interp_raa = lines!(ax_raa, pTs_kde[2:length(pTs_kde)], raa["interp"][2:length(raa["interp"])], color=colors[3])
+	
+
+	axislegend(ax_raa, [glasma_fit_norm_raa, glasma_fit_log_raa, glasma_interp_raa], [L"\mathrm{Normal\,fit}",L"\mathrm{Log\,fit}", L"\mathrm{Interp}"], position = :rb, labelsize=12)
+
+	xlims!(ax_raa, 0, 10)
+	ylims!(ax_raa, 0, 2)
+
+	save("plots/RAA_kde_"*gauge_group*"_"*representation*"_dsdpt_FONLL_weights_test.png", fig_raa, px_per_unit = 5.0)
+
+	fig_raa
 end
 
 # ╔═╡ 4df8388b-2fe8-40ff-a272-5b72ee7c1a21
@@ -2124,6 +2166,8 @@ version = "3.5.0+0"
 # ╠═d27076d9-2a36-4341-ada5-5bba3259c5e9
 # ╠═e1836cd7-8507-4f8c-9e9f-c32d65cdd66c
 # ╠═9b5c4df8-088a-4740-984c-a804f9f6cf0a
+# ╠═131acd53-92cb-466d-95bc-ef578e0887d8
+# ╠═487bcf80-3487-428c-965d-fa77e673a9ca
 # ╠═5ad3fac8-0aca-461d-936b-c3381ca3d4d5
 # ╠═2a4ff431-a5a0-49c5-a169-9d32ac22ca52
 # ╠═af81e5da-b637-4956-bfb5-5cb9dbc548e7
@@ -2138,12 +2182,14 @@ version = "3.5.0+0"
 # ╠═cfe49a8e-d868-4b50-8128-700687265d3e
 # ╠═c2624951-ccba-4c18-9c33-a48f07aea285
 # ╠═0090f0ae-9d77-4a22-b95a-8de08b5ded45
+# ╠═579d48ae-944f-4999-aeed-9fec8217d821
 # ╠═963e563d-fa24-4783-b59c-20570b8015d9
 # ╠═c0cb2831-b5b6-4148-92ea-a5bea86d2eac
 # ╠═0e9cf966-f7ad-4432-bd21-7bc7ce537dea
 # ╠═38f4003d-66d4-435d-af62-a6843a6da889
 # ╠═a6c034b8-f1ea-4bf2-bb69-86670f47fd91
 # ╠═3488e271-ef0f-44b6-9b52-76cbb931c078
+# ╠═88883f2b-215e-44be-b0e4-dceb4d1f9da9
 # ╠═bb2ee53e-99b3-4efe-a7e3-db1c83ed9f5c
 # ╠═4df8388b-2fe8-40ff-a272-5b72ee7c1a21
 # ╠═b31291e4-af16-4889-bd30-e27b8f07e02a

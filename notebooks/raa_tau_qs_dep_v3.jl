@@ -48,8 +48,8 @@ begin
 	pdf = "cteq"
 	quark = "charm"
 	
-	# data = "dsdpt"
-	data = "d2sdpt2"
+	data = "dsdpt"
+	# data = "d2sdpt2"
 	
 	spectra = "pT"
 	# spectra = "pT2"
@@ -218,10 +218,16 @@ function findminindex(value, array)
 	return findmin(element->abs(element-value),array)[2]
 end 
 
+# ╔═╡ c63baf6c-d212-4e59-a9bb-485b2ead3f51
+gauge_group = "su2"
+
+# ╔═╡ 845032c1-51ce-49ae-bfad-3f24ec9439c0
+representation = "qfund"
+
 # ╔═╡ ff93c5b9-6998-4492-b772-5021590945d4
 begin
-	folder= "test_RAA_charm_fonll_Qs_2.0_fund_su2_formt_m"
-	# folder= "test_RAA_charm_fonll_Qs_2.0_fund_su3_formt_m"
+	# folder= "test_RAA_charm_fonll_Qs_2.0_fund_"*gauge_group*"_formt_m"
+	folder= "test_RAA_charm_fonll_Qs_2.0_"*representation*"_"*gauge_group*"_formt_m"
 	
 	# folder= "RAA_charm_fonll_Qs_2.0_fund_su2_formt_m"
 	# folder= "RAA_charm_fonll_Qs_2.0_qfund"
@@ -246,7 +252,8 @@ begin
 			pT_spectra[string(τₛ)][label] = zeros(0)
 			initial_pTs[string(τₛ)][label] = zeros(0)
 			
-			for ev in range(1, nevents)
+			# for ev in range(1, nevents)
+			for ev in range(1, 1)
 				label_ev = "event_"*string(ev)
 
 				label_file = "/pT_bin_" * string(pTbin) * "_ev_" * string(ev) * ".npz"
@@ -290,11 +297,11 @@ begin
 		elseif fonll_type=="fit"
 			w₀ = powlaw(collect_initial_pTs, popt[fit_type])
 		end
-		wₜ = 1/2 .*exp.(-1/2 *collect_initial_pTs)
+		wₜ = 1/2 .*exp.(-1/2 *collect_initial_pTs) .* collect_initial_pTs
 	elseif spectra=="pT2"
 		collect_initial_sqpTs = collect_initial_pTs.^2
-		w₀ = fonll_map(collect_initial_sqpTs)
-		# wₜ = 1/2 .*exp.(-1/2 *collect_initial_pTs) .* collect_initial_pTs
+		w₀ = interp_map(collect_initial_sqpTs)
+		wₜ = 1/2 .*exp.(-1/2 *collect_initial_pTs) .* collect_initial_pTs
 	end
 
 	w₀ ./ sum(w₀)
@@ -323,34 +330,78 @@ begin
 end
 
 # ╔═╡ 410a9635-871c-4603-be82-29ef8c7ee016
-if spectra=="pT"
+begin
+# if spectra=="pT"
 	collect_pTs_hist = collect_pTs
 	collect_initial_pTs_hist = collect_initial_pTs
-elseif spectra=="pT2"
-	collect_pTs_hist = collect_pTs .^2
-	collect_initial_pTs_hist = collect_initial_pTs .^2
+# elseif spectra=="pT2"
+	# collect_pTs_hist = collect_pTs .^2
+	# collect_initial_pTs_hist = collect_initial_pTs .^2
+# end
 end
 
 # ╔═╡ 297fa790-488a-432f-91c6-d8c2088857bc
-md"#### Should the histrograms be constructed using `collect_pTs_hist?` and `collect_initial_pTs_hist`?"
+md"#### Should the histrograms with $\mathrm{d}\sigma/\mathrm{d}p_T^2$ constructed using `collect_pTs_hist?` and `collect_initial_pTs_hist` squared!?"
 
 # ╔═╡ 48a90d63-05b6-4194-be86-091e56f567cb
 begin
 	# just glasma, no weights
-	x₀, y₀ = histogram(collect_initial_pTs, bin_edges, norm_hist)
-	x₁, y₁ = histogram(collect_pTs, bin_edges, norm_hist)
+	x₀, y₀ = histogram(collect_initial_pTs_hist, bin_edges, norm_hist)
+	x₁, y₁ = histogram(collect_pTs_hist, bin_edges, norm_hist)
 
 	# weighted
-	xw₀, yw₀ = weighted_histogram(collect_initial_pTs, bin_edges, norm_hist, w₀)
-	xw₁, yw₁ = weighted_histogram(collect_pTs, bin_edges, norm_hist, w₀)
+	xw₀, yw₀ = weighted_histogram(collect_initial_pTs_hist, bin_edges, norm_hist, w₀)
+	xw₁, yw₁ = weighted_histogram(collect_pTs_hist, bin_edges, norm_hist, w₀)
+
+	# if spectra=="pT2"
+	# 	xw₀ = sqrt.(xw₀)
+	# 	xw₁ = sqrt.(xw₁)
+	
+	# 	yw₀ = yw₀ .* xw₀
+	# 	yw₁ = yw₁ .* xw₁
+	# end
 
 	# unity weights
-	xwu₀, ywu₀ = weighted_histogram(collect_initial_pTs, bin_edges, norm_hist, w₀_unity)
-	xwu₁, ywu₁ = weighted_histogram(collect_pTs, bin_edges, norm_hist, w₀_unity)
+	xwu₀, ywu₀ = weighted_histogram(collect_initial_pTs_hist, bin_edges, norm_hist, w₀_unity)
+	xwu₁, ywu₁ = weighted_histogram(collect_pTs_hist, bin_edges, norm_hist, w₀_unity)
+
+	# if spectra=="pT2"
+	# 	xwu₀ = sqrt.(xwu₀)
+	# 	xwu₁ = sqrt.(xwu₁)
+	
+	# 	ywu₀ = ywu₀ .* xwu₀
+	# 	ywu₁ = ywu₁ .* xwu₁
+	# end
 
 	# test weights
-	xwt₀, ywt₀ = weighted_histogram(collect_initial_pTs, bin_edges, norm_hist, wₜ)
-	xwt₁, ywt₁ = weighted_histogram(collect_pTs, bin_edges, norm_hist, wₜ)
+	xwt₀, ywt₀ = weighted_histogram(collect_initial_pTs_hist, bin_edges, norm_hist, wₜ)
+	xwt₁, ywt₁ = weighted_histogram(collect_pTs_hist, bin_edges, norm_hist, wₜ)
+end
+
+# ╔═╡ 1e958d84-3366-4276-ab07-edbe233c9e59
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig_pts_raa = Figure(resolution = (350, 300), font = "CMU Serif")
+	
+	ax_pts_raa = Axis(fig_pts_raa[1,1], xlabel=L"p_T", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false) 
+
+	raa_glasma_raa = stairs!(ax_pts_raa, xwu₁, ywu₁./ywu₀, step=:center, color=colors[5])
+
+	# FONLL weights
+	raa_fonll_glasma_raa = stairs!(ax_pts_raa, xw₁, yw₁./yw₀, step=:center, color=colors[4])
+
+	axislegend(ax_pts_raa, [raa_glasma_raa, raa_fonll_glasma_raa], [L"\mathrm{Unit\, weights}", L"\mathrm{FONLL\, weights}"], position = :rb, labelsize=10)
+
+	xlims!(ax_pts_raa, 0, 10)
+	ylims!(ax_pts_raa, 0, 2.2)
+
+	if fonll_type=="fit"
+		save("plots/dNdpT_RAA_hist_"*gauge_group*"_"*representation*"_"*data*"_"*spectra*"_FONLL_"*fonll_type*"_"*fit_type*"_test.png", fig_pts_raa, px_per_unit = 5.0)
+	else
+		save("plots/dNdpT_RAA_hist_"*gauge_group*"_"*representation*"_"*data*"_"*spectra*"_FONLL_"*fonll_type*"_FONLL_weights_test.png", fig_pts_raa, px_per_unit = 5.0)
+	end
+
+	fig_pts_raa
 end
 
 # ╔═╡ 9bf891e3-a437-421a-ba92-2e75c43dd192
@@ -385,6 +436,29 @@ begin
 	# save("plots/dNdpT_RAA_interp_hist_"*data*"_"*spectra*"_FONLL_weights_final.png", fig_pts, px_per_unit = 5.0)
 
 	fig_pts
+end
+
+# ╔═╡ 0ad998e8-e635-4594-8bb9-bd8134b70da6
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig_pts_raa_t = Figure(resolution = (350, 300), font = "CMU Serif")
+	
+	ax_pts_raa_t = Axis(fig_pts_raa_t[1,1], xlabel=xlabel, ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false)
+
+	raa_glasma_raa_t = stairs!(ax_pts_raa_t, xwu₁, ywu₁./ywu₀, step=:center, color=colors[5])
+
+	# test weights
+	raa_test_raa = stairs!(ax_pts_raa_t, xwt₁, ywt₁./ywt₀, step=:center, color=colors[6])
+
+	axislegend(ax_pts_raa_t, [raa_glasma_raa_t, raa_test_raa], [L"\mathrm{Unit\, weights}", L"\mathrm{Test\, weights}"], position = :rb, labelsize=10)
+
+	hidexdecorations!(ax_pts_raa_t, ticks = false, ticklabels = false, grid=false)
+	ylims!(ax_pts_raa_t, 0, 2)
+
+	xlims!(ax_pts_raa_t, 0, 10)
+
+	# save("plots/RAA_hist_"*gauge_group*"_test_weights_"*fonll_type*"_FONLL_weights_test.png", fig_pts_raa_t, px_per_unit = 5.0)
+	fig_pts_raa_t
 end
 
 # ╔═╡ 2bbc0b28-eac0-4a2d-847e-a21c74566d91
@@ -2089,6 +2163,8 @@ version = "3.5.0+0"
 # ╠═a304f6fe-de94-42f5-a0e2-9fed908c5991
 # ╠═137715fb-94ac-41d3-98c7-0a3320c43d49
 # ╠═54e5afb3-58de-491a-946d-fef7563a1bbc
+# ╠═c63baf6c-d212-4e59-a9bb-485b2ead3f51
+# ╠═845032c1-51ce-49ae-bfad-3f24ec9439c0
 # ╠═ff93c5b9-6998-4492-b772-5021590945d4
 # ╠═0b833054-a448-4fc6-b5e7-0670c274b9e2
 # ╠═272ac87c-ac4a-430b-8659-1aca8c28c1a2
@@ -2096,7 +2172,9 @@ version = "3.5.0+0"
 # ╠═410a9635-871c-4603-be82-29ef8c7ee016
 # ╠═297fa790-488a-432f-91c6-d8c2088857bc
 # ╠═48a90d63-05b6-4194-be86-091e56f567cb
+# ╠═1e958d84-3366-4276-ab07-edbe233c9e59
 # ╠═9bf891e3-a437-421a-ba92-2e75c43dd192
+# ╠═0ad998e8-e635-4594-8bb9-bd8134b70da6
 # ╠═2bbc0b28-eac0-4a2d-847e-a21c74566d91
 # ╠═2d2d45bc-b467-41f8-9de3-76b98b4d8015
 # ╟─00000000-0000-0000-0000-000000000001

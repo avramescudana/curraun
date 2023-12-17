@@ -687,6 +687,7 @@ def init_charge(representation):
             # this choice corresponds to q2=4/3=C2 from group theory but q3=0
             # since what quantities we are interested in have a very weak dependence on q3, this works well
             q0 = [np.sqrt(4/3), 0., 0., 0., 0., 0., 0., 0.]
+            # q0 = [np.sqrt(4), 0., 0., 0., 0., 0., 0., 0.]
         Q0 = np.einsum('ijk,i', T, q0)
 
         """

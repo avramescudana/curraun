@@ -55,7 +55,7 @@ end
 
 # ╔═╡ f3b4001f-d1a3-4f4e-b2a7-007330300d42
 begin
-	folder_trial = "RAA_charm_fonll_Qs_2.0_fund"
+	folder_trial = "RAA_charm_fonll_Qs_2.0_fund_oldbutnewer"
 	filename_trial = current_path * "/results/" * folder_trial * "/all_pTs_pT_bins.pickle"
 end
 
@@ -141,7 +141,7 @@ begin
 		band!(kdeᵢ.x, zeros(length(densᵢ)), densᵢ; color = (colors[pTbin], 0.1))
 	end
 	
-	ylims!(ax_trial, 0, 0.7)
+	# ylims!(ax_trial, 0, 0.7)
 	xlims!(ax_trial, nothing, 15)
 
 	labels_legend = [L"%$(round(pTᵢ; digits=2))" for pTᵢ in ptbinsel]
@@ -176,16 +176,8 @@ begin
 	p₀ =  [1.81517e8, 3.66738, 1.15575, 0.0341966]
 end
 
-# ╔═╡ 2373cb23-7f09-4c59-8acb-30db832fb26c
-md"---
-FONLL interpolated from data files
-"
-
 # ╔═╡ a8f5b978-c623-448c-9d88-223dde68a6c1
 interp_map
-
-# ╔═╡ 8408fd32-4730-4ee1-aded-bfb02d7d6974
-md"---"
 
 # ╔═╡ 5561ccc8-d88e-4d62-b538-f1ec32d5fcda
 
@@ -267,6 +259,14 @@ begin
 	fonll_raa_scipy_norm = interp_map(pTs_scipy)
 	RAA_scipy = dens_scipy./fonll_raa_scipy_norm
 end
+
+# ╔═╡ 2373cb23-7f09-4c59-8acb-30db832fb26c
+md"---
+FONLL interpolated from data files
+"
+
+# ╔═╡ 8408fd32-4730-4ee1-aded-bfb02d7d6974
+md"---"
 
 # ╔═╡ 1b0c21ed-e8a7-447d-b112-fb581261d702
 sum(weights)
