@@ -16,8 +16,8 @@ color sheets ("rapidity slices") and transverse shapes (finite radii)
 * Landau matching for hydrodynamical simulations
 - [ ] Update list of features
 
-# Installation
-### Check CUDA version
+## Installation
+#### Check CUDA version
 If you intend to use the GPU version of the code, you need a [CUDA](https://www.nvidia.com/en-gb/geforce/technologies/cuda/)-capable NVIDIA graphics card. Additionally, GPU drivers have to be installed. Assuming they are, check the CUDA version using
 
 ```
@@ -34,7 +34,7 @@ Remember the CUDA version `$CUDA_VERSION`, this will be important in the next st
 
 All the Python packages used by `curraun` can be intalled with your preffer Python package manager. Here we present a brief tutorials using `conda` and `pip`.
 
-### Using `conda``
+#### Using `conda`
 You can install all dependencies with [Anaconda](https://www.anaconda.com/distribution/). If Anaconda is not installed, follow the tutorial [install Anaconda](https://docs.anaconda.com/free/anaconda/install/index.html). 
 
 Equipped with a functional Anaconda, proceed to install the necessary packages. First, create a custom Python environment
@@ -70,7 +70,7 @@ conda install numba tqdm matplotlib jupyter
 - [ ] Split the packages into mandatory (like `numba`) and auxiliary (like `matplotlib`)
 - [ ] Create a [Conda environment YAML file](https://saturncloud.io/blog/how-to-create-a-conda-environment-based-on-a-yaml-file-a-guide-for-data-scientists/) to install all these packages in one go
 
-### Using pip
+#### Using pip
 
 For this installation, you may use your local Python>=3.6, otherwise `Numba` won't be compatible, [link here](https://numba.pydata.org/numba-doc/dev/user/installing.html). In case you run on a remote server where you don't have acces to installing a specific custom version `$PYTHON_VERSION` of Python, you may install one using Conda
 
@@ -95,22 +95,22 @@ pip install numba tqdm matplotlib jupyter
 
 - [ ] Check if these are all the necessary packages
 
-# Apptainer container
+## Apptainer
 
 - [ ] Add the image and running commands for the `curraun` container
 
-# Branches
+## Branches
 The bare Glasma solver is located in the main branch `master`. The Wong solver may be found in the branch `wong`. Additionaly functionalities will be added later on in new brances.
 
 - [ ] Document the `wong` branch
 
 
-# Example Jupyter notebooks
+## Example Jupyter notebooks
 Jupyter notebooks are provided in the [`notebooks`](notebooks) folder.
 
 - [ ] Add more details
 
-# Launching the application
+## Launching the application
 To launch a script module from the command line, go to the root directory
 of this git repository and do the following:
 ```
@@ -133,7 +133,7 @@ To list all available parameters, do the following:
 python3 -m scripts.transport_cmd --help
 ```
 
-# Papers
+## Papers
 
 This code has been used in the following works:
 
