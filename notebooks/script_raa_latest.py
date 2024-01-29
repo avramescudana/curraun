@@ -6,11 +6,11 @@ hbarc = 0.197326
 # Simulation box 
 L = 10      
 N = 512 
-tau_sim = 0.5     
+tau_sim = 0.4        
 DTS = 8     
 
 # Glasma
-su_group = 'su3'
+su_group = 'su2'
 Qs = 2.0     
 ns = 50      
 factor = 0.8        
@@ -24,20 +24,27 @@ tau_form = 1/(2*mass)*hbarc
 # tau_sim += tau_form
 
 initialization = 'pT'         
-ntp = 10**5  
+ntp = 10**4 
 
-nevents = 1
+nevents = 2
 
 representation = 'quantum fundamental'     
+# representation = 'test'     
 # representation = 'fundamental' 
+# representation = 'adjoint' 
 boundary = 'periodic'  
 form_time = 'm'
 
 # pTs = [0, 0.5, 1, 5]
-npTbins = 11 
+binning = 'pT2'
+# binning = 'pT'
+npTbins = 21 
 pTmax = 10
-pTs = np.linspace(0, pTmax, npTbins)
-deltapT = pTs[1] - pTs[0]
+if binning=='pT':
+    pTbins = np.linspace(0, pTmax, npTbins)
+elif binning=='pT2':
+    pTbins = np.linspace(0, pTmax**2, npTbins)
+deltapTbin = pTbins[1] - pTbins[0]
 
 # Store relevant parameters in a dictionary
 p = {
@@ -48,12 +55,13 @@ p = {
     'QS': Qs,            
     'NEVENTS': nevents,
     'NTP': ntp,   
-    'PTS': pTs,
+    'PTS': pTbins,
     'NPTBINS': npTbins,
     'PTMAX': pTmax,
     'REPR': representation,
     'SUGROUP': su_group,
     'FORMTIME': form_time,
+    'BINNING': binning,
     }
 
 import argparse
@@ -72,7 +80,8 @@ parser.add_argument('-NPTBINS',    type=int,   help="Number of pT bins")
 parser.add_argument('-PTMAX',    type=int,   help="Maximum value of pT [GeV]")
 parser.add_argument('-REPR',    type=str,   help="Representation")
 parser.add_argument('-SUGROUP',    type=str,   help="SU(2) or SU(3)")
-parser.add_argument('-FORMTIME',    type=str,   help="Formation time propto 1/2m or 1/2mT")
+parser.add_argument('-FORMTIME',    type=float,   help="Formation time propto 1/2m or 1/2mT")
+parser.add_argument('-BINNING',    type=str,   help="Type of binning")
 
 # parse args and update parameters dict
 args = parser.parse_args()
@@ -90,13 +99,19 @@ ir = 0.1 * g2mu
 tau_form = 1/(2*p["MASS"])*hbarc
 tau_sim += tau_form
 
-# Results folder
 if representation == 'quantum fundamental':
-    folder = 'RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_qfund_' + p["SUGROUP"] + '_formt_' + p["FORMTIME"]
+    repr_name = 'qfund'
 elif representation == 'fundamental':
-    folder = 'RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_fund_' + p["SUGROUP"] + '_formt_' + p["FORMTIME"]
+    repr_name = 'fund'
+elif representation == 'adjoint':
+    repr_name = 'adj'
+elif representation == 'test':
+    repr_name = 'test'
 
-filename = 'all_pTs_pT_bins.pickle'
+# Results folder
+folder = 'test_binning_RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_' + repr_name + '_' + p["SUGROUP"] + '_formt_' + p["FORMTIME"]
+
+# filename = 'all_pTs_' + binning + '_bins.pickle'
 
 import os
 os.environ["MY_NUMBA_TARGET"] = "cuda"
@@ -134,7 +149,7 @@ if not os.path.isdir(results_folder):
     os.makedirs(results_folder)
 results_path = current_path + '/' + results_folder + '/'
 
-def simulate(p, ev, pT, deltapT): 
+def simulate(p, ev, pTbin, deltapTbin): 
     # Derived parameters
     a = L/N
     E0 = N/L * hbarc
@@ -168,17 +183,22 @@ def simulate(p, ev, pT, deltapT):
     masses = p["MASS"] / E0 * np.ones(ntp)
 
     # pT bins
-    pTlow, pThigh = pT, pT+deltapT
-    initial_pTs = np.sort(np.random.uniform(pTlow, pThigh, ntp))
+    binning=p["BINNING"]
+    pTbinlow, pTbinhigh = pTbin, pTbin+deltapTbin
+    uniform_pTbins = np.sort(np.random.uniform(pTbinlow, pTbinhigh, ntp))
+    if binning=='pT':
+        initial_pTbins = uniform_pTbins
+    elif binning=='pT2':
+        initial_pTbins = np.sqrt(uniform_pTbins)
 
     for i in range(ntp):
         # x0, p0, q0 = init_pos(s.n), init_mom_toy('pT', pT / E0), init_charge(representation)
-        x0, p0, q0 = init_pos(s.n), init_mom_toy('pT', initial_pTs[i] / E0), init_charge(representation)
+        x0, p0, q0 = init_pos(s.n), init_mom_toy('pT', initial_pTbins[i] / E0), init_charge(representation)
         x0s[i, :], p0s[i, :], q0s[i, :] = x0, p0, q0
     
     wong_solver.initialize(x0s, p0s, q0s, masses)
 
-    pTs = np.zeros((maxt-formt, ntp))
+    final_pTbins = np.zeros((maxt-formt, ntp))
     compute_pT = TransMom(wong_solver, ntp)
 
     with tqdm(total=maxt) as pbar:
@@ -189,9 +209,13 @@ def simulate(p, ev, pT, deltapT):
             # Solve Wong's equations
             if t>=formt:  
                 compute_pT.compute()
-                pTs[t-formt] = compute_pT.pT.copy() * E0
+                pTs = compute_pT.pT.copy() * E0
+                if binning=='pT':
+                    final_pTbins[t-formt] = pTs
+                elif binning=='pT2':
+                    final_pTbins[t-formt] = pTs ** 2
 
-                wong_solver.compute_mom_broad()
+                # wong_solver.compute_mom_broad()
                 
                 wong_solver.evolve()
 
@@ -204,7 +228,7 @@ def simulate(p, ev, pT, deltapT):
     tau = np.linspace(0, tau_sim-tau_form, maxt-formt)
     # output['tau'] = tau
 
-    return tau, pTs, initial_pTs
+    return tau, final_pTbins, uniform_pTbins
 
 
 print(p['QUARK'].capitalize() + " quark")
@@ -227,12 +251,12 @@ for ipT, pT in enumerate(p['PTS']):
     # output[str(pT)] = {}
     for iev, ev in enumerate(range(0, p["NEVENTS"])):
         # print("event " + str(iev+1))
-        tau, pTs, initial_pTs = simulate(p, ev, pT, deltapT)
+        tau, final_pTs, initial_pTs = simulate(p, ev, pT, deltapTbin)
 
-        filename_pT_ev = 'pT_bin_' + str(ipT+1) + '_ev_' + str(iev+1)
-        np.savez_compressed(filename_pT_ev, pTs=pTs, initial_pTs=initial_pTs)
+        filename_pT_ev = p["BINNING"] + '_bin_' + str(ipT+1) + '_ev_' + str(iev+1)
+        np.savez_compressed(filename_pT_ev, pTs=final_pTs, initial_pTs=initial_pTs)
 
 p["TAU"] = tau
 
-with open('parameters.pickle', 'wb') as handle:
+with open('parameters_'+ p["BINNING"] +'_binning.pickle', 'wb') as handle:
     pickle.dump(p, handle)

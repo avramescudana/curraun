@@ -72,9 +72,9 @@ binning = "pT"
 
 # ╔═╡ da8dc0dc-5919-423b-8c38-f7c360cde750
 begin
-	nbins_hist = 50
+	nbins_hist = 60
 	norm_hist = :pdf
-	ptmax = 10
+	ptmax = 15
 	if binning=="pT" 
 		bin_edges = range(0, ptmax, nbins_hist+1)
 	elseif binning=="pT2"
@@ -94,6 +94,7 @@ begin
 	
 	# Gauge group
 	gauge_group = "su2"
+	# gauge_group = "su3"
 	
 	# Representation of the gauge group
 	# It dictates how much momentum kicks particles get
@@ -102,6 +103,7 @@ begin
 	representation = "qfund"
 	# representation = "fund"
 	# representation = "adj"
+	# representation = "test"
 end
 
 # ╔═╡ cc05cb4b-2f4f-4ffc-ab5f-0f29ce271983
@@ -111,6 +113,8 @@ elseif representation=="fund"
 	q₂ = 1.5
 elseif representation=="adj"
 	q₂ = 6
+elseif representation=="test"
+	q₂ = 1
 end
 
 # ╔═╡ f3d9af8d-ef3f-4228-a51f-558781565caf
@@ -130,8 +134,8 @@ md"This function reads the momenta at a fixed time $\tau_s$ and returns the tran
 
 # ╔═╡ cd62424c-fd8c-49f2-8502-f0968539814a
 begin
-	# folder= "test_binning_RAA_charm_fonll_Qs_2.0_"*representation*"_"*gauge_group*"_formt_m"
-	folder= "more_statistics_test_binning_RAA_charm_fonll_Qs_2.0_"*representation*"_"*gauge_group*"_formt_m"
+	folder= "test_binning_RAA_charm_fonll_Qs_2.0_"*representation*"_"*gauge_group*"_formt_m"
+	# folder= "more_statistics_test_binning_RAA_charm_fonll_Qs_2.0_"*representation*"_"*gauge_group*"_formt_m"
 
 	pT_spectra = Dict()
 	initial_pTs = Dict()
@@ -249,10 +253,10 @@ md"### FONLL
 # ╔═╡ 9fde979a-9d3e-4de4-85aa-56dd925f7f98
 begin
 	energy = 5500
-	pdf = "cteq"
+	pdf_type = "cteq"
 	quark = "charm"
 	
-	data = "dsdpt"
+	data_fonll = "dsdpt"
 	# fonll_type = "interp"
 	fonll_type = "fit"
 	fit_type = "log"
@@ -273,7 +277,7 @@ begin
 		return df
 	end
 	
-	dfe = df(quark, energy, pdf, data)
+	dfe = df(quark, energy, pdf_type, data_fonll)
 	
 	xdata = dfe[!, "pt"]
 	ydata = dfe[!, "central"]
@@ -296,7 +300,8 @@ md"##### Fit FONLL spectra"
 # ╔═╡ 7a9413de-8bab-4306-9821-4e2c65ef5778
 begin
 	@. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
-	@. logpowlaw(x,p) = real(log10(Complex(p[1]*x/(1+p[4]*Complex(x)^p[2])^p[3])))
+	@. powlaw_complex(x,p) = real(Complex(p[1]*x/(1+p[4]*Complex(x)^p[2])^p[3]))
+	# @. logpowlaw(x,p) = real(log10(Complex(p[1]*x/(1+p[4]*Complex(x)^p[2])^p[3])))
 	p₀_norm = [2e8, 2, 2, 0.1]
 	# p₀_log = [1e8, 3, 3, 0.1]
 	p₀_log = [2.5e8, 2.4, 2.3, 0.06]
@@ -372,18 +377,42 @@ begin
 	pt₁_weight_hist, dndpt₁_weight_hist = weighted_histogram(collect_pTs, bin_edges, norm_hist, w₀)
 	raa_hist = dndpt₁_weight_hist./dndpt₀_weight_hist
 
+	# Divide by analytical FONLL and not FONLL histogram
+	if fonll_type=="interp"
+		dndpt₀_fonll_hist = interp_map(pt₁_weight_hist)
+	elseif fonll_type=="fit"
+		dndpt₀_fonll_hist = powlaw(pt₁_weight_hist, popt[fit_type])
+	end
+	dndpt₀_fonll_hist_norm = dndpt₀_fonll_hist./integrate(dndpt₀_fonll_hist, pt₁_weight_hist).*(-1)
+	raa_hist_fonll = dndpt₁_weight_hist./dndpt₀_fonll_hist_norm
+
 	#KDEs
 	# τ₀
-	weight_kde₀= kde(collect_initial_pTs, weights=w₀)
+	# weight_kde₀= kde(collect_initial_pTs, weights=w₀)
+	weight_kde₀= kde(collect_initial_pTs, weights=w₀, boundary=(0, 20))
 	pt₀_weight_kde, dndpt₀_weight_kde = weight_kde₀.x, weight_kde₀.density
 	# τₛ
-	weight_kde₁= kde(collect_pTs, weights=w₀)
+	# weight_kde₁= kde(collect_pTs, weights=w₀)
+	weight_kde₁= kde(collect_pTs, weights=w₀, boundary=(0, 20))
 	pt₁_weight_kde, dndpt₁_weight_kde = weight_kde₁.x, weight_kde₁.density
 
 	# These KDEs don't have the same x axis 
 	# In order to divide them, we need to interpolate one of them
 	interp_map_kde₁ = CubicSpline(dndpt₁_weight_kde, pt₁_weight_kde)
 	raa_kde = interp_map_kde₁(pt₀_weight_kde)./dndpt₀_weight_kde
+
+	# Divide by analytical FONLL and not FONLL histogram
+	# pt₁_weight_kde_interp = pt₁_weight_kde[pt₁_weight_kde.>0]
+	pt₁_weight_kde_interp = pt₁_weight_kde
+	if fonll_type=="interp"
+		dndpt₀_fonll_kde = interp_map(pt₁_weight_kde_interp)
+	elseif fonll_type=="fit"
+		# dndpt₀_fonll_kde = powlaw_complex(pt₁_weight_kde_interp, popt[fit_type])
+		dndpt₀_fonll_kde = powlaw(pt₁_weight_kde_interp, popt[fit_type])
+	end
+	dndpt₀_fonll_kde_norm = dndpt₀_fonll_kde./integrate(dndpt₀_fonll_kde, pt₁_weight_kde_interp).*(-1)
+	# raa_kde_fonll = dndpt₁_weight_kde[pt₁_weight_kde.>0]./dndpt₀_fonll_kde_norm
+	raa_kde_fonll = dndpt₁_weight_kde./dndpt₀_fonll_kde_norm
 end
 
 # ╔═╡ bbbe8357-ed6f-4b4d-8c9f-564fa0e2d07b
@@ -397,39 +426,171 @@ begin
 
 	# dN/dpT
 	plot_weight_dndpt₀ = stairs!(ax_dndpt_fonll[1], pt₀_weight_hist, dndpt₀_weight_hist, step=:center, color=colors[5])
+	
 	plot_weight_dndpt₁ = stairs!(ax_dndpt_fonll[1], pt₁_weight_hist, dndpt₁_weight_hist, step=:center, color=colors[4])
 
 	lines!(ax_dndpt_fonll[1], pt₀_weight_kde, dndpt₀_weight_kde, color=colors[5])
 	lines!(ax_dndpt_fonll[1], pt₁_weight_kde, dndpt₁_weight_kde, color=colors[4])
 
-	axislegend(ax_dndpt_fonll[1], [plot_weight_dndpt₀, plot_weight_dndpt₁], [L"\delta\tau=0\,\mathrm{fm/c}", L"\delta\tau=0.3\,\mathrm{fm/c}"], position = :rt, labelsize=14)
+	axislegend(ax_dndpt_fonll[1], [plot_weight_dndpt₀, plot_weight_dndpt₁], [L"\delta\tau=0\,\mathrm{fm/c}", L"\delta\tau=%$τₛ\,\mathrm{fm/c}"], position = :rt, labelsize=14)
 
-	xlims!(ax_dndpt_fonll[1], 0, 10)
-	# ylims!(ax_dndpt_fonll, 2000, 2900)
+	# xlims!(ax_dndpt_fonll[1], 0, 10)
+	xlims!(ax_dndpt_fonll[1], 0, 6)
 
 	# RAA
 	lines!(ax_dndpt_fonll[2], pt₀_weight_kde, ones(length(pt₀_weight_kde)), color=(:gray, 0.6), linewidth=1.5)
 
-	stairs!(ax_dndpt_fonll[2], pt₁_weight_hist, raa_hist, step=:center, color=colors[6])
+	plot_raa_hist = stairs!(ax_dndpt_fonll[2], pt₁_weight_hist, raa_hist, step=:center, color=colors[6])
 
-	lines!(ax_dndpt_fonll[2], pt₀_weight_kde, raa_kde, color=colors[6])
+	plot_raa_hist_fonll = stairs!(ax_dndpt_fonll[2], pt₁_weight_hist, raa_hist_fonll, step=:center, color=colors[2])
 
-	xlims!(ax_dndpt_fonll[2], 0, 10)
+	plot_raa_kde = lines!(ax_dndpt_fonll[2], pt₀_weight_kde, raa_kde, color=colors[6])
+
+	plot_raa_kde_fonll = lines!(ax_dndpt_fonll[2], pt₁_weight_kde_interp, raa_kde_fonll, color=colors[2])
+
+	# xlims!(ax_dndpt_fonll[2], 0, 10)
+	xlims!(ax_dndpt_fonll[2], 0, 6)
+	
 	if representation=="qfund"
 		ylims!(ax_dndpt_fonll[2], 0.8, 1.2)
 		text!(ax_dndpt_fonll[2], 0.2, 1.15, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
 	else
 		ylims!(ax_dndpt_fonll[2], 0.5, 1.8)
+		# ylims!(ax_dndpt_fonll[2], 0, 3)
 		text!(ax_dndpt_fonll[2], 0.2, 1.65, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
 	end
+
+	axislegend(ax_dndpt_fonll[2], [plot_raa_hist, plot_raa_hist_fonll], [L"\mathrm{hist/hist\,or\,kde/kde}", L"\mathrm{hist/fonll\,or\,kde/fonll}", ], position = :rb, labelsize=14)
 
 	# save("plots/clean_dNdpT2_fonll_"*gauge_group*"_"*representation*"_hist_"*binning*"_binning.png", fig_dndpt_fonll, px_per_unit = 5.0)
 
 	fig_dndpt_fonll
 end
 
+# ╔═╡ 79b09b99-8b8e-4a87-930b-bb5a817b20f6
+md"##### Debug KDE/FONLL divergency at $p_T=0$"
+
 # ╔═╡ 870bfca5-4a6a-4523-9fba-1784d82ba787
 md"##### Compare FONLL fit vs interpolation"
+
+# ╔═╡ 3d9238dd-c98e-4371-99f7-a13ace4f3abe
+function raa_kde_weighted(collect_initial_pTs, collect_pTs, w₀)
+	#KDEs
+	# τ₀
+	weight_kde₀= kde(collect_initial_pTs, weights=w₀)
+	pt₀_weight_kde, dndpt₀_weight_kde = weight_kde₀.x, weight_kde₀.density
+	# τₛ
+	weight_kde₁= kde(collect_pTs, weights=w₀)
+	pt₁_weight_kde, dndpt₁_weight_kde = weight_kde₁.x, weight_kde₁.density
+
+	# These KDEs don't have the same x axis 
+	# In order to divide them, we need to interpolate one of them
+	interp_map_kde₁ = CubicSpline(dndpt₁_weight_kde, pt₁_weight_kde)
+	raa_kde = interp_map_kde₁(pt₀_weight_kde)./dndpt₀_weight_kde
+	return pt₁_weight_kde, raa_kde
+end
+
+# ╔═╡ 454ca2f9-6829-4ee1-bfae-774736033f75
+begin
+	pt_raa, raa =  Dict(), Dict() 
+	for fonll_type in ["fit", "interp"]
+		if fonll_type=="interp"
+			w₀ = interp_map(collect_initial_pTs)
+			# Normalize weights
+			w₀ ./ sum(w₀)
+			pt_raa[fonll_type], raa[fonll_type] = raa_kde_weighted(collect_initial_pTs, collect_pTs, w₀)
+		elseif fonll_type=="fit"
+			pt_raa[fonll_type], raa[fonll_type] = Dict(), Dict()
+			for fit_type in ["normal", "log"]
+				w₀ = powlaw(collect_initial_pTs, popt[fit_type])
+				# Normalize weights
+				w₀ ./ sum(w₀)
+				pt_raa[fonll_type][fit_type], raa[fonll_type][fit_type] = raa_kde_weighted(collect_initial_pTs, collect_pTs, w₀)
+			end
+		end
+	
+	end
+end
+
+# ╔═╡ 9635090f-3ce2-4e31-bdc7-19cf266d83c4
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig_raa_fonll = Figure(size = (350, 300), font = "CMU Serif")
+	ax_raa_fonll = Axis(fig_raa_fonll[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false)
+
+
+	lines!(ax_raa_fonll, pt₀_weight_kde, ones(length(pt₀_weight_kde)), color=(:gray, 0.6), linewidth=1.5)
+	
+	glasma_fit_norm = lines!(ax_raa_fonll, pt_raa["fit"]["normal"], raa["fit"]["normal"], color=colors[2])
+	glasma_fit_log = lines!(ax_raa_fonll, pt_raa["fit"]["log"], raa["fit"]["log"], color=colors[3])
+	glasma_interp = lines!(ax_raa_fonll, pt_raa["interp"], raa["interp"], color=colors[4])
+
+	axislegend(ax_raa_fonll, [glasma_fit_norm, glasma_fit_log, glasma_interp], [L"\mathrm{Normal\,fit}",L"\mathrm{Log\,fit}", L"\mathrm{Interp}"], position = :rb, labelsize=12)
+
+	for i in 1:2
+		xlims!(ax_raa_fonll, 0, 10)
+	end
+	
+	if representation=="qfund"
+		ylims!(ax_raa_fonll, 0.8, 1.2)
+		text!(ax_raa_fonll, 0.2, 1.15, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
+	else
+		ylims!(ax_raa_fonll, 0.2, 1.8)
+		text!(ax_raa_fonll, 0.2, 1.65, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
+	end
+
+	save("plots/clean_raa_fonll_comp_"*gauge_group*"_"*representation*"_kdes.png", fig_raa_fonll, px_per_unit = 5.0)
+
+	fig_raa_fonll
+end
+
+# ╔═╡ 5e4e10cc-6239-4677-b36d-52d8c7c0bc1f
+md"### Confidence interval of KDEs
+---
+##### Bootstrap resampling"
+
+# ╔═╡ 3989742a-1f11-4bd9-8eed-b9d03afb334e
+begin
+	# Generate sample data
+	data = randn(100)
+	
+	# Define grid for density estimates
+	xs = range(minimum(data), maximum(data), length=201)
+	
+	# Compute 1000 bootstrapped estimates of the density
+	ests = Matrix{Float64}(undef, length(xs), 1000)
+	for i in 1:1000
+	    sample_data = sample(data, length(data), replace=true)
+	    kde_estimate = kde(sample_data)
+	    ests[:, i] = pdf(kde_estimate, xs)
+	end
+	
+	# Create Figure and Axis
+	fig = Figure()
+	ax = Axis(fig[1, 1])
+	
+	# Plot the individual estimates
+	for i in 1:size(ests, 2)
+	    lines!(ax, xs, ests[:, i], color=:lightgrey, alpha=0.1)
+	end
+	
+	# Compute the 2.5%, 50%, and 97.5% quantiles of the density estimate at each grid point
+	quants = [quantile(ests[i, :], [0.025, 0.5, 0.975]) for i in 1:length(xs)]
+	
+	quants1 = [quantile(ests[i, :], 0.025) for i in 1:length(xs)]
+	quants2 = [quantile(ests[i, :], 0.5) for i in 1:length(xs)]
+	quants3 = [quantile(ests[i, :], 0.975) for i in 1:length(xs)]
+	
+	# Plot quantiles
+	lines!(ax, xs, quants1, color=:red, linestyle=:dash, linewidth=1.5)
+	lines!(ax, xs, quants3, color=:red, linestyle=:dash, linewidth=1.5)
+	lines!(ax, xs, quants2, color=:darkred, linewidth=2)
+
+	# save("plots/example_bootstrap_kde.png", fig, px_per_unit = 5.0)
+	
+	# Show the plot
+	fig
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2088,6 +2249,12 @@ version = "3.5.0+0"
 # ╠═83d18d65-d8d1-43b2-bc25-c6fc903dfad9
 # ╠═6362198c-54c5-4d59-8c90-69be2f3c8c7a
 # ╠═bbbe8357-ed6f-4b4d-8c9f-564fa0e2d07b
+# ╠═79b09b99-8b8e-4a87-930b-bb5a817b20f6
 # ╠═870bfca5-4a6a-4523-9fba-1784d82ba787
+# ╠═3d9238dd-c98e-4371-99f7-a13ace4f3abe
+# ╠═454ca2f9-6829-4ee1-bfae-774736033f75
+# ╠═9635090f-3ce2-4e31-bdc7-19cf266d83c4
+# ╠═5e4e10cc-6239-4677-b36d-52d8c7c0bc1f
+# ╠═3989742a-1f11-4bd9-8eed-b9d03afb334e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

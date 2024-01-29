@@ -52,7 +52,7 @@ binning = "pT2"
 
 # ╔═╡ c72a4c1f-3ed9-4442-b85a-50a5b6f08cc8
 begin
-	nbins_hist = 40
+	nbins_hist = 50
 	norm_hist = :none
 	ptmax = 10
 	# density = true
@@ -73,8 +73,21 @@ md"### Choose Glasma parameters
 # ╔═╡ 2c8242dd-4a82-40d2-957f-69fa175a1f55
 begin
 	τₛ = 0.3
-	gauge_group = "su3"
+	gauge_group = "su2"
+	# representation = "adj"
+	# representation = "qfund"
 	representation = "fund"
+end
+
+# ╔═╡ 24da9b37-f6dd-42f2-961f-f4272040be4f
+if representation=="qfund"
+	q₂ = 0.5
+elseif representation=="fund"
+	q₂ = 1.5
+elseif representation=="adj"
+	q₂ = 6
+elseif representation=="test"
+	q₂ = 1
 end
 
 # ╔═╡ 47ef0924-0d5d-4c64-a8ed-2ca0e3448744
@@ -378,17 +391,22 @@ function transform_Np_to_Np2(p_bin_edges, Np_values)
 end
 
 # ╔═╡ b92491ff-2589-45a6-8567-0fa557380c13
-pt2_fonll, pt2_fonll_edges, dndpt2_fonll = transform_Np_to_Np2(xdata_downsample, interp_map(xdata_downsample_center))
+begin
+	pt2_fonll, pt2_fonll_edges, dndpt2_fonll = transform_Np_to_Np2(xdata_downsample, interp_map(xdata_downsample_center))
+	interp_map_pt2 = CubicSpline(dndpt2_fonll, pt2_fonll)
+end
 
-# ╔═╡ 7a1943fd-2904-403d-b0ec-9a76e9796386
-diff(pt2_fonll)
+# ╔═╡ 6a7e772f-00b5-4365-ad20-538119ff86a8
+
 
 # ╔═╡ 7aa7363f-5d7b-440b-81ad-dfc61d17df15
 begin
 	set_theme!(fonts = (; regular = "CMU Serif"))
 
 	fig_fonll_pt2 = Figure(size = (350, 350), font = "CMU Serif")
-	ax_fonll_pt2 = Axis(fig_fonll_pt2[1,1], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false, xlabel=L"p_T^2", ylabel=L"\mathrm{d}N/\mathrm{d}p_T^2", yscale=log10)
+	ax_fonll_pt2 = Axis(fig_fonll_pt2[1,1], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false, xlabel=L"p_T^2", ylabel=L"\mathrm{d}N/\mathrm{d}p_T^2", 
+		yscale=log10
+	)
 
 	stairs!(ax_fonll_pt2, pt2_fonll, dndpt2_fonll, step=:center, color=colors[2])
 	
@@ -402,6 +420,149 @@ end
 # ╔═╡ 5f66bf8a-e735-4400-8df5-169675773b69
 md"---
 ### Weighted histograms"
+
+# ╔═╡ b3c8bc67-afdd-4b01-806a-ac67ff39bce9
+begin
+	# Weights
+	w₀ = interp_map_pt2(collect_initial_pTs)
+	
+	# Histograms
+	# τ₀
+	pt₀_weight_hist, dndpt₀_weight_hist = weighted_histogram(collect_initial_pTs, bin_edges, norm_hist, w₀)
+	# τₛ
+	pt₁_weight_hist, dndpt₁_weight_hist = weighted_histogram(collect_pTs, bin_edges, norm_hist, w₀)
+	raa_hist = dndpt₁_weight_hist./dndpt₀_weight_hist
+
+	# Divide by analytical FONLL and not FONLL histogram
+	dndpt₀_fonll_hist = interp_map_pt2(pt₁_weight_hist)
+	dndpt₁_weight_hist_norm = dndpt₁_weight_hist./integrate(dndpt₁_weight_hist, pt₁_weight_hist).*(-1)
+	dndpt₀_weight_hist_norm = dndpt₀_weight_hist./integrate(dndpt₀_weight_hist, pt₁_weight_hist).*(-1)
+	raa_hist_fonll = dndpt₁_weight_hist_norm./dndpt₀_weight_hist_norm
+end
+
+# ╔═╡ 243f630f-9ebb-49f9-ab10-18889c82250d
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig_dndpt_fonll = Figure(size = (350, 550), font = "CMU Serif")
+
+	ylabels = [L"\mathrm{d}N/\mathrm{d}p_T^2", L"R_{AA}"]
+	# yscales = [log10, identity]
+	
+	ax_dndpt_fonll = [Axis(fig_dndpt_fonll[i,1], xlabel=L"p_T^2", ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false, 
+		# yscale=yscales[i]
+	) for i in 1:2]
+
+	# dN/dpT
+	plot_weight_dndpt₀ = stairs!(ax_dndpt_fonll[1], pt₀_weight_hist, dndpt₀_weight_hist, step=:center, color=colors[5])
+	
+	plot_weight_dndpt₁ = stairs!(ax_dndpt_fonll[1], pt₁_weight_hist, dndpt₁_weight_hist, step=:center, color=colors[4])
+
+	axislegend(ax_dndpt_fonll[1], [plot_weight_dndpt₀, plot_weight_dndpt₁], [L"\delta\tau=0\,\mathrm{fm/c}", L"\delta\tau=%$τₛ\,\mathrm{fm/c}"], position = :rt, labelsize=14)
+
+	# xlims!(ax_dndpt_fonll[1], 0, 6)
+
+	# RAA
+	lines!(ax_dndpt_fonll[2], pt₀_weight_hist, ones(length(pt₀_weight_hist)), color=(:gray, 0.6), linewidth=1.5)
+
+	plot_raa_hist = stairs!(ax_dndpt_fonll[2], pt₁_weight_hist, raa_hist, step=:center, color=colors[6])
+
+	plot_raa_hist_fonll = stairs!(ax_dndpt_fonll[2], pt₁_weight_hist, raa_hist_fonll, step=:center, color=colors[2])
+	
+	# xlims!(ax_dndpt_fonll[2], 0, 6)
+	
+	# if representation=="qfund"
+	# 	ylims!(ax_dndpt_fonll[2], 0.8, 1.2)
+	# 	text!(ax_dndpt_fonll[2], 0.2, 1.15, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
+	# else
+	# 	ylims!(ax_dndpt_fonll[2], 0.5, 1.8)
+	# 	# ylims!(ax_dndpt_fonll[2], 0, 3)
+	# 	text!(ax_dndpt_fonll[2], 0.2, 1.65, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
+	# end
+
+	# save("plots/clean_dNdpT2_fonll_"*gauge_group*"_"*representation*"_hist_"*binning*"_binning.png", fig_dndpt_fonll, px_per_unit = 5.0)
+
+	fig_dndpt_fonll
+end
+
+# ╔═╡ 8f6a269c-051f-4f62-8bf9-c49f1e18d118
+# ╠═╡ disabled = true
+#=╠═╡
+pt_raa, pt_raa_edges, raa = transform_Np2_to_Np(bin_edges, raa_hist)
+  ╠═╡ =#
+
+# ╔═╡ 04117feb-889e-4b5c-86ab-b801e0af9e32
+begin
+	pt_hist, raa_pt_hist = complete_hist(sqrt.(pt₁_weight_hist), raa_hist, sqrt.(bin_edges))
+	pt₀_weight_hist_compl, dndpt₀_weight_hist_compl = complete_hist(pt₀_weight_hist, dndpt₀_weight_hist, bin_edges)
+	pt₁_weight_hist_compl, dndpt₁_weight_hist_compl = complete_hist(pt₁_weight_hist, dndpt₁_weight_hist, bin_edges)
+end
+
+# ╔═╡ 66413f4e-4181-4bea-943f-10650a815089
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig_dndpt_raa_fonll = Figure(size = (350, 550), font = "CMU Serif")
+
+	xlabels = [L"p_T^2", L"p_T"]
+	yscales = [log10, identity]
+	
+	ax_dndpt_raa_fonll = [Axis(fig_dndpt_raa_fonll[i,1], xlabel=xlabels[i], ylabel=ylabels[i], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false, 
+		yscale=yscales[i]
+	) for i in 1:2]
+
+	# dN/dpT
+	stairs!(ax_dndpt_raa_fonll[1], pt₀_weight_hist_compl, dndpt₀_weight_hist_compl, step=:center, color=colors[5])
+	
+	stairs!(ax_dndpt_raa_fonll[1], pt₁_weight_hist_compl, dndpt₁_weight_hist_compl, step=:center, color=colors[4])
+
+	axislegend(ax_dndpt_raa_fonll[1], [plot_weight_dndpt₀, plot_weight_dndpt₁], [L"\delta\tau=0\,\mathrm{fm/c}", L"\delta\tau=%$τₛ\,\mathrm{fm/c}"], position = :rt, labelsize=14)
+
+	xlims!(ax_dndpt_raa_fonll[1], 0, 100)
+
+	# RAA
+	lines!(ax_dndpt_raa_fonll[2], pt_hist, ones(length(pt_hist)), color=(:gray, 0.6), linewidth=1.5)
+
+	stairs!(ax_dndpt_raa_fonll[2], pt_hist, raa_pt_hist, step=:center, color=colors[2])
+
+	xlims!(ax_dndpt_raa_fonll[2], 0, 10)
+	ylims!(ax_dndpt_raa_fonll[2], 0, 1.8)
+
+	# text!(ax_dndpt_raa_fonll[2], 0.2, 0.05, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
+	
+	# xlims!(ax_dndpt_fonll[2], 0, 6)
+	
+	if representation=="qfund"
+		ylims!(ax_dndpt_raa_fonll[2], 0.8, 1.2)
+		text!(ax_dndpt_raa_fonll[2], 0.2, 1.15, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
+	else
+		ylims!(ax_dndpt_raa_fonll[2], 0.5, 1.8)
+		# ylims!(ax_dndpt_raa_fonll[2], 0, 3)
+		text!(ax_dndpt_raa_fonll[2], 0.2, 1.65, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
+	end
+
+	save("plots/clean_dNdpT2_fonll_"*gauge_group*"_"*representation*"_hist_"*binning*"_binning.png", fig_dndpt_raa_fonll, px_per_unit = 5.0)
+
+	fig_dndpt_raa_fonll
+end
+
+# ╔═╡ 4383f36f-7a8d-48e8-9ddd-c90ceee8b997
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+
+	fig_raa_pt = Figure(size = (350, 300), font = "CMU Serif")
+	ax_raa_pt = Axis(fig_raa_pt[1,1], xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false, xlabel=L"p_T", ylabel=L"R_{AA}")
+
+	# stairs!(ax_raa_pt, pt_raa, raa, step=:center, color=colors[2])
+	# stairs!(ax_raa_pt, sqrt.(pt₁_weight_hist), raa_hist, step=:center, color=colors[2])
+	stairs!(ax_raa_pt, pt_hist, raa_pt_hist, step=:center, color=colors[2])
+	
+	# save("plots/dNdpT2_FONLL_interp_hist_binning.png", fig_raa_pt, px_per_unit = 5.0)
+
+	xlims!(ax_raa_pt, 0, 10)
+	ylims!(ax_raa_pt, 0, 1.8)
+	# ylims!(ax_raa_pt, 0.7, 1.2)
+
+	fig_raa_pt
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2007,6 +2168,7 @@ version = "3.5.0+0"
 # ╟─120e9391-4ed4-45d1-8913-7fa2b706fa0a
 # ╟─a739eba8-8fd2-423d-bc4b-3f0bd7fc6665
 # ╠═2c8242dd-4a82-40d2-957f-69fa175a1f55
+# ╠═24da9b37-f6dd-42f2-961f-f4272040be4f
 # ╟─47ef0924-0d5d-4c64-a8ed-2ca0e3448744
 # ╠═ac15ae1a-5a92-490c-b8c9-cffbbd7ff93f
 # ╠═9eb2b035-3ad0-4486-b538-56184e9479c9
@@ -2036,8 +2198,14 @@ version = "3.5.0+0"
 # ╟─f8afc47b-3aac-47d5-944a-1eae7e4284c2
 # ╠═c958cf26-66f1-4de8-a852-18f5b8d0a9b0
 # ╠═b92491ff-2589-45a6-8567-0fa557380c13
-# ╠═7a1943fd-2904-403d-b0ec-9a76e9796386
+# ╠═6a7e772f-00b5-4365-ad20-538119ff86a8
 # ╠═7aa7363f-5d7b-440b-81ad-dfc61d17df15
 # ╠═5f66bf8a-e735-4400-8df5-169675773b69
+# ╠═b3c8bc67-afdd-4b01-806a-ac67ff39bce9
+# ╠═243f630f-9ebb-49f9-ab10-18889c82250d
+# ╠═8f6a269c-051f-4f62-8bf9-c49f1e18d118
+# ╠═04117feb-889e-4b5c-86ab-b801e0af9e32
+# ╠═66413f4e-4181-4bea-943f-10650a815089
+# ╠═4383f36f-7a8d-48e8-9ddd-c90ceee8b997
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

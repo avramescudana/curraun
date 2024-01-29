@@ -663,6 +663,8 @@ def init_charge(representation):
             q2 = 6
         elif representation=='quantum fundamental':
             q2 = 1/2
+        elif representation=='test':
+            q2 = 1
     
         J = np.sqrt(q2)
         phi, pi = np.random.uniform(0, 2 * np.pi), np.random.uniform(-J, J)
