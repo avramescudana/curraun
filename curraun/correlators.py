@@ -6,7 +6,7 @@ if use_cuda:
     import numba.cuda as cuda
 
 """
-    A module for computing E_z and B_z correlation functions
+    A module for computing E_i and B_i correlation functions
 """
 
 @myjit
@@ -43,6 +43,32 @@ def compute_Ez(xi, n, u0, u1, aeta0, aeta1, pt0, pt1, peta0, peta1):
 
     return ez
 
+@myjit
+def compute_Bi(xi, n, u0, aeta0, tau, i):
+
+    bi = su.zero()
+    b1 = l.transport(aeta0, u0, xi, i, +1, n)
+    b2 = l.transport(aeta0, u0, xi, i, -1, n)
+    b2 = l.add_mul(b1, b2, -1.0)
+    bi = su.mul_s(b2, -0.5 / tau)
+
+    return bi
+
+@myjit
+def compute_Ei(xi, n, u0, pt0, pt1, tau, i):
+
+    ei = su.zero()
+    ei = su.add(ei, pt1[xi, i])
+    ei = su.add(ei, pt0[xi, i])
+    xs = l.shift(xi, i, -1, n)
+    b1 = l.act(su.dagger(u0[xs, i]), pt1[xs, i])
+    ei = su.add(ei, b1)
+    b1 = l.act(su.dagger(u0[xs, i]), pt0[xs, i])
+    ei = su.add(ei, b1)
+    ei = su.mul_s(ei, 0.25 / tau)
+    
+    return ei
+
 
 class Correlators:
     def __init__(self, s):
@@ -71,6 +97,14 @@ class Correlators:
             my_parallel_loop(compute_Ez_correlation_kernel, s.n * s.n, s.n, s.d_u0, s.d_u1, s.d_aeta0, s.d_aeta1, s.d_pt0, s.d_pt1, s.d_peta0, s.d_peta1, self.d_corr)
         elif mode == 'Bz':
             my_parallel_loop(compute_Bz_correlation_kernel, s.n * s.n, s.n, s.d_u0, s.d_u1, s.d_aeta0, s.d_aeta1, s.d_pt0, s.d_pt1, s.d_peta0, s.d_peta1, self.d_corr)
+        elif mode == 'Ex':
+            my_parallel_loop(compute_Ei_correlation_kernel, s.n * s.n, s.n, s.d_u0, s.d_pt1, s.d_pt0, s.t, self.d_corr, 0)
+        elif mode == 'Ey':
+            my_parallel_loop(compute_Ei_correlation_kernel, s.n * s.n, s.n, s.d_u0, s.d_pt1, s.d_pt0, s.t, self.d_corr, 1)
+        elif mode == 'Bx':
+            my_parallel_loop(compute_Bi_correlation_kernel, s.n * s.n, s.n, s.d_u0, s.d_aeta0, s.t, self.d_corr, 1)
+        elif mode == 'By':
+            my_parallel_loop(compute_Bi_correlation_kernel, s.n * s.n, s.n, s.d_u0, s.d_aeta0, s.t, self.d_corr, 0)
         else:
             print("Correlators: mode '{}' is not implemented.".format(mode))
 
@@ -136,6 +170,71 @@ def compute_Bz_correlation_kernel(xi, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, 
         xs_y = l.shift(xi, 1, r, n)
 
         Fs_y = compute_Bz(xs_y, n, u0, u1, aeta0, aeta1, pt1, pt0, peta1, peta0)
+
+        Fs_y = l.act(Uy, Fs_y)
+        correlation = su.tr(su.mul(F, su.dagger(Fs_y))).real
+
+        cuda.atomic.add(corr, r, correlation)
+
+        # update Ux, Uy
+        Ux = su.mul(Ux, u0[xs_x, 0])
+        Uy = su.mul(Uy, u0[xs_y, 1])
+
+@myjit
+def compute_Ei_correlation_kernel(xi, n, u0, pt1, pt0, tau, corr, i):
+    Ux = su.unit()
+    Uy = su.unit()
+
+    # i=0 for Ex and i=1 for Ey
+    F = compute_Ei(xi, n, u0, pt0, pt1, tau, i)
+
+    for r in range(n // 2):
+        # x shifts
+        xs_x = l.shift(xi, 0, r, n)
+
+        Fs_x = compute_Ei(xs_x, n, u0, pt0, pt1, tau, i)
+        Fs_x = l.act(Ux, Fs_x)
+        correlation = su.tr(su.mul(F, su.dagger(Fs_x))).real
+
+        cuda.atomic.add(corr, r, correlation)
+
+        # y shifts
+        xs_y = l.shift(xi, 1, r, n)
+
+        Fs_y = compute_Ei(xs_y, n, u0, pt0, pt1, tau, i)
+
+        Fs_y = l.act(Uy, Fs_y)
+        correlation = su.tr(su.mul(F, su.dagger(Fs_y))).real
+
+        cuda.atomic.add(corr, r, correlation)
+
+        # update Ux, Uy
+        Ux = su.mul(Ux, u0[xs_x, 0])
+        Uy = su.mul(Uy, u0[xs_y, 1])
+
+
+@myjit
+def compute_Bi_correlation_kernel(xi, n, u0, aeta0, tau, corr, i):
+    Ux = su.unit()
+    Uy = su.unit()
+
+    # i=1 for Bx and i=0 for By
+    F = compute_Bi(xi, n, u0, aeta0, tau, i)
+
+    for r in range(n // 2):
+        # x shifts
+        xs_x = l.shift(xi, 0, r, n)
+
+        Fs_x = compute_Bi(xs_x, n, u0, aeta0, tau, i)
+        Fs_x = l.act(Ux, Fs_x)
+        correlation = su.tr(su.mul(F, su.dagger(Fs_x))).real
+
+        cuda.atomic.add(corr, r, correlation)
+
+        # y shifts
+        xs_y = l.shift(xi, 1, r, n)
+
+        Fs_y = compute_Bi(xs_y, n, u0, aeta0, tau, i)
 
         Fs_y = l.act(Uy, Fs_y)
         correlation = su.tr(su.mul(F, su.dagger(Fs_y))).real
