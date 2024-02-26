@@ -100,9 +100,9 @@ begin
 	# It dictates how much momentum kicks particles get
 	# qfund < fund < adj
 	
-	representation = "qfund"
+	# representation = "qfund"
 	# representation = "fund"
-	# representation = "adj"
+	representation = "adj"
 	# representation = "test"
 end
 
@@ -552,7 +552,7 @@ md"### Confidence interval of KDEs
 # ╔═╡ 3989742a-1f11-4bd9-8eed-b9d03afb334e
 begin
 	# Generate sample data
-	data = randn(100)
+	data = randn(2000)
 	
 	# Define grid for density estimates
 	xs = range(minimum(data), maximum(data), length=201)
@@ -585,6 +585,10 @@ begin
 	lines!(ax, xs, quants1, color=:red, linestyle=:dash, linewidth=1.5)
 	lines!(ax, xs, quants3, color=:red, linestyle=:dash, linewidth=1.5)
 	lines!(ax, xs, quants2, color=:darkred, linewidth=2)
+
+	real_kde = kde(data)
+	real_kde_x, real_kde_y = real_kde.x, real_kde.density
+	lines!(ax, real_kde_x, real_kde_y, color=:blue, linewidth=2)
 
 	# save("plots/example_bootstrap_kde.png", fig, px_per_unit = 5.0)
 	

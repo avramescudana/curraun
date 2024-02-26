@@ -10,7 +10,7 @@ tau_sim = 0.4
 DTS = 8     
 
 # Glasma
-su_group = 'su2'
+su_group = 'su3'
 Qs = 2.0     
 ns = 50      
 factor = 0.8        
@@ -36,8 +36,8 @@ boundary = 'periodic'
 form_time = 'm'
 
 # pTs = [0, 0.5, 1, 5]
-binning = 'pT2'
-# binning = 'pT'
+# binning = 'pT2'
+binning = 'pT'
 npTbins = 21 
 pTmax = 10
 if binning=='pT':

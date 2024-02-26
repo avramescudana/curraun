@@ -16,15 +16,86 @@ end
 md"### Import packages"
 
 # ╔═╡ ff1cb707-f9bc-4a9f-a200-43d67305acb2
-function N₀(p, x)
-	x₀, x₁, x₂, x₃ = x[1], x[2], x[3], x[4]
+function N₀(p, x₀, x₁, x₂, x₃)
+	# x₀, x₁, x₂, x₃ = x[1], x[2], x[3], x[4]
 	return x₀/(1+x₃*p^x₁)^x₂
 end
 
 # ╔═╡ aa8ab38b-ad62-43cc-ba22-b37a3f580a96
-function Nτ(p, q, σ, x)
+# function Nτ(p, q, σ, x)
+function Nτ_fixedq(p, q, σ)
+	return sqrt(2*π)/σ * exp(-(p^2+q^2)/(2*σ^2)) * besseli(0,p*q/σ^2)
+end
+
+# ╔═╡ fc3c62e5-384d-4e4a-91d1-abc388ce544d
+function Nτ_fixedq_qdq(p, q, σ)
+	return Nτ_fixedq(p, q, σ) * q
+end
+
+# ╔═╡ d7938712-fc2e-4708-b50e-b53d36a7f787
+function Nτ_fixedq_qdq_fonll(p, q, σ, x₀, x₁, x₂, x₃)
+	return Nτ_fixedq(p, q, σ) * q * N₀(q, x₀, x₁, x₂, x₃)
+end
+
+# ╔═╡ 61fd3665-faae-4f93-9a82-b5aea12d98d5
+begin
+	q_range = range(0, 10, 100)
+	Nτ_intq = Nτ_fixedq.(1, q_range, 1)
+end
+
+# ╔═╡ 7fc7e1e1-ab92-4be1-973b-d3cac28ecb0d
+function Nτ(p, σ)
+	# q_range = range(p-δp, p+δp, 100)
+	q_range = range(0, 40, 100)
+	Nτ_fixedq_qdq_num = Nτ_fixedq_qdq.(p, q_range, σ)
+	return integrate(q_range, Nτ_fixedq_qdq_num)
+end
+
+# ╔═╡ db66ae65-d377-4f13-b4aa-4ce29f875aa6
+function Nτ_fonll(p, σ, x₀, x₁, x₂, x₃)
+	# q_range = range(p-δp, p+δp, 100)
+	q_range = range(0, 40, 100)
+	Nτ_fixedq_qdq_num = Nτ_fixedq_qdq_fonll.(p, q_range, σ, x₀, x₁, x₂, x₃)
+	return integrate(q_range, Nτ_fixedq_qdq_num)
+end
+
+# ╔═╡ fcb9397a-4387-47fd-aff0-0242242cc63a
+Nτ(1, 1)
+
+# ╔═╡ 71158bee-eed4-416e-83a8-513b0bf66ce8
+begin
+	σ_test = 1
+	# x_fonll = [20.284, 1.951, 3.137, 0.07]
+	x₀, x₁, x₂, x₃ = 20.284, 1.951, 3.137, 0.07
 	
-	return
+	p_range = range(0, 15, 100)
+	Nτ_p = Nτ.(p_range, σ_test)
+	Nτ_p_norm = Nτ_p./integrate(p_range, Nτ_p)
+
+	Nτ_p_fonll = Nτ_fonll.(p_range, σ_test, x₀, x₁, x₂, x₃)
+	Nτ_p_fonll_norm = Nτ_p_fonll./integrate(p_range, Nτ_p_fonll)
+
+	N₀_fonll = N₀.(p_range, x₀, x₁, x₂, x₃)
+	N₀_fonll_norm = N₀_fonll./integrate(p_range, N₀_fonll)
+
+	RAA_fonll = Nτ_p_fonll_norm./N₀_fonll_norm
+end
+
+# ╔═╡ 6a6660b8-d7ec-4be6-8f99-dd7fb7c6b07f
+Nτ_fonll(1, 1, x₀, x₁, x₂, x₃)
+
+# ╔═╡ afcb0db9-8ca7-4bff-800c-279437829af9
+begin
+	# Create Figure and Axis
+	fig = Figure()
+	ax = Axis(fig[1, 1])
+
+	# lines!(ax, p_range, Nτ_p_norm, color=:red, linewidth=1.5)
+
+	lines!(ax, p_range, RAA_fonll, color=:blue, linewidth=1.5)
+	ylims!(ax, 0, 1.6)
+	
+	fig
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1517,5 +1588,14 @@ version = "3.5.0+0"
 # ╠═cc1b04bf-908e-4928-a8ee-4619e2fc4843
 # ╠═ff1cb707-f9bc-4a9f-a200-43d67305acb2
 # ╠═aa8ab38b-ad62-43cc-ba22-b37a3f580a96
+# ╠═fc3c62e5-384d-4e4a-91d1-abc388ce544d
+# ╠═d7938712-fc2e-4708-b50e-b53d36a7f787
+# ╠═61fd3665-faae-4f93-9a82-b5aea12d98d5
+# ╠═7fc7e1e1-ab92-4be1-973b-d3cac28ecb0d
+# ╠═db66ae65-d377-4f13-b4aa-4ce29f875aa6
+# ╠═fcb9397a-4387-47fd-aff0-0242242cc63a
+# ╠═6a6660b8-d7ec-4be6-8f99-dd7fb7c6b07f
+# ╠═71158bee-eed4-416e-83a8-513b0bf66ce8
+# ╠═afcb0db9-8ca7-4bff-800c-279437829af9
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.27
 
 using Markdown
 using InteractiveUtils
@@ -18,33 +18,71 @@ function string_as_varname(s::AbstractString,v::Any)
 	return @eval (($s) = ($v))
 end
 
+# ╔═╡ d820f97f-3a0c-4b28-9ede-37327f1e4027
+dep = "m"
+
+# ╔═╡ d8f33689-ea04-4352-b0cc-83eed52cf660
+begin
+	if dep=="px"
+		results_dep = "trento_wong_jets_px_dep_m_0.1"
+	elseif dep=="m"
+		results_dep = "trento_wong_jets_m_dep_px_10"
+	end
+end
+
 # ╔═╡ aff5cd65-114d-4631-9670-e3b40759d30c
 begin
 	Qs = 2.0
-	results = ["wong_jets_px_dep", 
+	results = [
+		# "wong_jets_px_dep", 
 		# "wong_jets_mass_dep", 
-		"qhat"]
+		# "trento_wong_jets_px_dep_m_1",
+		# "trento_wong_jets_m_dep_px_10",
+		results_dep,
+		# "qhat"
+		"trento_qhat_large_px"
+		# "trento_qhat"
+	]
+	# variable_names = ["wong_jets_"*dep*"_dep", "qhat"]
+	variable_names = ["wong_jets_"*dep*"_dep", "qhat_trento"]
 	
-	for r in results
+	for (ir, r) in enumerate(results)
 		file = string_as_varname("file_" * r, "results/mom_broad_" * r * ".pickle")
-	    data = string_as_varname("data_" * r, Pickle.npyload(file))
-	    string_as_varname("mom_broad_" * r,  data["mom_broad"])
-	    string_as_varname("tau_" * r,  data["tau"])
+	    data = string_as_varname("data_" * variable_names[ir], Pickle.npyload(file))
+	    string_as_varname("mom_broad_" * variable_names[ir],  data["mom_broad"])
+		print(variable_names[ir])
+	    string_as_varname("tau_" * variable_names[ir],  data["tau"])
 	end
-	
-	pxs, mass = string.(data_wong_jets_px_dep["pxs"]), string.(data_wong_jets_px_dep["mass"])
+
+	if dep=="px"
+		pxs, mass = string.(data_wong_jets_px_dep["pxs"]), string.(data_wong_jets_px_dep["mass"])
+	elseif dep=="m"
+		pxs, mass = string.(data_wong_jets_m_dep["px"]), string.(data_wong_jets_m_dep["masses"])
+	end
+
+	mom_broad_qhat = mom_broad_qhat_trento["mass_0.1_px_100000"]
+	tau_qhat = tau_qhat_trento["mass_0.1_px_100000"]
+
 	# masses, px = string.(data_wong_jets_mass_dep["masses"]), string.(data_wong_jets_mass_dep["px"])
+
+	# pxs, mass = string.(data_trento_wong_jets_px_dep_m_1["pxs"]), string.(data_trento_wong_jets_px_dep_m_1["mass"])
 end
 
 # ╔═╡ 1dcd2d79-a522-4b06-b13b-012c6293856f
 begin
 	segmented_cmap = cgrad(:watermelon, 24, categorical = true)
+	# segmented_cmap = cgrad(:starrynight, 24, categorical = true)
 	colors = [segmented_cmap[5], segmented_cmap[9], segmented_cmap[21], segmented_cmap[23]]
 	linestyles = [:dash, :dashdot, :dot]
 	width_line=2
 
 	set_theme!(fonts = (; regular ="CMU Serif"))
-	fig = Figure(resolution = (750, 400), font = "CMU Serif") 
+	if dep=="px"
+		fig = Figure(resolution = (760, 400), font = "CMU Serif") 
+	elseif dep=="m"
+		fig = Figure(resolution = (760, 400), font = "CMU Serif")
+		# fig = Figure(resolution = (730, 400), font = "CMU Serif")
+	end
 
 	ylabels = [L"\langle\delta p^2\,\rangle\,\mathrm{[GeV^2]}", L"\langle\delta p^2_z\,\rangle\,/\,\langle\delta p^2_y\,\rangle"]
 	axes_left = [Axis(fig[i, 1], 
@@ -59,7 +97,10 @@ begin
 	        xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4)
 
 	# zoom-in
-	ax_right_zoomin = Axis(fig, bbox = BBox(470, 660, 180, 370), 
+	ax_right_zoomin = Axis(fig, 
+		# bbox = BBox(470, 660, 180, 370), 
+		bbox = BBox(475, 665, 180, 370), 
+		# bbox = BBox(500, 700, 180, 370), 
          xticklabelsize=13, yticklabelsize=13,
 	        xtickalign = 1, xticksize=3, ytickalign=1, yticksize=3, xlabelpadding = -4, xgridvisible = false, ygridvisible = false,
 	        ytickcolor = :grey, xtickcolor = :grey, yticklabelcolor = :grey, xticklabelcolor = :grey, ylabelcolor = :grey, xlabelcolor = :grey,
@@ -80,7 +121,9 @@ begin
 	xlims!(ax_right, 0, 2)
 	ax_right.xticks = ([0, 0.5, 1, 1.5, 2], ["0", "0.5", "1", "1.5", "2"])
 
-	ylims!(axes_left[1], 0, 4)
+	# ylims!(axes_left[1], 0, 4)
+	ylims!(axes_left[1], 0, 5)
+	
 	ylims!(axes_left[2], 0.5, 3.5)
 	axes_left[2].yticks = ([1, 2, 3], ["1", "2", "3"])
 	ylims!(ax_right, -3, 24)
@@ -91,17 +134,31 @@ begin
 	ylims!(ax_right_zoomin, 0, 18)
 	ax_right_zoomin.yticks = ([5, 10, 15], ["5", "10", "15"])
 
-	text!(axes_left[1], L"\langle\delta p_z^2\,\rangle", position = (1.66,2.35), fontsize=18)
-	text!(axes_left[1], L"\langle\delta p_y^2\,\rangle", position = (1.66,0.6), fontsize=18)
+	if dep=="px"
+		text!(axes_left[1], L"\langle\delta p_z^2\,\rangle", position = (1.66,3.2), fontsize=18)
+		text!(axes_left[1], L"\langle\delta p_y^2\,\rangle", position = (1.66,0.8), fontsize=18)
+		text!(ax_right_zoomin, L"\hat{q}_z", position = (0.26, 6.5), fontsize=19)
+	elseif dep=="m"
+		text!(axes_left[1], L"\langle\delta p_z^2\,\rangle", position = (1.66,2.7), fontsize=18)
+		# text!(axes_left[1], L"\langle\delta p_z^2\,\rangle", position = (1.66,2.3), fontsize=18)
+		text!(axes_left[1], L"\langle\delta p_y^2\,\rangle", position = (1.66,0.5), fontsize=18)
+		text!(ax_right_zoomin, L"\hat{q}_z", position = (0.26, 4.8), fontsize=19)
+	end
+	# text!(axes_left[1], L"\langle\delta p_y^2\,\rangle", position = (1.66,0.8), fontsize=18)
 
-	text!(ax_right_zoomin, L"\hat{q}_z", position = (0.26, 4.8), fontsize=19)
+	# text!(ax_right_zoomin, L"\hat{q}_z", position = (0.26, 4.8), fontsize=19)
 	text!(ax_right_zoomin, L"\hat{q}_y", position = (0.26, 1.5), fontsize=19)
 
 	text!(ax_right, L"\hat{q}_z", position = (1.87, -2.2), fontsize=16)
 	text!(ax_right, L"\hat{q}_y", position = (1.87, 0.6), fontsize=16)
 
 	text!(ax_right, L"Q_s=2\,\mathrm{GeV}", position = (0.02, -2.5), fontsize=16)
-	text!(ax_right_zoomin, L"\mathrm{jet\,quarks}", position = (0.18, 15.5), fontsize=16)
+	# text!(ax_right_zoomin, L"\mathrm{jet\,quarks}", position = (0.18, 15.5), fontsize=16)
+	if dep=="m"
+		text!(ax_right_zoomin, L"p^x=10\,\mathrm{GeV}", position = (0.16, 15.5), fontsize=16)
+	elseif dep=="px"
+		text!(ax_right_zoomin, L"m=0.1\,\mathrm{GeV}", position = (0.15, 15.5), fontsize=16)
+	end
 	
 	# dimenstion of fundamental representation for SU(3)
 	DR = 3
@@ -114,30 +171,110 @@ begin
 
 	δτ_qhat = Float64.(tau_qhat)
 
+	if dep=="px"
+		for ip in 1:length(pxs)
+	    	tag_wong_jets = "mass_" * mass * "_px_" * pxs[ip]
+	    	δτ_wong_jets = Float64.(tau_wong_jets_px_dep[tag_wong_jets])
+	
+			mom_broad_L_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 3]/DR
+			lines!(axes_left[1], δτ_wong_jets, factor*mom_broad_L_wong_jets, linewidth = width_line, color=(colors[ip], transp))
+		
+			mom_broad_T_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 2]/DR
+			lines!(axes_left[1], δτ_wong_jets, mom_broad_T_wong_jets, linewidth = width_line, color=(colors[ip], transp))
+		
+			qhat_L_wong = diff(mom_broad_L_wong_jets)./ diff(δτ_wong_jets)
+			insert!(qhat_L_wong, 1, 0)
+			lines!(ax_right, δτ_wong_jets, factor_qhat*qhat_L_wong, linewidth = 1.5, color=(colors[ip], transp))
+		
+			qhat_T_wong = diff(mom_broad_T_wong_jets)./ diff(δτ_wong_jets)
+			insert!(qhat_T_wong, 1, 0)
+			lines!(ax_right, δτ_wong_jets, qhat_T_wong, linewidth = 1.5, color=(colors[ip], transp))
+			
+			local ratio = mom_broad_L_wong_jets./mom_broad_T_wong_jets
+			string_as_varname("wong_px_"*string(ip), lines!(axes_left[2], δτ_wong_jets, ratio, linewidth = width_line, color=colors[ip]))
+		
+			# zoom-in #
+			local zoomin_indices = findall(t->t<=0.31, δτ_wong_jets)
+			δτ_wong_jets_zoomin = δτ_wong_jets[zoomin_indices]
+		
+			mom_broad_L_wong_jets_zoomin = mom_broad_L_wong_jets[zoomin_indices]
+			mom_broad_T_wong_jets_zoomin = mom_broad_T_wong_jets[zoomin_indices]
+		
+			qhat_L_wong_jets_zoomin = diff(mom_broad_L_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+			insert!(qhat_L_wong_jets_zoomin, 1, 0)
+			lines!(ax_right_zoomin, δτ_wong_jets_zoomin, factor_qhat*qhat_L_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
+		
+			qhat_T_wong_jets_zoomin = diff(mom_broad_T_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+			insert!(qhat_T_wong_jets_zoomin, 1, 0)
+			lines!(ax_right_zoomin, δτ_wong_jets_zoomin, qhat_T_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
+		end
+	elseif dep=="m"
+		for im in 1:length(mass)
+	    	tag_wong_jets = "mass_" * mass[im] * "_px_" * pxs
+	    	δτ_wong_jets = Float64.(tau_wong_jets_m_dep[tag_wong_jets])
+	
+			mom_broad_L_wong_jets = mom_broad_wong_jets_m_dep[tag_wong_jets][:, 3]/DR
+			lines!(axes_left[1], δτ_wong_jets, factor*mom_broad_L_wong_jets, linewidth = width_line, color=(colors[im], transp))
+		
+			mom_broad_T_wong_jets = mom_broad_wong_jets_m_dep[tag_wong_jets][:, 2]/DR
+			lines!(axes_left[1], δτ_wong_jets, mom_broad_T_wong_jets, linewidth = width_line, color=(colors[im], transp))
+		
+			qhat_L_wong = diff(mom_broad_L_wong_jets)./ diff(δτ_wong_jets)
+			insert!(qhat_L_wong, 1, 0)
+			lines!(ax_right, δτ_wong_jets, factor_qhat*qhat_L_wong, linewidth = 1.5, color=(colors[im], transp))
+		
+			qhat_T_wong = diff(mom_broad_T_wong_jets)./ diff(δτ_wong_jets)
+			insert!(qhat_T_wong, 1, 0)
+			lines!(ax_right, δτ_wong_jets, qhat_T_wong, linewidth = 1.5, color=(colors[im], transp))
+			
+			local ratio = mom_broad_L_wong_jets./mom_broad_T_wong_jets
+			string_as_varname("wong_m_"*string(im), lines!(axes_left[2], δτ_wong_jets, ratio, linewidth = width_line, color=colors[im]))
+		
+			# zoom-in #
+			local zoomin_indices = findall(t->t<=0.31, δτ_wong_jets)
+			δτ_wong_jets_zoomin = δτ_wong_jets[zoomin_indices]
+		
+			mom_broad_L_wong_jets_zoomin = mom_broad_L_wong_jets[zoomin_indices]
+			mom_broad_T_wong_jets_zoomin = mom_broad_T_wong_jets[zoomin_indices]
+		
+			qhat_L_wong_jets_zoomin = diff(mom_broad_L_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+			insert!(qhat_L_wong_jets_zoomin, 1, 0)
+			lines!(ax_right_zoomin, δτ_wong_jets_zoomin, factor_qhat*qhat_L_wong_jets_zoomin, linewidth = width_line, color=(colors[im], transp))
+		
+			qhat_T_wong_jets_zoomin = diff(mom_broad_T_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+			insert!(qhat_T_wong_jets_zoomin, 1, 0)
+			lines!(ax_right_zoomin, δτ_wong_jets_zoomin, qhat_T_wong_jets_zoomin, linewidth = width_line, color=(colors[im], transp))
+		end
+	end
+	
 	# momentum broadening
 	mom_broad_L_qhat = mom_broad_qhat[:, 3]/DR
 	lines!(axes_left[1], δτ_qhat, factor*mom_broad_L_qhat, linewidth = width_line, color=:grey60, linestyle=:dash)
-	lines!(axes_left[1], δτ_qhat, factor*mom_broad_L_qhat, linewidth = width_line, color=(:grey60, 0.6))
+	# lines!(axes_left[1], δτ_qhat, factor*mom_broad_L_qhat, linewidth = width_line, color=(:grey60, 0.6))
+	# lines!(axes_left[1], δτ_qhat, factor*mom_broad_L_qhat, linewidth = width_line, color=(:grey60, 1))
 
 	mom_broad_T_qhat = mom_broad_qhat[:, 2] /DR
 	lines!(axes_left[1], δτ_qhat, mom_broad_T_qhat, linewidth = width_line, color=:grey60, linestyle=:dash)
-	lines!(axes_left[1], δτ_qhat, mom_broad_T_qhat, linewidth = width_line, color=(:grey60, 0.6))
+	# lines!(axes_left[1], δτ_qhat, mom_broad_T_qhat, linewidth = width_line, color=(:grey60, 0.6))
+	# lines!(axes_left[1], δτ_qhat, mom_broad_T_qhat, linewidth = width_line, color=(:grey60, 1))
 
 	# qhat
 	qhat_L_qhat = diff(mom_broad_L_qhat)./ diff(δτ_qhat)
 	insert!(qhat_L_qhat, 1, 0)
 	
 	lines!(ax_right, δτ_qhat, factor_qhat*qhat_L_qhat, linewidth = 1.5, color=:grey60, linestyle=:dash)
-	lines!(ax_right, δτ_qhat, factor_qhat*qhat_L_qhat, linewidth = 1.5, color=(:grey60, 0.6))
+	# lines!(ax_right, δτ_qhat, factor_qhat*qhat_L_qhat, linewidth = 1.5, color=(:grey60, 0.6))
+	# lines!(ax_right, δτ_qhat, factor_qhat*qhat_L_qhat, linewidth = 1.5, color=(:grey60, 1))
 
 	qhat_T_qhat = diff(mom_broad_T_qhat)./ diff(δτ_qhat)
 	insert!(qhat_T_qhat, 1, 0)
 	
 	lines!(ax_right, δτ_qhat, qhat_T_qhat, linewidth = 1.5, color=:grey60, linestyle=:dash)
-	lines!(ax_right, δτ_qhat, qhat_T_qhat, linewidth = 1.5, color=(:grey60, 0.6))
+	# lines!(ax_right, δτ_qhat, qhat_T_qhat, linewidth = 1.5, color=(:grey60, 0.6))
+	# lines!(ax_right, δτ_qhat, qhat_T_qhat, linewidth = 1.5, color=(:grey60, 1))
 
 	# zoom-in #
-	zoomin_indices = findall(t->t<=0.3, δτ_qhat)
+	zoomin_indices = findall(t->t<=0.31, δτ_qhat)
 	δτ_qhat_zoomin = δτ_qhat[zoomin_indices]
 	
 	mom_broad_L_qhat_zoomin = mom_broad_L_qhat[zoomin_indices]
@@ -147,67 +284,53 @@ begin
 	insert!(qhat_L_qhat_zoomin, 1, 0)
 
 	lines!(ax_right_zoomin, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=:grey60, linestyle=:dash)
-	lines!(ax_right_zoomin, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
+	# lines!(ax_right_zoomin, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
+	# lines!(ax_right_zoomin, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=(:grey60, 1))
+	
 
 	qhat_T_qhat_zoomin = diff(mom_broad_T_qhat_zoomin)./ diff(δτ_qhat_zoomin)
 	insert!(qhat_T_qhat_zoomin, 1, 0)
 	
 	lines!(ax_right_zoomin, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=:grey60, linestyle=:dash)
-	lines!(ax_right_zoomin, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
+	# lines!(ax_right_zoomin, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
+	# lines!(ax_right_zoomin, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=(:grey60, 1))
 
-
-	for ip in 1:length(pxs)
-        tag_wong_jets = "mass_" * mass * "_px_" * pxs[ip]
-        δτ_wong_jets = Float64.(tau_wong_jets_px_dep[tag_wong_jets])
-
-		mom_broad_L_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 3]/DR
-		lines!(axes_left[1], δτ_wong_jets, factor*mom_broad_L_wong_jets, linewidth = width_line, color=(colors[ip], transp))
-
-		mom_broad_T_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 2]/DR
-		lines!(axes_left[1], δτ_wong_jets, mom_broad_T_wong_jets, linewidth = width_line, color=(colors[ip], transp))
-
-		qhat_L_wong = diff(mom_broad_L_wong_jets)./ diff(δτ_wong_jets)
-		insert!(qhat_L_wong, 1, 0)
-		lines!(ax_right, δτ_wong_jets, factor_qhat*qhat_L_wong, linewidth = 1.5, color=(colors[ip], transp))
-
-		qhat_T_wong = diff(mom_broad_T_wong_jets)./ diff(δτ_wong_jets)
-		insert!(qhat_T_wong, 1, 0)
-		lines!(ax_right, δτ_wong_jets, qhat_T_wong, linewidth = 1.5, color=(colors[ip], transp))
-		
-		local ratio = mom_broad_L_wong_jets./mom_broad_T_wong_jets
-		string_as_varname("wong_px_"*string(ip), lines!(axes_left[2], δτ_wong_jets, ratio, linewidth = width_line, color=colors[ip]))
-
-		# zoom-in #
-		local zoomin_indices = findall(t->t<=0.31, δτ_wong_jets)
-		δτ_wong_jets_zoomin = δτ_wong_jets[zoomin_indices]
-
-		mom_broad_L_wong_jets_zoomin = mom_broad_L_wong_jets[zoomin_indices]
-		mom_broad_T_wong_jets_zoomin = mom_broad_T_wong_jets[zoomin_indices]
-
-		qhat_L_wong_jets_zoomin = diff(mom_broad_L_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
-		insert!(qhat_L_wong_jets_zoomin, 1, 0)
-		lines!(ax_right_zoomin, δτ_wong_jets_zoomin, factor_qhat*qhat_L_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
-
-		qhat_T_wong_jets_zoomin = diff(mom_broad_T_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
-		insert!(qhat_T_wong_jets_zoomin, 1, 0)
-		lines!(ax_right_zoomin, δτ_wong_jets_zoomin, qhat_T_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
-		
-	end
 
 	ratio = mom_broad_L_qhat./mom_broad_T_qhat
 	qhat_dash = lines!(axes_left[2], δτ_qhat, ratio, linewidth = width_line, color=:grey60, linestyle=:dash)
-	qhat = lines!(axes_left[2], δτ_qhat, ratio, linewidth = width_line, color=(:grey60, 0.6))
+	# qhat = lines!(axes_left[2], δτ_qhat, ratio, linewidth = width_line, color=(:grey60, 0.6))
+	# qhat = lines!(axes_left[2], δτ_qhat, ratio, linewidth = width_line, color=(:grey60, 0.6))
 	# kappa = lines!(axes_left[2], δτ_kappa, ratio, linewidth = width_line, color=(:grey60, transp))
-	
-	cbar = Colorbar(fig[1:2, 3], limits = (1, 5), colormap =  cgrad(colors, 4, categorical = true), size = 25, labelsize = 20, flipaxis = true,
-	ticksize=3, tickalign = 0, ticklabelsize = 14,  label=L"p_x\,(\tau_\mathrm{form})/m", 
-	height = Relative(1), width = 10,
-	)
-	cbar_pxs = string.(floor.(Int,(parse.(Int64, pxs))./10))
-	cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  cbar_pxs)
+
+	# cbar = Colorbar(fig[1:2, 3], limits = (1, 5), colormap =  cgrad(colors, 4, categorical = true), size = 25, labelsize = 20, flipaxis = true,
+	# ticksize=3, tickalign = 0, ticklabelsize = 14,  label=L"p_x\,(\tau_\mathrm{form})/m", 
+	# height = Relative(1), width = 10,
+	# )
+	# cbar_pxs = string.(floor.(Int,(parse.(Int64, pxs))./10))
+	# cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  cbar_pxs)
+
+	if dep=="px"
+		cbar = Colorbar(fig[1:2, 3], limits = (1, 5), colormap =  cgrad(colors, 4, categorical = true), size = 25, labelsize = 20, flipaxis = true,
+		ticksize=3, tickalign = 0, ticklabelsize = 14,  label=L"p^x\,(\tau_\mathrm{form})\,\mathrm{[GeV]}", 
+		height = Relative(1), width = 10,
+		)
+		# cbar_pxs = string.(floor.(Int,(parse.(Int64, pxs))))
+		# cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  cbar_pxs)
+		cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  pxs)
+	elseif dep=="m"
+		cbar = Colorbar(fig[1:2, 3], limits = (1, 5), colormap =  cgrad(colors, 4, categorical = true), size = 25, labelsize = 20, flipaxis = true,
+		ticksize=3, tickalign = 0, ticklabelsize = 14,  label=L"m\,\mathrm{[GeV]}", 
+		height = Relative(1), width = 10,
+		)
+		# cbar_m = string.(floor.(Int,(parse.(Int64, mass))))
+		# cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  cbar_m)
+		cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  mass)
+	end
 	
 	legend_qhat = [L"\mathrm{lightlike}"]
-	axislegend(axes_left[1], [[qhat, qhat_dash]], legend_qhat, L"\mathrm{quark}", labelsize=15, titlesize=15, position = (0, 1), orientation = :vertical, bgcolor = :transparent, framecolor=(:grey80, 0), titleposition=:left)
+	# axislegend(axes_left[1], [[qhat, qhat_dash]], legend_qhat, L"\mathrm{quark}", labelsize=15, titlesize=15, position = (0, 1), orientation = :vertical, bgcolor = :transparent, framecolor=(:grey80, 0), titleposition=:left)
+	# axislegend(axes_left[1], [qhat], legend_qhat, L"\mathrm{quark}", labelsize=15, titlesize=15, position = (0, 1), orientation = :vertical, bgcolor = :transparent, framecolor=(:grey80, 0), titleposition=:left)
+	axislegend(axes_left[1], [qhat_dash], legend_qhat, L"\mathrm{quark}", labelsize=15, titlesize=15, position = (0, 1), orientation = :vertical, bgcolor = :transparent, framecolor=(:grey80, 0), titleposition=:left)
 
 	legend_wong = [L"\mathrm{dynamic}"]
 	elem_wong = [LineElement(color = colors[4])]
@@ -223,11 +346,297 @@ begin
 	colgap!(fig.layout, 10)
 	rowgap!(fig.layout, 0)
 	
-	save("plots/hp23_mom_broad_qhat_anis_wong_vs_qhat.pdf", fig) 
-	save("plots/hp23_mom_broad_qhat_anis_wong_vs_qhat.png", fig, px_per_unit=10.0) 
+	# save("plots/hp23_mom_broad_qhat_anis_wong_vs_qhat.pdf", fig) 
+	# save("plots/trento_mom_broad_qhat_anis_wong_vs_qhat_m_dep.png", fig, px_per_unit=10.0) 
+	save("plots/trento_mom_broad_qhat_anis_wong_vs_qhat_"*dep*"_dep_v2.png", fig, px_per_unit=10.0) 
 	
 	fig
 end
+
+# ╔═╡ 50da90f3-48f5-44c8-a3df-18e22be76a6f
+# begin
+# 	segmented_cmap = cgrad(:watermelon, 24, categorical = true)
+# 	colors = [segmented_cmap[5], segmented_cmap[9], segmented_cmap[21], segmented_cmap[23]]
+# 	linestyles = [:dash, :dashdot, :dot]
+# 	width_line=2
+
+# 	set_theme!(fonts = (; regular ="CMU Serif"))
+# 	if dep=="px"
+# 		fig = Figure(resolution = (760, 400), font = "CMU Serif") 
+# 	elseif dep=="m"
+# 		# fig = Figure(resolution = (760, 400), font = "CMU Serif")
+# 		fig = Figure(resolution = (710, 400), font = "CMU Serif")
+# 	end
+
+# 	ylabels = [L"\langle\delta p^2\,\rangle\,\mathrm{[GeV^2]}", L"\langle\delta p^2_z\,\rangle\,/\,\langle\delta p^2_y\,\rangle"]
+# 	axes_left = [Axis(fig[i, 1], 
+# 	        xlabel=L"\tau\,\mathrm{[fm/}c\mathrm{]}", 
+# 			ylabel=ylabels[i],
+# 	        xlabelsize = 19, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14,
+# 	        xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4) for i in 1:2]
+# 	ax_right = Axis(fig[1:2, 2], 
+# 	        xlabel=L"\tau\,\mathrm{[fm/}c\mathrm{]}", 
+# 			ylabel=L"\hat{q}\,\,\mathrm{[GeV^2/fm]}",
+# 	        xlabelsize = 19, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14,
+# 	        xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4)
+
+# 	# zoom-in
+# 	ax_right_zoomin = Axis(fig, 
+# 		# bbox = BBox(470, 660, 180, 370), 
+# 		bbox = BBox(485, 685, 180, 370), 
+#          xticklabelsize=13, yticklabelsize=13,
+# 	        xtickalign = 1, xticksize=3, ytickalign=1, yticksize=3, xlabelpadding = -4, xgridvisible = false, ygridvisible = false,
+# 	        ytickcolor = :grey, xtickcolor = :grey, yticklabelcolor = :grey, xticklabelcolor = :grey, ylabelcolor = :grey, xlabelcolor = :grey,
+# 	        bottomspinecolor = :grey, topspinecolor = :grey, leftspinecolor = :grey, rightspinecolor = :grey) 
+# 	translate!(ax_right_zoomin.elements[:background], 0, 0, 9)
+# 	translate!(ax_right_zoomin.scene, 0, 0, 10)
+# 	poly!(ax_right, Rect(0, 0, 0.3, 17.3), color = :grey95, strokecolor = :grey70, strokewidth = 0.8)
+# 	lines!(ax_right, [0, 0.75], [17.3, 22.87], linewidth = 0.8, color=:grey70)
+# 	lines!(ax_right, [0.3, 1.922], [0, 7.05], linewidth = 0.8, color=:grey70)
+
+# 	linkxaxes!(axes_left[1], axes_left[2])
+# 	hidexdecorations!(axes_left[1], grid = false)
+
+# 	for i in 1:2
+# 		xlims!(axes_left[i], 0, 2)
+# 		axes_left[i].xticks = ([0, 0.5, 1, 1.5, 2], ["0", "0.5", "1", "1.5", "2"])
+# 	end 
+# 	xlims!(ax_right, 0, 2)
+# 	ax_right.xticks = ([0, 0.5, 1, 1.5, 2], ["0", "0.5", "1", "1.5", "2"])
+
+# 	ylims!(axes_left[1], 0, 4)
+# 	ylims!(axes_left[2], 0.5, 3.5)
+# 	axes_left[2].yticks = ([1, 2, 3], ["1", "2", "3"])
+# 	ylims!(ax_right, -3, 24)
+# 	ax_right.yticks = ([0, 5, 10, 15, 20], string.([0, 5, 10, 15, 20]))
+
+# 	xlims!(ax_right_zoomin, 0, 0.3)
+# 	# xlims!(ax_right_zoomin, 0, 0.29)
+# 	ax_right_zoomin.xticks = ([0, 0.1, 0.2, 0.3], ["0", "0.1", "0.2", "0.3"])
+# 	ylims!(ax_right_zoomin, 0, 18)
+# 	ax_right_zoomin.yticks = ([5, 10, 15], ["5", "10", "15"])
+
+# 	if dep=="px"
+# 		text!(axes_left[1], L"\langle\delta p_z^2\,\rangle", position = (1.66,2.35), fontsize=18)
+# 	elseif dep=="m"
+# 		# text!(axes_left[1], L"\langle\delta p_z^2\,\rangle", position = (1.66,2.7), fontsize=18)
+# 		# text!(axes_left[1], L"\langle\delta p_z^2\,\rangle", position = (1.66,2.3), fontsize=18)
+# 		text!(axes_left[1], L"\langle\delta p_z^2\,\rangle", position = (1.66,2.4), fontsize=18)
+		
+# 	end
+# 	# text!(axes_left[1], L"\langle\delta p_y^2\,\rangle", position = (1.66,0.6), fontsize=18)
+# 	text!(axes_left[1], L"\langle\delta p_y^2\,\rangle", position = (1.66,0.9), fontsize=18)
+
+# 	text!(ax_right_zoomin, L"\hat{q}_z", position = (0.26, 4.8), fontsize=19)
+# 	text!(ax_right_zoomin, L"\hat{q}_y", position = (0.26, 1.5), fontsize=19)
+
+# 	text!(ax_right, L"\hat{q}_z", position = (1.87, -2.2), fontsize=16)
+# 	text!(ax_right, L"\hat{q}_y", position = (1.87, 0.6), fontsize=16)
+
+# 	text!(ax_right, L"Q_s=2\,\mathrm{GeV}", position = (0.02, -2.5), fontsize=16)
+# 	# text!(ax_right_zoomin, L"m=0.1\,\mathrm{GeV}", position = (0.16, 15.5), fontsize=16)
+# 	# text!(ax_right_zoomin, L"p^x=10\,\mathrm{GeV}", position = (0.165, 13), fontsize=16)
+# 	# if dep=="m"
+# 	# 	text!(ax_right_zoomin, L"p^x=10\,\mathrm{GeV}", position = (0.16, 15.5), fontsize=16)
+# 	# elseif dep=="px"
+# 	# 	text!(ax_right_zoomin, L"m=0.1\,\mathrm{GeV}", position = (0.18, 15.5), fontsize=16)
+# 	# end
+	
+# 	# dimenstion of fundamental representation for SU(3)
+# 	DR = 3
+	
+# 	# factor
+# 	factor = 1
+# 	factor_qhat = 1
+
+# 	transp = 1
+
+# 	δτ_qhat = Float64.(tau_qhat)
+
+# 	# momentum broadening
+# 	mom_broad_L_qhat = mom_broad_qhat[:, 3]/DR
+# 	# lines!(axes_left[1], δτ_qhat, factor*mom_broad_L_qhat, linewidth = width_line, color=:grey60, linestyle=:dash)
+# 	# lines!(axes_left[1], δτ_qhat, factor*mom_broad_L_qhat, linewidth = width_line, color=(:grey60, 0.6))
+# 	lines!(axes_left[1], δτ_qhat, factor*mom_broad_L_qhat, linewidth = width_line, color=(:grey60, 1))
+
+# 	mom_broad_T_qhat = mom_broad_qhat[:, 2] /DR
+# 	# lines!(axes_left[1], δτ_qhat, mom_broad_T_qhat, linewidth = width_line, color=:grey60, linestyle=:dash)
+# 	# lines!(axes_left[1], δτ_qhat, mom_broad_T_qhat, linewidth = width_line, color=(:grey60, 0.6))
+# 	lines!(axes_left[1], δτ_qhat, mom_broad_T_qhat, linewidth = width_line, color=(:grey60, 1))
+
+# 	# qhat
+# 	qhat_L_qhat = diff(mom_broad_L_qhat)./ diff(δτ_qhat)
+# 	insert!(qhat_L_qhat, 1, 0)
+	
+# 	# lines!(ax_right, δτ_qhat, factor_qhat*qhat_L_qhat, linewidth = 1.5, color=:grey60, linestyle=:dash)
+# 	# lines!(ax_right, δτ_qhat, factor_qhat*qhat_L_qhat, linewidth = 1.5, color=(:grey60, 0.6))
+# 	lines!(ax_right, δτ_qhat, factor_qhat*qhat_L_qhat, linewidth = 1.5, color=(:grey60, 1))
+
+# 	qhat_T_qhat = diff(mom_broad_T_qhat)./ diff(δτ_qhat)
+# 	insert!(qhat_T_qhat, 1, 0)
+	
+# 	# lines!(ax_right, δτ_qhat, qhat_T_qhat, linewidth = 1.5, color=:grey60, linestyle=:dash)
+# 	# lines!(ax_right, δτ_qhat, qhat_T_qhat, linewidth = 1.5, color=(:grey60, 0.6))
+# 	lines!(ax_right, δτ_qhat, qhat_T_qhat, linewidth = 1.5, color=(:grey60, 1))
+
+# 	# zoom-in #
+# 	zoomin_indices = findall(t->t<=0.31, δτ_qhat)
+# 	δτ_qhat_zoomin = δτ_qhat[zoomin_indices]
+	
+# 	mom_broad_L_qhat_zoomin = mom_broad_L_qhat[zoomin_indices]
+# 	mom_broad_T_qhat_zoomin = mom_broad_T_qhat[zoomin_indices]
+
+# 	qhat_L_qhat_zoomin = diff(mom_broad_L_qhat_zoomin)./ diff(δτ_qhat_zoomin)
+# 	insert!(qhat_L_qhat_zoomin, 1, 0)
+
+# 	# lines!(ax_right_zoomin, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=:grey60, linestyle=:dash)
+# 	# lines!(ax_right_zoomin, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
+# 	lines!(ax_right_zoomin, δτ_qhat_zoomin, factor_qhat*qhat_L_qhat_zoomin, linewidth = width_line, color=(:grey60, 1))
+	
+
+# 	qhat_T_qhat_zoomin = diff(mom_broad_T_qhat_zoomin)./ diff(δτ_qhat_zoomin)
+# 	insert!(qhat_T_qhat_zoomin, 1, 0)
+	
+# 	# lines!(ax_right_zoomin, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=:grey60, linestyle=:dash)
+# 	# lines!(ax_right_zoomin, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=(:grey60, 0.6))
+# 	lines!(ax_right_zoomin, δτ_qhat_zoomin, qhat_T_qhat_zoomin, linewidth = width_line, color=(:grey60, 1))
+
+
+# 	# if dep=="px"
+# 	# 	for ip in 1:length(pxs)
+# 	#     	tag_wong_jets = "mass_" * mass * "_px_" * pxs[ip]
+# 	#     	δτ_wong_jets = Float64.(tau_wong_jets_px_dep[tag_wong_jets])
+	
+# 	# 		mom_broad_L_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 3]/DR
+# 	# 		lines!(axes_left[1], δτ_wong_jets, factor*mom_broad_L_wong_jets, linewidth = width_line, color=(colors[ip], transp))
+		
+# 	# 		mom_broad_T_wong_jets = mom_broad_wong_jets_px_dep[tag_wong_jets][:, 2]/DR
+# 	# 		lines!(axes_left[1], δτ_wong_jets, mom_broad_T_wong_jets, linewidth = width_line, color=(colors[ip], transp))
+		
+# 	# 		qhat_L_wong = diff(mom_broad_L_wong_jets)./ diff(δτ_wong_jets)
+# 	# 		insert!(qhat_L_wong, 1, 0)
+# 	# 		lines!(ax_right, δτ_wong_jets, factor_qhat*qhat_L_wong, linewidth = 1.5, color=(colors[ip], transp))
+		
+# 	# 		qhat_T_wong = diff(mom_broad_T_wong_jets)./ diff(δτ_wong_jets)
+# 	# 		insert!(qhat_T_wong, 1, 0)
+# 	# 		lines!(ax_right, δτ_wong_jets, qhat_T_wong, linewidth = 1.5, color=(colors[ip], transp))
+			
+# 	# 		local ratio = mom_broad_L_wong_jets./mom_broad_T_wong_jets
+# 	# 		string_as_varname("wong_px_"*string(ip), lines!(axes_left[2], δτ_wong_jets, ratio, linewidth = width_line, color=colors[ip]))
+		
+# 	# 		# zoom-in #
+# 	# 		local zoomin_indices = findall(t->t<=0.31, δτ_wong_jets)
+# 	# 		δτ_wong_jets_zoomin = δτ_wong_jets[zoomin_indices]
+		
+# 	# 		mom_broad_L_wong_jets_zoomin = mom_broad_L_wong_jets[zoomin_indices]
+# 	# 		mom_broad_T_wong_jets_zoomin = mom_broad_T_wong_jets[zoomin_indices]
+		
+# 	# 		qhat_L_wong_jets_zoomin = diff(mom_broad_L_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+# 	# 		insert!(qhat_L_wong_jets_zoomin, 1, 0)
+# 	# 		lines!(ax_right_zoomin, δτ_wong_jets_zoomin, factor_qhat*qhat_L_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
+		
+# 	# 		qhat_T_wong_jets_zoomin = diff(mom_broad_T_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+# 	# 		insert!(qhat_T_wong_jets_zoomin, 1, 0)
+# 	# 		lines!(ax_right_zoomin, δτ_wong_jets_zoomin, qhat_T_wong_jets_zoomin, linewidth = width_line, color=(colors[ip], transp))
+# 	# 	end
+# 	# elseif dep=="m"
+# 	# 	# for im in 1:length(mass)
+# 	# 	im = 4
+# 	#     	tag_wong_jets = "mass_" * mass[1] * "_px_" * pxs
+# 	#     	δτ_wong_jets = Float64.(tau_wong_jets_m_dep[tag_wong_jets])
+	
+# 	# 		mom_broad_L_wong_jets = mom_broad_wong_jets_m_dep[tag_wong_jets][:, 3]/DR
+# 	# 		lines!(axes_left[1], δτ_wong_jets, factor*mom_broad_L_wong_jets, linewidth = width_line, color=(colors[im], transp))
+		
+# 	# 		mom_broad_T_wong_jets = mom_broad_wong_jets_m_dep[tag_wong_jets][:, 2]/DR
+# 	# 		lines!(axes_left[1], δτ_wong_jets, mom_broad_T_wong_jets, linewidth = width_line, color=(colors[im], transp))
+		
+# 	# 		qhat_L_wong = diff(mom_broad_L_wong_jets)./ diff(δτ_wong_jets)
+# 	# 		insert!(qhat_L_wong, 1, 0)
+# 	# 		lines!(ax_right, δτ_wong_jets, factor_qhat*qhat_L_wong, linewidth = 1.5, color=(colors[im], transp))
+		
+# 	# 		qhat_T_wong = diff(mom_broad_T_wong_jets)./ diff(δτ_wong_jets)
+# 	# 		insert!(qhat_T_wong, 1, 0)
+# 	# 		lines!(ax_right, δτ_wong_jets, qhat_T_wong, linewidth = 1.5, color=(colors[im], transp))
+			
+# 	# 		local ratio = mom_broad_L_wong_jets./mom_broad_T_wong_jets
+# 	# 		string_as_varname("wong_m_"*string(im), lines!(axes_left[2], δτ_wong_jets, ratio, linewidth = width_line, color=colors[im]))
+		
+# 	# 		# zoom-in #
+# 	# 		local zoomin_indices = findall(t->t<=0.31, δτ_wong_jets)
+# 	# 		δτ_wong_jets_zoomin = δτ_wong_jets[zoomin_indices]
+		
+# 	# 		mom_broad_L_wong_jets_zoomin = mom_broad_L_wong_jets[zoomin_indices]
+# 	# 		mom_broad_T_wong_jets_zoomin = mom_broad_T_wong_jets[zoomin_indices]
+		
+# 	# 		qhat_L_wong_jets_zoomin = diff(mom_broad_L_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+# 	# 		insert!(qhat_L_wong_jets_zoomin, 1, 0)
+# 	# 		lines!(ax_right_zoomin, δτ_wong_jets_zoomin, factor_qhat*qhat_L_wong_jets_zoomin, linewidth = width_line, color=(colors[im], transp))
+		
+# 	# 		qhat_T_wong_jets_zoomin = diff(mom_broad_T_wong_jets_zoomin)./ diff(δτ_wong_jets_zoomin)
+# 	# 		insert!(qhat_T_wong_jets_zoomin, 1, 0)
+# 	# 		lines!(ax_right_zoomin, δτ_wong_jets_zoomin, qhat_T_wong_jets_zoomin, linewidth = width_line, color=(colors[im], transp))
+# 	# 	# end
+# 	# end
+	
+
+
+# 	ratio = mom_broad_L_qhat./mom_broad_T_qhat
+# 	# qhat_dash = lines!(axes_left[2], δτ_qhat, ratio, linewidth = width_line, color=:grey60, linestyle=:dash)
+# 	# qhat = lines!(axes_left[2], δτ_qhat, ratio, linewidth = width_line, color=(:grey60, 0.6))
+# 	qhat = lines!(axes_left[2], δτ_qhat, ratio, linewidth = width_line, color=(:grey60, 0.6))
+# 	# kappa = lines!(axes_left[2], δτ_kappa, ratio, linewidth = width_line, color=(:grey60, transp))
+
+# 	# cbar = Colorbar(fig[1:2, 3], limits = (1, 5), colormap =  cgrad(colors, 4, categorical = true), size = 25, labelsize = 20, flipaxis = true,
+# 	# ticksize=3, tickalign = 0, ticklabelsize = 14,  label=L"p_x\,(\tau_\mathrm{form})/m", 
+# 	# height = Relative(1), width = 10,
+# 	# )
+# 	# cbar_pxs = string.(floor.(Int,(parse.(Int64, pxs))./10))
+# 	# cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  cbar_pxs)
+
+# 	# if dep=="px"
+# 	# 	cbar = Colorbar(fig[1:2, 3], limits = (1, 5), colormap =  cgrad(colors, 4, categorical = true), size = 25, labelsize = 20, flipaxis = true,
+# 	# 	ticksize=3, tickalign = 0, ticklabelsize = 14,  label=L"p_x\,(\tau_\mathrm{form})\,\mathrm{[GeV]}", 
+# 	# 	height = Relative(1), width = 10,
+# 	# 	)
+# 	# 	# cbar_pxs = string.(floor.(Int,(parse.(Int64, pxs))))
+# 	# 	# cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  cbar_pxs)
+# 	# 	cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  pxs)
+# 	# elseif dep=="m"
+# 	# 	cbar = Colorbar(fig[1:2, 3], limits = (1, 5), colormap =  cgrad(colors, 4, categorical = true), size = 25, labelsize = 20, flipaxis = true,
+# 	# 	ticksize=3, tickalign = 0, ticklabelsize = 14,  label=L"m\,\mathrm{[GeV]}", 
+# 	# 	height = Relative(1), width = 10,
+# 	# 	)
+# 	# 	# cbar_m = string.(floor.(Int,(parse.(Int64, mass))))
+# 	# 	# cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  cbar_m)
+# 	# 	cbar.ticks = ([1.5, 2.5, 3.5, 4.5],  mass)
+# 	# end
+	
+# 	legend_qhat = [L"\mathrm{lightlike}"]
+# 	# axislegend(axes_left[1], [[qhat, qhat_dash]], legend_qhat, L"\mathrm{quark}", labelsize=15, titlesize=15, position = (0, 1), orientation = :vertical, bgcolor = :transparent, framecolor=(:grey80, 0), titleposition=:left)
+# 	axislegend(axes_left[1], [qhat], legend_qhat, L"\mathrm{quark}", labelsize=15, titlesize=15, position = (0, 1), orientation = :vertical, bgcolor = :transparent, framecolor=(:grey80, 0), titleposition=:left)
+
+# 	# legend_wong = [L"\mathrm{dynamic}"]
+# 	# elem_wong = [LineElement(color = colors[4])]
+# 	# axislegend(axes_left[1], elem_wong, legend_wong, labelsize=15, position = (1.07,1), orientation = :vertical, bgcolor = :transparent, framecolor=(:grey80, 0))
+	
+# 	rowsize!(fig.layout, 1, Relative(2/3))
+# 	rowsize!(fig.layout, 2, Relative(1/3))
+
+# 	colsize!(fig.layout, 1, Relative(3/7))
+# 	colsize!(fig.layout, 2, Relative(4/7))
+	
+	
+# 	colgap!(fig.layout, 10)
+# 	rowgap!(fig.layout, 0)
+	
+# 	# save("plots/hp23_mom_broad_qhat_anis_wong_vs_qhat.pdf", fig) 
+# 	# save("plots/trento_mom_broad_qhat_anis_wong_vs_qhat_m_dep.png", fig, px_per_unit=10.0) 
+# 	# save("plots/trento_mom_broad_qhat_anis_wong_vs_qhat_lightlike_1_dynamical_v2.png", fig, px_per_unit=10.0) 
+# 	save("plots/trento_mom_broad_qhat_anis_wong_vs_qhat_lightlike_v2.png", fig, px_per_unit=10.0) 
+	
+# 	fig
+# end
 
 # ╔═╡ db66738b-b19a-4545-8339-ed5012de8509
 begin
@@ -372,9 +781,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
+git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+0"
+version = "1.0.8+1"
 
 [[deps.CEnum]]
 git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
@@ -1591,9 +2000,9 @@ version = "2.0.2+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
+git-tree-sha1 = "f7c281e9c61905521993a987d38b5ab1d4b53bef"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.38+0"
+version = "1.6.38+1"
 
 [[deps.libsixel_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]
@@ -1633,8 +2042,11 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╠═d63cbd90-0919-11ee-0a0f-79cd06d42808
 # ╠═3dd596d2-f226-4f0e-b523-8460caf217a7
+# ╠═d820f97f-3a0c-4b28-9ede-37327f1e4027
+# ╠═d8f33689-ea04-4352-b0cc-83eed52cf660
 # ╠═aff5cd65-114d-4631-9670-e3b40759d30c
 # ╠═1dcd2d79-a522-4b06-b13b-012c6293856f
+# ╠═50da90f3-48f5-44c8-a3df-18e22be76a6f
 # ╠═db66738b-b19a-4545-8339-ed5012de8509
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

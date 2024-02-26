@@ -484,12 +484,6 @@ begin
 	fig_dndpt_fonll
 end
 
-# ╔═╡ 8f6a269c-051f-4f62-8bf9-c49f1e18d118
-# ╠═╡ disabled = true
-#=╠═╡
-pt_raa, pt_raa_edges, raa = transform_Np2_to_Np(bin_edges, raa_hist)
-  ╠═╡ =#
-
 # ╔═╡ 04117feb-889e-4b5c-86ab-b801e0af9e32
 begin
 	pt_hist, raa_pt_hist = complete_hist(sqrt.(pt₁_weight_hist), raa_hist, sqrt.(bin_edges))
