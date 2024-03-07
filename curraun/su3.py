@@ -460,6 +460,21 @@ def get_algebra_factors_from_group_element_approximate(g):
     r6 = tr(mul(s6, g)).imag
     r7 = tr(mul(s7, g)).imag
     r8 = tr(mul(s8, g)).imag
+    
+    return r1, r2, r3, r4, r5, r6, r7, r8
+
+@myjit
+def get_gauge_links_color_components(g):
+    
+    r1 = tr(mul(s1, g)).real
+    r2 = tr(mul(s2, g)).real
+    r3 = tr(mul(s3, g)).real
+    r4 = tr(mul(s4, g)).real
+    r5 = tr(mul(s5, g)).real
+    r6 = tr(mul(s6, g)).real
+    r7 = tr(mul(s7, g)).real
+    r8 = tr(mul(s8, g)).real
+    
     return r1, r2, r3, r4, r5, r6, r7, r8
 
 @myjit
