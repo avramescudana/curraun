@@ -110,8 +110,11 @@ venv.bak/
 .idea/
 
 # Results and plots
-*.dat
+*.dats
 *.pickle
 *.npz
 plots/
 results/
+
+# VSCode
+.vscode
