@@ -31,12 +31,6 @@ def act(u, a):
     result =  su.mul(buffer1, su.dagger(u))
     return result
 
-# adjoint action a -> u(x) a u^t(y)
-@myjit
-def act_link(u1, u2, a):
-    buffer1 = su.mul(u1, a)
-    result =  su.mul(buffer1, su.dagger(u2))
-    return result
 
 # commutator of two su(2) elements
 @myjit
