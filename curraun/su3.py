@@ -175,6 +175,35 @@ def mexp(a):
         print("Exponential did not reach desired accuracy")  # TODO: remove debugging code
     return res
 
+LOG_MIN_TERMS = -1 # minimum number of terms in Taylor series
+LOG_MAX_TERMS = 100 # maximum number of terms in Taylor series
+LOG_ACCURACY_SQUARED = 1.e-32 # 1.e-32 # accuracy
+
+# logarithm map
+def mlog(a):
+    """
+    Computes logarithm of a matrix using Taylor series
+
+    mlog(a) = (a-id0) - (a-id0)^2 / 2 + (a-id0)^3 / 3 - (a-id0)^4 / 4 + ...
+
+    Works for matrices close to identity (for example gauge links)
+    """
+    res = add(a, mul_s(id0, -1))
+    t = add(a, mul_s(id0, -1))
+    sign = -1
+    for i in range(1, LOG_MAX_TERMS):
+        t = mul(t, add(a, mul_s(id0, -1)))
+        buff = mul_s(t, sign/(i+1))
+        res = add(res, buff)
+        sign = sign * (-1)
+        n = sq(t) 
+        if (i > LOG_MIN_TERMS) and (math.fabs(n.real) < LOG_ACCURACY_SQUARED):
+            break
+        # else:
+            # print("Logarithm did not reach desired accuracy") 
+
+    return res
+
 
 # derivative of exponential map
 @myjit
