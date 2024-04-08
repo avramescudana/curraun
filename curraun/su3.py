@@ -149,6 +149,36 @@ def mul(a, b):
     r8 = a[6] * b[2] + a[7] * b[5] + a[8] * b[8]
     return r0, r1, r2, r3, r4, r5, r6, r7, r8
 
+# Overload * operator
+@myjit
+def __mul__(a, b):
+    """SU(3) multiplication: 3x3 matrix multiplication
+
+    >>> a=[1,2,3,4,5,6,7,8,9]
+    >>> b=[3,6,8,4,3,2,1,3,4]
+    >>> c=mul(a,b)
+    >>> c
+    (14, 21, 24, 38, 57, 66, 62, 93, 108)
+
+    # Check with numpy
+    >>> import numpy as np
+    >>> ma = np.asarray(a).reshape(3,3)
+    >>> mb = np.asarray(b).reshape(3,3)
+    >>> mc = np.matmul(ma, mb)
+    >>> mc
+    array([[ 14,  21,  24],
+           [ 38,  57,  66],
+           [ 62,  93, 108]])
+
+    >>> tuple(mc.flatten()) == c
+    True
+    """
+    
+    if np.shape(a) == np.shape(b) == GROUP_ELEMENTS:
+        mul(a,b)
+    if np.shape(a) == 1 or np.shape(b) == 1:
+        mul_s(a,b)
+
 # exponential map
 @myjit
 def mexp(a):
@@ -351,6 +381,16 @@ def add(g0, g1):
     r7 = g0[7] + g1[7]
     r8 = g0[8] + g1[8]
     return r0, r1, r2, r3, r4, r5, r6, r7, r8
+
+# overload the + operator
+@myjit
+def __add__(g0, g1):
+    # Unfortunately, tuple creation from list comprehension does not work in numba:
+    # see https://github.com/numba/numba/issues/2771
+    #
+    # result = tuple(g0[i] + g1[i] for i in range(9))
+    # return result
+    add(g0,g1)
 
 # multiply by scalar
 @myjit
