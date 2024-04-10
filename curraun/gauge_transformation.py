@@ -1,14 +1,28 @@
-# Defines the gauge transformation operator at a given time for every x
+import os
+# os.environ["MY_NUMBA_TARGET"] = "python"  # Pure Python version    # TODO: remove debug code
+# from curraun import su as su
+from curraun.numba_target import myjit
+
+import math
+import numpy as np
+
+import curraun.su as su
+
+# Constructs the plus links in temporal gauge over the x^+ axis
 @myjit
-def trans_operator(t, aeta, ux, uprev): #TODO: How can I automatize it for every x
-    buffer1 = su.mexp(1j*g*L/N*z* aeta[t, x, y, :]) * ux[t, x, y, :]
-    r = su.mul(buffer1, uprev[(t+x)//2])
-    
+def get_plus_links(ux, ae, z, g, a, N):
+    r = su.mul(su.mexp(su.mul_s(ae, 1j*g*a*(z-N//2))), ux)
     return r
 
-#Transforms the field at a given xplus
+# Defines the gauge operator for a given step given its value at the previous one
 @myjit
-def transform_link(u, v, t):
-    u_plus_LC = su.dagger(v[t+1, x+1, y, z]) * u[t, x, y] * v[t,x,y,z]
-    
-    return u_plus_LC
+def gauge_transformation_operator(ux, ae, v, z, g, a, N):
+    umin = su.mul(su.mexp(su.mul_s(ae, 1j*g*a*(z-N//2))), su.dagger(ux))
+    r = su.mul(umin, v)
+    return r
+
+# Defines the gauge operator for a given step given its value at the previous one
+@myjit
+def act_on_links(u, v1, v2):
+    r = su.mul(su.mul(su.dagger(v1), u), v2)
+    return r
