@@ -200,9 +200,9 @@ def mexp(a):
         n = sq(t)  # TODO: Is it possible to improve performance by checking this not so often?
         if (i > EXP_MIN_TERMS) and (math.fabs(n.real) < EXP_ACCURACY_SQUARED):
             break
-    else:
+        # else:
         # print("Exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
-        print("Exponential did not reach desired accuracy")  # TODO: remove debugging code
+        # print("Exponential did not reach desired accuracy")  # TODO: remove debugging code
     return res
 
 LOG_MIN_TERMS = -1 # minimum number of terms in Taylor series
