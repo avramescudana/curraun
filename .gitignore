@@ -114,6 +114,7 @@ venv.bak/
 *.pickle
 *.npz
 *.npy
+*.txt
 plots/
 results/
 
