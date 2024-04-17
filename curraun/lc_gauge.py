@@ -56,7 +56,9 @@ class LCGaugeTransf:
         self.d_vlc1.copy_to_host(self.vlc1)
 
     def initialize_vlc(self):
-        my_parallel_loop(init_vlc_kernel, self.s.n, self.vlc0)
+        n = self.s.n
+        # my_parallel_loop(init_vlc_kernel, n**2, self.vlc0)
+        my_parallel_loop(init_vlc_kernel, n**2, self.vlc1)
 
         # self.initialized = True
 
@@ -71,32 +73,47 @@ class LCGaugeTransf:
         if not self.initialized:
             self.init()
 
-        # tint = round(self.s.t / self.s.dt)
+        tint = round(self.s.t / self.s.dt)
+
+        # print('t=', self.s.t)
+        # print('dt=', self.s.dt)
+
         # if tint % self.dts == 0:
+        if self.s.t % self.s.dt == 0:
 
-        if self.t % self.dts == 0:
+            # print('tint=', tint)
+            # print('xplus=', xplus)
 
-            # if xplus > self.s.tint:
-            if xplus > self.t:
+            #TODO: Should be xplus > tint//self.dts, needs to be corrected
+            if xplus > tint:
+            # if xplus > self.t:
                 # Use self.s.t, self.s.n, self.s.d_u1, self.s.d_aeta1 from the Glasma simulation
                 # compute_vlc(self.s, self.d_vlc0, self.d_vlc1, xplus)
-                compute_vlc(self.d_vlc0, self.d_vlc1, xplus, self.s.t, self.s.n, self.s.d_u1, self.s.d_aeta1)
+                # compute_vlc(self.d_vlc0, self.d_vlc1, xplus, tint, self.s.n, self.s.d_u1, self.s.d_aeta1)
+                compute_vlc(self.d_vlc1, xplus, tint, self.s.n, self.s.d_u1, self.s.d_aeta1)
 
-            # elif xplus == (self.s.tint//self.s.dts) and xplus != 0:
-            elif xplus == (self.t//self.dts) and xplus != 0:
+                # swap variables
+                # self.d_vlc0, self.d_vlc1 = self.d_vlc1, self.d_vlc0 
+                # self.vlc0, self.vlc1 = self.vlc1, self.vlc0
+
+
+            elif xplus == tint and xplus != 0:
+            # elif xplus == (self.t//self.dts) and xplus != 0:
                 # Use self.s.t, self.s.n, self.s.d_u0, self.s.d_aeta0 from the Glasma simulation
                 # This doesn't need xplus as input, it is evaluated at xplus==t//DTS
                 # compute_uplus(self.s, self.d_up_temp)
-                compute_uplus(self.d_up_temp, self.s.t, self.s.n, self.s.d_u0, self.s.d_aeta0)
+                compute_uplus(self.d_up_temp, tint, self.s.n, self.s.d_u0, self.s.d_aeta0)
 
                 # act_vlc_uplus(self.s, self.d_up_lc, self.d_up_temp, self.d_vlc0, self.d_vlc1)
-                act_vlc_uplus(self.s.n, self.d_up_lc, self.d_up_temp, self.d_vlc0, self.d_vlc1)
+
+                # act_vlc_uplus(self.s.n, self.d_up_lc, self.d_up_temp, self.d_vlc0, self.d_vlc1)
 
                 # When xplus==(t//DTS), the xplus loop reached its end and vlc needs to be reinitialized to su.unit()
                 # self.initialized = False
 
-        # swap variables
-        self.d_vlc0 = self.d_vlc1
+                # the previous vlc0 becomes the current vlc1, for the next xplus step
+                # self.d_vlc0 = self.d_vlc1
+                # self.vlc0 = self.vlc1
 
         if use_cuda:
             self.copy_to_host()
@@ -106,8 +123,8 @@ class LCGaugeTransf:
     Initialize the LC gauge transformation as unity.
 """
 @myjit
-def init_vlc_kernel(zi, vlc0):
-    su.store(vlc0[zi], su.unit())
+def init_vlc_kernel(zi, vlc1):
+    su.store(vlc1[zi], su.unit())
 
 
 """
@@ -115,23 +132,21 @@ def init_vlc_kernel(zi, vlc0):
 """
 
 # def compute_vlc(s, vlc0, vlc1, xplus):
-def compute_vlc(vlc0, vlc1, xplus, t, n, u1, aeta1):
+def compute_vlc(vlc1, xplus, t, n, u1, aeta1):
     # t = s.t
     # n = s.n
     # u1 = s.d_u1
     # aeta1 = s.d_aeta1
 
-    my_parallel_loop(compute_vlc_kernel, n*n, n, t, u1, aeta1, vlc0, vlc1, xplus)  
+    my_parallel_loop(compute_vlc_kernel, n*n, n, t, u1, aeta1, vlc1, xplus)  
 
 @myjit
-def compute_vlc_kernel(zi, n, t, u1, aeta1, vlc0, vlc1, xplus):
+def compute_vlc_kernel(zi, n, t, u1, aeta1, vlc1, xplus):
     yz = l.get_point(zi, n)
     #TODO: Should be get_index() instead? Probably no but check to be sure.
     xy_latt = l.get_index_nm(xplus+xplus-t, yz[0], n)
     # xy_latt = l.get_index(xplus+xplus-t, yz[0], n)
-    print(xy_latt)
 
-    #TODO: These indices are not correct, it is because 2*xplus-t is not an integer! This can be fixed.
     ux_latt = u1[xy_latt, 0, :]
     aeta_latt = aeta1[xy_latt, :]
 
@@ -141,8 +156,9 @@ def compute_vlc_kernel(zi, n, t, u1, aeta1, vlc0, vlc1, xplus):
     ae_exp = su.mexp(aez)
     ux_dag = su.dagger(ux_latt)
     umin = su.mul(ae_exp, ux_dag)
-    res = su.mul(umin, vlc0[zi])
+    res = su.mul(umin, vlc1[zi])
     
+    # su.store(vlc1[zi], res)
     su.store(vlc1[zi], res)
 
 # Defines the gauge operator for a given step given its value at the previous one

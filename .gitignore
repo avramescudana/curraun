@@ -115,6 +115,7 @@ venv.bak/
 *.npz
 *.npy
 *.txt
+*.zip
 plots/
 results/
 
