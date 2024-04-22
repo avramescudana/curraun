@@ -144,6 +144,13 @@ def get_point(x, n):
     r0 = (x - r1) // n
     return r0, r1
 
+# compute grid point from index for a nxm lattice
+@myjit
+def get_point_nxm(x, n, m):
+    r1 = x % n
+    r0 = (x - r1) // m
+    return r0, r1
+
 # index shifting
 #@myjit
 #@njit(locals={'result' : nb.int64},
