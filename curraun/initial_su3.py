@@ -6,6 +6,8 @@ from math import sqrt
 from numba import cuda
 import numpy as np
 
+DEBUG = True
+
 """
     A module that solves the initial conditions for the longitudinal magnetic field for SU(3).
     
@@ -30,7 +32,8 @@ def init_kernel_2_su3_numba(xi, u0, u1, ua, ub):
         b3, check = solve_initial_numba(u_a, u_b)
 
         if check > ACCURACY_GOAL:
-            print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
+            if DEBUG:
+                print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
 
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
@@ -47,7 +50,8 @@ def init_kernel_2_su3_cuda(xi, u0, u1, ua, ub):
         b3, check = solve_initial_cuda(u_a, u_b)
 
         if check > ACCURACY_GOAL:
-            print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
+            if DEBUG:
+                print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
 
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
