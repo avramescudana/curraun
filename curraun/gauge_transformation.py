@@ -16,9 +16,9 @@ def get_plus_links(ux, ae, z, N):
     return r
 
 # Defines the gauge operator for a given step given its value at the previous one
-def gauge_transformation_operator(ux, ae, v, z, N):
+def gauge_transformation_operator(ux, ae, v, z, N, a, t):
 # def gauge_transformation_operator(ux, ae, v, z, N):
-    umin = su.mul(su.mexp(su.mul_s(ae, (z-N//2))), su.dagger(ux))
+    umin = su.mul(su.mexp(su.mul_s(ae, ((z-N//2)*a)/t**2)), su.dagger(ux))
     # umin = su.mul(su.mexp(su.mul_s(ae, z-N//2)), su.dagger(ux))
     r = su.mul(umin, v)
     return r
