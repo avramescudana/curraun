@@ -178,8 +178,6 @@ def compute_uplus_temp_kernel(yi, t, n, u0, up_temp):
     ty_latt = l.get_index_nm(t, yi, n)
 
     ux_latt = u0[ty_latt, 0, :]
-    #TODO: Check if this is correct, the dagger was missing in `Temporal loop transformation.ipynb` 
-    # but was there in `LC Coordinate Lattice.ipynb`
     ux_dag_latt = su.dagger(ux_latt)
     # aeta_latt = aeta0[ty_latt, :]
 
@@ -245,3 +243,25 @@ def act_vlc_uminus_kernel(yi, xplus, nplus, um_lc, um_temp, vlc1):
     buff2 = su.mul(buff1, vlc1[xplusy_latt])
     
     su.store(um_lc[yi], buff2)
+
+
+"""
+Carlos' functions for the z-independent gauge transformation
+CPU version only, for numerical cheks
+"""
+
+# Constructs the plus links in temporal gauge over the x^+ axis
+def get_plus_links(ux):
+    r = su.dagger(ux)
+    return r
+
+# Defines the gauge operator for a given step given its value at the previous one
+def gauge_transformation_operator(ux, v):
+    umin = su.dagger(ux)
+    r = su.mul(umin, v)
+    return r
+
+# Defines the gauge operator for a given step given its value at the previous one
+def act_on_links(u, v1, v2):
+    r = su.mul(su.mul(su.dagger(v1), u), v2)
+    return r
