@@ -69,6 +69,7 @@ class LCGaugeTransf:
             self.d_um_lc = cuda.to_device(self.um_lc)
         self.d_vlc0 = cuda.to_device(self.vlc0)
         self.d_vlc1 = cuda.to_device(self.vlc1)
+        
 
     def copy_to_host(self):
         self.d_up_temp.copy_to_host(self.up_temp)
