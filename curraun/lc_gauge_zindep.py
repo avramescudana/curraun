@@ -53,6 +53,7 @@ class LCGaugeTransf:
             self.d_um_lc = self.um_lc
         self.d_vlc0 = self.vlc0
         self.d_vlc1 = self.vlc1
+        
 
         # Move data to GPU
         if use_cuda:
