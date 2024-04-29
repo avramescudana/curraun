@@ -82,7 +82,6 @@ class LCGaugeTransf:
         n = self.s.n
         nplus = self.nplus
         my_parallel_loop(init_vlc_kernel, n*nplus, self.vlc0, self.vlc1)
-        # my_parallel_loop(init_vlc_kernel, n*nplus, self.vlc1)
 
     def init(self):
         if use_cuda:
@@ -97,10 +96,6 @@ class LCGaugeTransf:
         # Or equivalently if tint % self.dts == 0
         if self.s.t % self.s.dt == 0:
 
-            # the previous vlc0 becomes the current vlc1, for the next xplus time step
-            # self.d_vlc0 = self.d_vlc1
-            # self.vlc0 = self.vlc1
-
             compute_vlc(self.d_vlc0, self.d_vlc1, xplus, self.s.n, self.nplus, self.s.d_u1)
 
             compute_uplus_temp(self.d_up_temp, xplus, self.s.n, self.s.d_u0)
@@ -109,6 +104,9 @@ class LCGaugeTransf:
             if self.LCDEBUG:
                 compute_uminus_temp(self.d_um_temp, xplus, self.s.n, self.s.d_u0)
                 act_vlc_uminus(self.s.n, xplus, self.nplus, self.d_um_lc, self.d_um_temp, self.d_vlc1)
+
+            # the previous vlc0 becomes the current vlc1, for the next xplus time step
+            update_vlc(self.d_vlc0, self.d_vlc1, self.s.n, self.nplus)
 
         if use_cuda:
             self.copy_to_host()
@@ -121,6 +119,18 @@ class LCGaugeTransf:
 def init_vlc_kernel(yi, vlc0, vlc1):
     su.store(vlc0[yi], su.unit())
     su.store(vlc1[yi], su.unit())
+
+"""
+    The previous vlc0 becomes the current vlc1
+"""
+
+def update_vlc(vlc0, vlc1, n, nplus):
+    my_parallel_loop(update_vlc_kernel, n*nplus, vlc0, vlc1)  
+
+@myjit
+def update_vlc_kernel(yi, vlc0, vlc1):
+    su.store(vlc0[yi], vlc1[yi])
+
 
 """
     Computes the infinitesimal gauge transformation V_LC. 
@@ -141,14 +151,9 @@ def compute_vlc_kernel(yi, n, t, u1, vlc0, vlc1):
         ux_latt = u1[xy_latt, 0, :]
         ux_dag = su.dagger(ux_latt)
 
-        # aeta_latt = aeta1[xy_latt, :]
-        # aez = su.mul_s(aeta_latt, yz[1]-n//2)
-        # ae_exp = su.mexp(aez)
-        # umin = su.mul(ae_exp, ux_dag)
-        # res = su.mul(umin, vlc1[zi])
+        #TODO: Add here the aeta terms
 
         res = su.mul(ux_dag, vlc0[yi])
-        
         su.store(vlc1[yi], res)
 
 
@@ -165,11 +170,8 @@ def compute_uplus_temp_kernel(yi, t, n, u0, up_temp):
 
     ux_latt = u0[ty_latt, 0, :]
     ux_dag_latt = su.dagger(ux_latt)
-    # aeta_latt = aeta0[ty_latt, :]
-
-    # aez = su.mul_s(aeta_latt, yz[1]-n//2)
-    # ae_exp = su.mexp(aez)
-    # res = su.mul(ae_exp, ux_latt)
+    
+    #TODO: Add here the aeta terms
     
     su.store(up_temp[yi], ux_dag_latt)
 
@@ -187,8 +189,10 @@ def act_vlc_uplus_kernel(yi, xplus, n, up_lc, up_temp, vlc0, vlc1):
 
     buff0 = su.dagger(vlc1[xplusy_latt])
     buff1 = su.mul(buff0, up_temp[yi])
-    buff2 = su.mul(buff1, vlc0[xplusy_latt])
     
+    xplusy_prev = l.get_index_nm(xplus-1, yi, n)
+    buff2 = su.mul(buff1, vlc0[xplusy_prev])
+
     su.store(up_lc[yi], buff2)
 
 
