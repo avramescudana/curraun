@@ -100,9 +100,9 @@ begin
 	# It dictates how much momentum kicks particles get
 	# qfund < fund < adj
 	
-	# representation = "qfund"
+	representation = "qfund"
 	# representation = "fund"
-	representation = "adj"
+	# representation = "adj"
 	# representation = "test"
 end
 
@@ -531,13 +531,13 @@ begin
 		xlims!(ax_raa_fonll, 0, 10)
 	end
 	
-	if representation=="qfund"
-		ylims!(ax_raa_fonll, 0.8, 1.2)
-		text!(ax_raa_fonll, 0.2, 1.15, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
-	else
+	# if representation=="qfund"
+	# 	ylims!(ax_raa_fonll, 0.8, 1.2)
+	# 	text!(ax_raa_fonll, 0.2, 1.15, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
+	# else
 		ylims!(ax_raa_fonll, 0.2, 1.8)
 		text!(ax_raa_fonll, 0.2, 1.65, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
-	end
+	# end
 
 	save("plots/clean_raa_fonll_comp_"*gauge_group*"_"*representation*"_kdes.png", fig_raa_fonll, px_per_unit = 5.0)
 

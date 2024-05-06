@@ -6,14 +6,124 @@ using InteractiveUtils
 
 # ╔═╡ cc1b04bf-908e-4928-a8ee-4619e2fc4843
 begin
+	# Analytical functions
 	using SpecialFunctions
 	using NumericalIntegration
 
+	# FONLL spectra
+	using DataFrames
+	using DelimitedFiles
+	# Interpolate FONLL spectra 
+	using DataInterpolations
+	# Use SciPy to fit log
+	using PyCall
+	# Use Julia for normal fit
+	using LsqFit
+
+	# Plotting
 	using CairoMakie
 end
 
 # ╔═╡ 76121010-bc50-11ee-0800-91c64a9d6495
 md"### Import packages"
+
+# ╔═╡ 24fb37e9-03a4-4ba0-b40b-756e44893374
+md"### FONLL parameters"
+
+# ╔═╡ e174e643-dc24-4496-9bb6-e4145cca85e9
+begin
+	energy = 5500
+	pdf_type = "cteq"
+	quark = "charm"
+	
+	data_fonll = "dsdpt"
+	# fonll_type = "interp"
+	fonll_type = "fit"
+	fit_type = "log"
+	# fit_type = "normal"
+end
+
+# ╔═╡ 74cfc6cc-5f73-448c-9990-1fd0e8503ed6
+md"##### Read FONLL data from files"
+
+# ╔═╡ 6a016b92-9654-4cd0-b36c-dda09c5c89d4
+current_path = pwd()
+
+# ╔═╡ c2d0f00b-4ad8-4140-b99e-9042779573e2
+begin
+	# Read FONLL spectrum + store in DataFrame
+	function df(quark, energy, pdf, data)
+		# filename = current_path*"/fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*"_more_points.txt"
+		filename = current_path*"/fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".txt"
+		dataᵢ, headerᵢ = readdlm(filename, header=true, skipstart=13)
+		dataⱼ = readdlm(filename, header=false, skipstart=14)
+		df = DataFrame(dataⱼ, vec(headerᵢ)[2:length(headerᵢ)])
+		return df
+	end
+	
+	dfe = df(quark, energy, pdf_type, data_fonll)
+	
+	xdata = dfe[!, "pt"]
+	ydata = dfe[!, "central"]
+end
+
+# ╔═╡ 5c3f298d-ae66-4081-8f3e-c2ebc09d562a
+md"##### Interpolate FONLL spectra"
+
+# ╔═╡ c3dbc679-3fc6-4ebc-9e21-15ac19c4a45b
+begin
+	# Interpolate normalized FONLL pT-spectrum
+	norm = integrate(xdata, ydata)
+	ydata_norm = ydata./norm
+	interp_map = CubicSpline(ydata_norm, xdata)
+end
+
+# ╔═╡ b8a477a9-9c51-4354-8d51-6bd02a8ec6c3
+md"##### Fit FONLL spectra"
+
+# ╔═╡ 3800162d-558e-4a82-abb9-87e258a55c0c
+begin
+	@. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
+	@. powlaw_complex(x,p) = real(Complex(p[1]*x/(1+p[4]*Complex(x)^p[2])^p[3]))
+	# @. logpowlaw(x,p) = real(log10(Complex(p[1]*x/(1+p[4]*Complex(x)^p[2])^p[3])))
+	p₀_norm = [2e8, 2, 2, 0.1]
+	# p₀_log = [1e8, 3, 3, 0.1]
+	p₀_log = [2.5e8, 2.4, 2.3, 0.06]
+
+	popt = Dict()
+	for fit_type in ["normal", "log"]
+		if fit_type=="normal"
+			fit = curve_fit(powlaw, xdata, ydata, p₀_norm)
+			popt[fit_type] = fit.param
+		elseif fit_type=="log"
+			# fit[fit_type] = curve_fit(logpowlaw, xdata[2:length(xdata)], log10.(ydata[2:length(ydata)]), p₀_log)
+			so = pyimport("scipy.optimize")
+			fit = pyeval("""lambda fit: lambda a, b, c, d, e: fit(a, b, c, d, e)""")
+			popt[fit_type], pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. real(log10(Complex(x₀*pₜ/(1.0+x₃*Complex(pₜ)^x₁)^x₂)))), xdata[2:length(xdata)], log10.(ydata[2:length(ydata)]), p₀_log)
+		end
+
+		# popt[fit_type] = fit[fit_type].param
+	end
+end
+
+# ╔═╡ 8269daca-9684-48e5-a920-7cd259579206
+begin
+	nbins_hist = 100
+	ptmax = 10
+	pt_bins = range(0, ptmax, nbins_hist)
+end
+
+# ╔═╡ 055ff9f4-0106-44a4-9259-1b8077cde5f3
+begin
+	fit = powlaw(pt_bins, popt[fit_type])
+	fonll_fit = fit./integrate(pt_bins, fit)
+	
+	fonll_interp = interp_map(pt_bins)
+end
+
+# ╔═╡ f94ff1a6-e035-404a-85b9-a6f443522099
+md"---
+### Analytical functions"
 
 # ╔═╡ ff1cb707-f9bc-4a9f-a200-43d67305acb2
 function N₀(p, x₀, x₁, x₂, x₃)
@@ -37,6 +147,41 @@ function Nτ_fixedq_qdq_fonll(p, q, σ, x₀, x₁, x₂, x₃)
 	return Nτ_fixedq(p, q, σ) * q * N₀(q, x₀, x₁, x₂, x₃)
 end
 
+# ╔═╡ 8c172d80-b9d3-4f51-a93e-d7ac8e2895d8
+md"---
+#### FONLL data"
+
+# ╔═╡ aac5666b-ecfb-42d0-9004-1b8dca7f2496
+function N₀_fit(p, fit_type)
+	return powlaw(p, popt[fit_type])/p
+	# return powlaw(p, [x₀, x₁, x₂, x₃])
+end
+
+# ╔═╡ de52022a-d624-465c-b9c7-238115770754
+integrate(range(0.01, 30, 100), N₀_fit.(range(0.01, 30, 100), fit_type))
+
+# ╔═╡ 98c83a43-c0d6-4bc1-97ff-12766b2a389b
+function N₀_interp(p)
+	return interp_map(p)/p
+end
+
+# ╔═╡ 4f51b2f7-b388-48ce-97d0-1bcf39b952a3
+integrate(range(0.01, 10, 100), N₀_interp.(range(0.01, 10, 100)))
+
+# ╔═╡ 843417d7-0987-48bd-a14f-ef1860eb847c
+function Nτ_fixedq_qdq_fonll_fit(p, q, σ, fit_type)
+	return Nτ_fixedq(p, q, σ) * q * N₀_fit(q, fit_type)
+end
+
+# ╔═╡ 25d3da37-e189-4d30-b65e-afca159973e3
+function Nτ_fixedq_qdq_fonll_interp(p, q, σ)
+	return Nτ_fixedq(p, q, σ) * q * N₀_interp(q)
+end
+
+# ╔═╡ 0b377594-3f3c-41c9-9194-5ca87edc4718
+md"---
+### Results"
+
 # ╔═╡ 61fd3665-faae-4f93-9a82-b5aea12d98d5
 begin
 	q_range = range(0, 10, 100)
@@ -44,70 +189,213 @@ begin
 end
 
 # ╔═╡ 7fc7e1e1-ab92-4be1-973b-d3cac28ecb0d
-function Nτ(p, σ)
+function Nτ(p, σ, pₘₐₓ)
 	# q_range = range(p-δp, p+δp, 100)
-	q_range = range(0, 40, 100)
+	q_range = range(0, pₘₐₓ+3σ, 100)
+	# q_range = range(0, 12, 100)
 	Nτ_fixedq_qdq_num = Nτ_fixedq_qdq.(p, q_range, σ)
 	return integrate(q_range, Nτ_fixedq_qdq_num)
 end
 
 # ╔═╡ db66ae65-d377-4f13-b4aa-4ce29f875aa6
-function Nτ_fonll(p, σ, x₀, x₁, x₂, x₃)
+function Nτ_fonll(p, σ, x₀, x₁, x₂, x₃, pₘₐₓ)
 	# q_range = range(p-δp, p+δp, 100)
-	q_range = range(0, 40, 100)
+	q_range = range(0, pₘₐₓ+3σ, 100)
+	# q_range = range(0, 12, 100)
 	Nτ_fixedq_qdq_num = Nτ_fixedq_qdq_fonll.(p, q_range, σ, x₀, x₁, x₂, x₃)
 	return integrate(q_range, Nτ_fixedq_qdq_num)
 end
 
 # ╔═╡ fcb9397a-4387-47fd-aff0-0242242cc63a
-Nτ(1, 1)
+Nτ(1, 1, 10)
+
+# ╔═╡ 0d5fadc0-d4de-4e65-b17b-3aa9a313c42d
+besseli(0,700)
 
 # ╔═╡ 71158bee-eed4-416e-83a8-513b0bf66ce8
 begin
-	σ_test = 1
+	pₘₐₓ = 10
+	p_range = range(0, pₘₐₓ, 100)
+	
 	# x_fonll = [20.284, 1.951, 3.137, 0.07]
 	x₀, x₁, x₂, x₃ = 20.284, 1.951, 3.137, 0.07
 	
-	p_range = range(0, 15, 100)
-	Nτ_p = Nτ.(p_range, σ_test)
-	Nτ_p_norm = Nτ_p./integrate(p_range, Nτ_p)
+	# σ_test = 0.5
 
-	Nτ_p_fonll = Nτ_fonll.(p_range, σ_test, x₀, x₁, x₂, x₃)
-	Nτ_p_fonll_norm = Nτ_p_fonll./integrate(p_range, Nτ_p_fonll)
+	σs = [0.5, 1, 1.5, 2]
+	# σs = [1]
+	RAAs = Dict()
+	
+	for σ in σs
+		correct_values = false
+		besseli_max = 700
+		if (pₘₐₓ*(pₘₐₓ+2σ)/σ^2) > besseli_max
+			print("Pick a smaller pₘₐₓ or larger σ")
+			print("Current values make `besseli` explode")
+		else
+			correct_values = true
+		end
+		
+		if correct_values
+			Nτ_p = Nτ.(p_range, σ, pₘₐₓ)
+			Nτ_p_norm = Nτ_p./integrate(p_range, Nτ_p)
+		
+			Nτ_p_fonll = Nτ_fonll.(p_range, σ, x₀, x₁, x₂, x₃, pₘₐₓ)
+			Nτ_p_fonll_norm = Nτ_p_fonll./integrate(p_range, Nτ_p_fonll)
+		
+			N₀_fonll = N₀.(p_range, x₀, x₁, x₂, x₃)
+			N₀_fonll_norm = N₀_fonll./integrate(p_range, N₀_fonll)
+		
+			RAA_fonll = Nτ_p_fonll_norm./N₀_fonll_norm
 
-	N₀_fonll = N₀.(p_range, x₀, x₁, x₂, x₃)
-	N₀_fonll_norm = N₀_fonll./integrate(p_range, N₀_fonll)
-
-	RAA_fonll = Nτ_p_fonll_norm./N₀_fonll_norm
+			RAAs[string(σ)] = RAA_fonll
+		end
+	end
 end
 
+# ╔═╡ 0f46afe3-a424-423d-ab7c-1bc40c0adfc5
+integrate(range(0, 30, 100), N₀.(range(0, 30, 100), x₀, x₁, x₂, x₃))
+
 # ╔═╡ 6a6660b8-d7ec-4be6-8f99-dd7fb7c6b07f
-Nτ_fonll(1, 1, x₀, x₁, x₂, x₃)
+Nτ_fonll(1, 1, x₀, x₁, x₂, x₃, 10)
+
+# ╔═╡ faa25f7f-9b1c-4048-88b3-9928647df823
+RAAs
 
 # ╔═╡ afcb0db9-8ca7-4bff-800c-279437829af9
 begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	
 	# Create Figure and Axis
-	fig = Figure()
-	ax = Axis(fig[1, 1])
+	fig = Figure(size = (350, 300))
+	ax = Axis(fig[1, 1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 18, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false)
 
 	# lines!(ax, p_range, Nτ_p_norm, color=:red, linewidth=1.5)
 
-	lines!(ax, p_range, RAA_fonll, color=:blue, linewidth=1.5)
-	ylims!(ax, 0, 1.6)
+	colors = Makie.wong_colors()
+
+	for (iσ, σ) in enumerate(σs)
+		lines!(ax, p_range, RAAs[string(σ)], color=colors[iσ], linewidth=1.5, label=string(σ))
+	end
+
+	lines!(ax, p_range, ones(length(p_range)), color=(:gray, 0.7), linewidth=1.5)
+	xlims!(ax, 0, 10)
+
+	axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
+
+	# save("plots/analytical_raa_fixed_sigma_" * fonll_type * "_fonll.png", fig, px_per_unit = 5.0)
 	
 	fig
+end
+
+# ╔═╡ a69def89-7553-4a98-9aca-a1e0c3b04b55
+md"---
+### Results FONLL data"
+
+# ╔═╡ 5ac6a68b-b135-479b-af35-b258110a9fc5
+pₘᵢₙ = 0.000001
+
+# ╔═╡ 007bb65e-ed73-42fe-92a5-4568e32af75a
+function Nτ_fonll_fit(p, σ, fit_type, pₘₐₓ)
+	q_range = range(pₘᵢₙ, pₘₐₓ+3σ, 100)
+	Nτ_fixedq_qdq_num = Nτ_fixedq_qdq_fonll_fit.(p, q_range, σ, fit_type)
+	return integrate(q_range, Nτ_fixedq_qdq_num)
+end
+
+# ╔═╡ 6eddd3b1-7764-4846-8109-3e821683df9d
+function Nτ_fonll_interp(p, σ, pₘₐₓ)
+	q_range = range(pₘᵢₙ, pₘₐₓ+3σ, 100)
+	Nτ_fixedq_qdq_num = Nτ_fixedq_qdq_fonll_interp.(p, q_range, σ)
+	return integrate(q_range, Nτ_fixedq_qdq_num)
+end
+
+# ╔═╡ 26833302-87ea-4c87-9f3f-aa15c0e8bea8
+Nτ_fonll_interp(1, 1, 10)
+
+# ╔═╡ f1119712-06cf-4af2-85f3-bfe545cb20e0
+Nτ_fonll_fit(1, 1, fit_type, 10)
+
+# ╔═╡ 33ae48a0-2a79-4063-9895-1e0155787042
+begin
+	RAAs_fit = Dict()
+	RAAs_interp = Dict()
+
+	p_range_fit = range(pₘᵢₙ, pₘₐₓ, 100)
+	
+	for σ in σs
+		Nτ_p_fonll_fit = Nτ_fonll_fit.(p_range_fit, σ, fit_type, pₘₐₓ)
+		Nτ_p_fonll_fit_norm = Nτ_p_fonll_fit./integrate(p_range_fit, Nτ_p_fonll_fit)
+	
+		N₀_fonll_fit = N₀_fit.(p_range_fit, fit_type)
+		N₀_fonll_fit_norm = N₀_fonll_fit./integrate(p_range_fit, N₀_fonll_fit)
+	
+		RAA_fonll_fit = Nτ_p_fonll_fit_norm./N₀_fonll_fit_norm
+		RAAs_fit[string(σ)] = RAA_fonll_fit
+
+		Nτ_p_fonll_interp = Nτ_fonll_interp.(p_range_fit, σ, pₘₐₓ)
+		Nτ_p_fonll_interp_norm = Nτ_p_fonll_interp./integrate(p_range_fit, Nτ_p_fonll_interp)
+	
+		N₀_fonll_interp = N₀_interp.(p_range_fit)
+		N₀_fonll_interp_norm = N₀_fonll_interp./integrate(p_range_fit, N₀_fonll_interp)
+	
+		RAA_fonll_interp = Nτ_p_fonll_interp_norm./N₀_fonll_interp_norm
+		RAAs_interp[string(σ)] = RAA_fonll_interp
+		
+	end
+end
+
+# ╔═╡ 766129be-2522-40ab-80d5-579ec1f2e05a
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	
+	# Create Figure and Axis
+	fig_interp = Figure(size = (350, 300))
+	ax_interp = Axis(fig_interp[1, 1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 18, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xgridvisible = false, ygridvisible = false)
+
+	for (iσ, σ) in enumerate(σs)
+		lines!(ax_interp, p_range_fit, RAAs_fit[string(σ)], color=colors[iσ], linewidth=1.5, linestyle=:dash)
+		lines!(ax_interp, p_range_fit, RAAs_fit[string(σ)], color=(colors[iσ], 0.5), linewidth=1.5)
+
+		lines!(ax_interp, p_range, RAAs_interp[string(σ)], color=colors[iσ], linewidth=1.5, label=string(σ))
+	end
+
+	lines!(ax_interp, p_range_fit, ones(length(p_range)), color=(:gray, 0.7), linewidth=1.5)
+	xlims!(ax_interp, 0, 10)
+	ylims!(ax_interp, 0, 4)
+
+	axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
+
+	raa_fit = [LineElement(color = color=colors[1], linestyle = :dash, linewidth=1.5),
+          LineElement(color = color=(colors[1], 0.5), linewidth=1.5)]
+
+	raa_interp = [LineElement(color = color=colors[1], linewidth=1.5)]
+
+	axislegend(ax_interp, [raa_fit, raa_interp], [L"\mathrm{fit}", L"\mathrm{interp}"], position = :rb, titlesize = 16, labelsize=14, orientation = :horizontal)
+
+	save("plots/analytical_raa_fixed_sigma_fit_vs_interp_fonll.png", fig_interp, px_per_unit = 5.0)
+	
+	fig_interp
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
 NumericalIntegration = "e7bfaba1-d571-5449-8927-abc22e82249b"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [compat]
 CairoMakie = "~0.11.6"
+DataFrames = "~1.6.1"
+DataInterpolations = "~4.6.0"
+LsqFit = "~0.15.0"
 NumericalIntegration = "~0.3.3"
+PyCall = "~1.96.4"
 SpecialFunctions = "~2.3.1"
 """
 
@@ -117,7 +405,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "14e5d5cb1f43229f98b65c0c7dca0becd50103f0"
+project_hash = "d9e972b33a94858b46e3958aabb36110ad4cbc62"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -295,6 +583,12 @@ deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 version = "0.5.2+0"
 
+[[deps.Conda]]
+deps = ["Downloads", "JSON", "VersionParsing"]
+git-tree-sha1 = "51cab8e982c5b598eea9c8ceaced4b58d9dd37c9"
+uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
+version = "1.10.0"
+
 [[deps.ConstructionBase]]
 deps = ["LinearAlgebra"]
 git-tree-sha1 = "c53fc348ca4d40d7b371e71fd52251839080cbc9"
@@ -306,10 +600,27 @@ git-tree-sha1 = "d05d9e7b7aedff4e5b51a029dced05cfb6125781"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.6.2"
 
+[[deps.Crayons]]
+git-tree-sha1 = "249fe38abf76d48563e2f4556bebd215aa317e15"
+uuid = "a8cc5b0e-0ffa-5ad4-8c14-923d3ee1735f"
+version = "4.1.1"
+
 [[deps.DataAPI]]
 git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
 version = "1.16.0"
+
+[[deps.DataFrames]]
+deps = ["Compat", "DataAPI", "DataStructures", "Future", "InlineStrings", "InvertedIndices", "IteratorInterfaceExtensions", "LinearAlgebra", "Markdown", "Missings", "PooledArrays", "PrecompileTools", "PrettyTables", "Printf", "REPL", "Random", "Reexport", "SentinelArrays", "SortingAlgorithms", "Statistics", "TableTraits", "Tables", "Unicode"]
+git-tree-sha1 = "04c738083f29f86e62c8afc341f0967d8717bdb8"
+uuid = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+version = "1.6.1"
+
+[[deps.DataInterpolations]]
+deps = ["LinearAlgebra", "PrettyTables", "RecipesBase", "Reexport", "Requires"]
+git-tree-sha1 = "99f979d5e9b67c2aeee701c3683037ac8d75bdd6"
+uuid = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
+version = "4.6.0"
 
 [[deps.DataStructures]]
 deps = ["Compat", "InteractiveUtils", "OrderedCollections"]
@@ -331,6 +642,10 @@ deps = ["DataStructures", "EnumX", "ExactPredicates", "Random", "SimpleGraphs"]
 git-tree-sha1 = "26eb8e2331b55735c3d305d949aabd7363f07ba7"
 uuid = "927a84f5-c5f4-47a5-9785-b46e178433df"
 version = "0.8.11"
+
+[[deps.DelimitedFiles]]
+deps = ["Mmap"]
+uuid = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 
 [[deps.DensityInterface]]
 deps = ["InverseFunctions", "Test"]
@@ -630,6 +945,12 @@ git-tree-sha1 = "ea8031dea4aff6bd41f1df8f2fdfb25b33626381"
 uuid = "d25df0c9-e2be-5dd7-82c8-3ad0b3e990b9"
 version = "0.1.4"
 
+[[deps.InlineStrings]]
+deps = ["Parsers"]
+git-tree-sha1 = "9cc2baf75c6d09f9da536ddf58eb2f29dedaf461"
+uuid = "842dd82b-1e85-43dc-bf29-5d0ee9dffc48"
+version = "1.4.0"
+
 [[deps.IntegerMathUtils]]
 git-tree-sha1 = "b8ffb903da9f7b8cf695a8bead8e01814aa24b30"
 uuid = "18e54dd8-cb9d-406c-a71d-865a43cbb235"
@@ -668,6 +989,11 @@ deps = ["Test"]
 git-tree-sha1 = "68772f49f54b479fa88ace904f6127f0a3bb2e46"
 uuid = "3587e190-3f89-42d0-90ee-14403ec27112"
 version = "0.1.12"
+
+[[deps.InvertedIndices]]
+git-tree-sha1 = "0dc7b50b8d436461be01300fd8cd45aa0274b038"
+uuid = "41ab1584-1d38-5bbf-9106-f11c6c58b48f"
+version = "1.3.0"
 
 [[deps.IrrationalConstants]]
 git-tree-sha1 = "630b497eafcc20001bba38a4651b327dcfc491d2"
@@ -840,6 +1166,12 @@ version = "0.3.26"
 
 [[deps.Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[deps.LsqFit]]
+deps = ["Distributions", "ForwardDiff", "LinearAlgebra", "NLSolversBase", "Printf", "StatsAPI"]
+git-tree-sha1 = "40acc20cfb253cf061c1a2a2ea28de85235eeee1"
+uuid = "2fda8390-95c7-5789-9bda-21331edee243"
+version = "0.15.0"
 
 [[deps.MKL_jll]]
 deps = ["Artifacts", "IntelOpenMP_jll", "JLLWrappers", "LazyArtifacts", "Libdl"]
@@ -1103,6 +1435,12 @@ git-tree-sha1 = "a9c7a523d5ed375be3983db190f6a5874ae9286d"
 uuid = "f27b6e38-b328-58d1-80ce-0feddd5e7a45"
 version = "4.0.6"
 
+[[deps.PooledArrays]]
+deps = ["DataAPI", "Future"]
+git-tree-sha1 = "36d8b4b899628fb92c2749eb488d884a926614d3"
+uuid = "2dfb63ee-cc39-5dd5-95bd-886bf059d720"
+version = "1.4.3"
+
 [[deps.PositiveFactorizations]]
 deps = ["LinearAlgebra"]
 git-tree-sha1 = "17275485f373e6673f7e7f97051f703ed5b15b20"
@@ -1121,6 +1459,12 @@ git-tree-sha1 = "00805cd429dcb4870060ff49ef443486c262e38e"
 uuid = "21216c6a-2e73-6563-6e65-726566657250"
 version = "1.4.1"
 
+[[deps.PrettyTables]]
+deps = ["Crayons", "LaTeXStrings", "Markdown", "PrecompileTools", "Printf", "Reexport", "StringManipulation", "Tables"]
+git-tree-sha1 = "88b895d13d53b5577fd53379d913b9ab9ac82660"
+uuid = "08abe8d2-0d0c-5749-adfa-8a2ac140af0d"
+version = "2.3.1"
+
 [[deps.Primes]]
 deps = ["IntegerMathUtils"]
 git-tree-sha1 = "1d05623b5952aed1307bf8b43bec8b8d1ef94b6e"
@@ -1136,6 +1480,12 @@ deps = ["Distributed", "Printf"]
 git-tree-sha1 = "00099623ffee15972c16111bcf84c58a0051257c"
 uuid = "92933f4c-e287-5a05-a399-4b506db050ca"
 version = "1.9.0"
+
+[[deps.PyCall]]
+deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
+git-tree-sha1 = "9816a3826b0ebf49ab4926e2b18842ad8b5c8f04"
+uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+version = "1.96.4"
 
 [[deps.QOI]]
 deps = ["ColorTypes", "FileIO", "FixedPointNumbers"]
@@ -1223,6 +1573,12 @@ deps = ["Dates"]
 git-tree-sha1 = "3bac05bc7e74a75fd9cba4295cde4045d9fe2386"
 uuid = "6c6a2e73-6563-6170-7368-637461726353"
 version = "1.2.1"
+
+[[deps.SentinelArrays]]
+deps = ["Dates", "Random"]
+git-tree-sha1 = "0e7508ff27ba32f26cd459474ca2ede1bc10991f"
+uuid = "91c51154-3ec4-41a3-a24f-3f23e20d615c"
+version = "1.4.1"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
@@ -1360,6 +1716,12 @@ git-tree-sha1 = "f625d686d5a88bcd2b15cd81f18f98186fdc0c9a"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "1.3.0"
 
+[[deps.StringManipulation]]
+deps = ["PrecompileTools"]
+git-tree-sha1 = "a04cabe79c5f01f4d723cc6704070ada0b9d46d5"
+uuid = "892a3eda-7b42-436c-8928-eab12a02cf0e"
+version = "0.3.4"
+
 [[deps.StructArrays]]
 deps = ["Adapt", "ConstructionBase", "DataAPI", "GPUArraysCore", "StaticArraysCore", "Tables"]
 git-tree-sha1 = "1b0b1205a56dc288b71b1961d48e351520702e24"
@@ -1441,6 +1803,11 @@ deps = ["REPL"]
 git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
+
+[[deps.VersionParsing]]
+git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
+uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
+version = "1.3.0"
 
 [[deps.WoodburyMatrices]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -1586,16 +1953,47 @@ version = "3.5.0+0"
 # ╔═╡ Cell order:
 # ╠═76121010-bc50-11ee-0800-91c64a9d6495
 # ╠═cc1b04bf-908e-4928-a8ee-4619e2fc4843
+# ╠═24fb37e9-03a4-4ba0-b40b-756e44893374
+# ╠═e174e643-dc24-4496-9bb6-e4145cca85e9
+# ╠═74cfc6cc-5f73-448c-9990-1fd0e8503ed6
+# ╠═6a016b92-9654-4cd0-b36c-dda09c5c89d4
+# ╠═c2d0f00b-4ad8-4140-b99e-9042779573e2
+# ╠═5c3f298d-ae66-4081-8f3e-c2ebc09d562a
+# ╠═c3dbc679-3fc6-4ebc-9e21-15ac19c4a45b
+# ╠═b8a477a9-9c51-4354-8d51-6bd02a8ec6c3
+# ╠═3800162d-558e-4a82-abb9-87e258a55c0c
+# ╠═8269daca-9684-48e5-a920-7cd259579206
+# ╠═055ff9f4-0106-44a4-9259-1b8077cde5f3
+# ╠═f94ff1a6-e035-404a-85b9-a6f443522099
 # ╠═ff1cb707-f9bc-4a9f-a200-43d67305acb2
+# ╠═0f46afe3-a424-423d-ab7c-1bc40c0adfc5
 # ╠═aa8ab38b-ad62-43cc-ba22-b37a3f580a96
 # ╠═fc3c62e5-384d-4e4a-91d1-abc388ce544d
 # ╠═d7938712-fc2e-4708-b50e-b53d36a7f787
+# ╠═8c172d80-b9d3-4f51-a93e-d7ac8e2895d8
+# ╠═aac5666b-ecfb-42d0-9004-1b8dca7f2496
+# ╠═de52022a-d624-465c-b9c7-238115770754
+# ╠═98c83a43-c0d6-4bc1-97ff-12766b2a389b
+# ╠═4f51b2f7-b388-48ce-97d0-1bcf39b952a3
+# ╠═843417d7-0987-48bd-a14f-ef1860eb847c
+# ╠═25d3da37-e189-4d30-b65e-afca159973e3
+# ╠═0b377594-3f3c-41c9-9194-5ca87edc4718
 # ╠═61fd3665-faae-4f93-9a82-b5aea12d98d5
 # ╠═7fc7e1e1-ab92-4be1-973b-d3cac28ecb0d
 # ╠═db66ae65-d377-4f13-b4aa-4ce29f875aa6
 # ╠═fcb9397a-4387-47fd-aff0-0242242cc63a
 # ╠═6a6660b8-d7ec-4be6-8f99-dd7fb7c6b07f
+# ╠═0d5fadc0-d4de-4e65-b17b-3aa9a313c42d
 # ╠═71158bee-eed4-416e-83a8-513b0bf66ce8
+# ╠═faa25f7f-9b1c-4048-88b3-9928647df823
 # ╠═afcb0db9-8ca7-4bff-800c-279437829af9
+# ╠═a69def89-7553-4a98-9aca-a1e0c3b04b55
+# ╠═5ac6a68b-b135-479b-af35-b258110a9fc5
+# ╠═007bb65e-ed73-42fe-92a5-4568e32af75a
+# ╠═6eddd3b1-7764-4846-8109-3e821683df9d
+# ╠═26833302-87ea-4c87-9f3f-aa15c0e8bea8
+# ╠═f1119712-06cf-4af2-85f3-bfe545cb20e0
+# ╠═33ae48a0-2a79-4063-9895-1e0155787042
+# ╠═766129be-2522-40ab-80d5-579ec1f2e05a
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

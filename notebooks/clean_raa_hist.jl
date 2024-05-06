@@ -33,9 +33,6 @@ end
 # ╔═╡ d2006490-dace-4302-9f32-4b52cab58f2d
 md"### Import packages"
 
-# ╔═╡ 9024c3f6-e909-4bd7-8b2b-a5e5452a30bd
-println(PyCall.python)
-
 # ╔═╡ a4ccd245-b470-4941-8cce-449b51ef2132
 begin
 	energy = 5500
@@ -518,6 +515,9 @@ end
 
 # 	fig_pTipTf
 # end
+
+# ╔═╡ 9024c3f6-e909-4bd7-8b2b-a5e5452a30bd
+println(PyCall.python)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -2172,5 +2172,6 @@ version = "3.5.0+0"
 # ╠═0ad998e8-e635-4594-8bb9-bd8134b70da6
 # ╠═2bbc0b28-eac0-4a2d-847e-a21c74566d91
 # ╠═2d2d45bc-b467-41f8-9de3-76b98b4d8015
+# ╠═9024c3f6-e909-4bd7-8b2b-a5e5452a30bd
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
