@@ -10,58 +10,53 @@ if use_cuda:
 """
 
 class LCGaugeTransf:
-    def __init__(self, s):
+    def __init__(self, s, nplus):
         self.s = s
         self.n = s.n
         self.t = s.t
         self.dts = round(1.0 / s.dt)
+        self.nplus = nplus
 
-        # The arrays store the (y,z) dependence in n ** 2 lattice points
+        # We create U_+ before the gauge transformation
+        self.up_temp = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
-        # U_+ gauge before the gauge transformation, in the temporal gauge
-        self.up_temp = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-
-        # U_+ gauge after the gauge transformation, in the LC gauge
-        self.up_lc = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        # We create U_+ after the gauge transformation
+        self.up_lc = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         
-        # LC gauge transformation operator at tau_n
-        self.vlc0 = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        # We create the LC gauge transformation operator at tau_n
+        self.vlc0 = np.zeros((self.n**2 * nplus, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         # my_parallel_loop(init_vlc_kernel, self.n ** 2, self.vlc0)
 
-        # LC gauge transformation operator at tau_{n+1}
-        self.vlc1 = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        # We create the LC gauge transformation operator at tau_{n+1}
+        self.vlc1 = np.zeros((self.n**2 * nplus, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
-        # Memory on the CUDA device:
+        # We create the pointers to the GPU
         self.d_up_temp = self.up_temp
         self.d_up_lc = self.up_lc
         self.d_vlc0 = self.vlc0
         self.d_vlc1 = self.vlc1
 
-        # Move data to GPU
-        if use_cuda:
-            self.copy_to_device()
-
         self.initialized = False
 
+    # Copies the CPU objects to the GPU
     def copy_to_device(self):
         self.d_up_temp = cuda.to_device(self.up_temp)
         self.d_up_lc = cuda.to_device(self.up_lc)
         self.d_vlc0 = cuda.to_device(self.vlc0)
         self.d_vlc1 = cuda.to_device(self.vlc1)
 
+    # Copies back the transformed field to the CPU
     def copy_to_host(self):
-        self.d_up_temp.copy_to_host(self.up_temp)
         self.d_up_lc.copy_to_host(self.up_lc)
-        self.d_vlc0.copy_to_host(self.vlc0)
-        self.d_vlc1.copy_to_host(self.vlc1)
 
+    # We initialize the gauge transformation operator as unity
+    # TODO: Initialize using the fields at tau=1
     def initialize_vlc(self):
         n = self.s.n
-        # my_parallel_loop(init_vlc_kernel, n**2, self.vlc0)
-        my_parallel_loop(init_vlc_kernel, n**2, self.vlc1)
+        nplus = self.nplus
+        my_parallel_loop(init_vlc_kernel, n**2 * nplus, self.vlc0, self.vlc1)
 
-        # self.initialized = True
-
+    # We copy the fields to the GPU
     def init(self):
         if use_cuda:
             self.copy_to_device()
@@ -123,7 +118,8 @@ class LCGaugeTransf:
     Initialize the LC gauge transformation as unity.
 """
 @myjit
-def init_vlc_kernel(zi, vlc1):
+def init_vlc_kernel(zi, vlc0, vlc1):
+    su.store(vlc0[zi], su.unit())
     su.store(vlc1[zi], su.unit())
 
 
