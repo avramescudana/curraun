@@ -42,8 +42,9 @@ md"#### Energy dependence of $p_T$-differential cross section, NNPDF and CTEQ"
 
 # ╔═╡ 9784e5b2-376b-4ef7-90c5-23e354a8f8e1
 begin
-	fig = Figure(resolution = (500, 400), font = "CMU Serif")
 	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig = Figure(resolution = (500, 400), font = "CMU Serif")
+
 	ax = Axis(fig[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}\sigma/\mathrm{d}p_T\,\mathrm{[pb/GeV]}",
     xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14)
 	colors = [:red, :green, :green, :dodgerblue, :purple, :purple, :orange, :orange]
@@ -108,7 +109,7 @@ md"Fit either $\mathrm{d}\sigma/\mathrm{d}p_T$ or $\mathrm{d}^2\sigma/\mathrm{d}
 version = "d2sd2pt"
 
 # ╔═╡ 51dfbc86-fa1c-49e0-a99f-455cb3fe92da
-saveplots = false
+saveplots = true
 
 # ╔═╡ d4d7d828-f39b-4c28-b716-99b7ba9f073e
 begin
@@ -144,7 +145,8 @@ begin
 	elseif version == "d2sd2pt"
 		p0s = [[10^8, 3, 4, 0.1], [10^8, 3, 4, 0.1], [10^8, 3, 4, 0.1]]
 	end
-	for (e, energy) in enumerate(energies2[1])
+	# for (e, energy) in enumerate(energies2[1])
+	for (e, energy) in enumerate(energies2)
 		dfe = df(quark, energies2[e], pdfs2[e])
 
 		
@@ -393,9 +395,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
+git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+0"
+version = "1.0.8+1"
 
 [[deps.CEnum]]
 git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
@@ -1831,9 +1833,9 @@ version = "2.0.2+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
+git-tree-sha1 = "f7c281e9c61905521993a987d38b5ab1d4b53bef"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.38+0"
+version = "1.6.38+1"
 
 [[deps.libsixel_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]

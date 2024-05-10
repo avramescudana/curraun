@@ -6,7 +6,7 @@ hbarc = 0.197326
 # Simulation box 
 L = 10      
 N = 512 
-tau_sim = 0.4        
+tau_sim = 0.21        
 DTS = 8     
 
 # Glasma
@@ -26,7 +26,7 @@ tau_form = 1/(2*mass)*hbarc
 initialization = 'pT'         
 ntp = 10**4 
 
-nevents = 2
+nevents = 20
 
 representation = 'quantum fundamental'     
 # representation = 'test'     
@@ -38,8 +38,8 @@ form_time = 'm'
 # pTs = [0, 0.5, 1, 5]
 # binning = 'pT2'
 binning = 'pT'
-npTbins = 21 
-pTmax = 10
+npTbins = 13 
+pTmax = 12
 if binning=='pT':
     pTbins = np.linspace(0, pTmax, npTbins)
 elif binning=='pT2':
@@ -109,7 +109,7 @@ elif representation == 'test':
     repr_name = 'test'
 
 # Results folder
-folder = 'test_binning_RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_' + repr_name + '_' + p["SUGROUP"] + '_formt_' + p["FORMTIME"]
+folder = 'test2_many_events_RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_' + repr_name + '_' + p["SUGROUP"] + '_formt_' + p["FORMTIME"]
 
 # filename = 'all_pTs_' + binning + '_bins.pickle'
 
