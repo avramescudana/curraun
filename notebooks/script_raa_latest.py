@@ -6,7 +6,7 @@ hbarc = 0.197326
 # Simulation box 
 L = 10      
 N = 512 
-tau_sim = 0.21        
+tau_sim = 1.0        
 DTS = 8     
 
 # Glasma
@@ -26,7 +26,8 @@ tau_form = 1/(2*mass)*hbarc
 initialization = 'pT'         
 ntp = 10**4 
 
-nevents = 20
+nevents = 30
+nevents_offset = 0
 
 representation = 'quantum fundamental'     
 # representation = 'test'     
@@ -54,6 +55,7 @@ p = {
     'TSIM': tau_sim,
     'QS': Qs,            
     'NEVENTS': nevents,
+    'NEVENTSOFFSET': nevents_offset,
     'NTP': ntp,   
     'PTS': pTbins,
     'NPTBINS': npTbins,
@@ -82,6 +84,7 @@ parser.add_argument('-REPR',    type=str,   help="Representation")
 parser.add_argument('-SUGROUP',    type=str,   help="SU(2) or SU(3)")
 parser.add_argument('-FORMTIME',    type=float,   help="Formation time propto 1/2m or 1/2mT")
 parser.add_argument('-BINNING',    type=str,   help="Type of binning")
+parser.add_argument('-TSIM',    type=float,   help="Simulation time [fm/c]")
 
 # parse args and update parameters dict
 args = parser.parse_args()
@@ -96,6 +99,7 @@ g = np.pi * np.sqrt(1 / np.log(p["QS"] / 0.2))
 mu = g2mu / g**2          	
 ir = 0.1 * g2mu     
 
+tau_sim = p["TSIM"]
 tau_form = 1/(2*p["MASS"])*hbarc
 tau_sim += tau_form
 
@@ -109,7 +113,7 @@ elif representation == 'test':
     repr_name = 'test'
 
 # Results folder
-folder = 'test2_many_events_RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_' + repr_name + '_' + p["SUGROUP"] + '_formt_' + p["FORMTIME"]
+folder = 'clean_RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_' + repr_name + '_' + p["SUGROUP"] + '_formt_' + p["FORMTIME"]
 
 # filename = 'all_pTs_' + binning + '_bins.pickle'
 
@@ -249,7 +253,7 @@ for ipT, pT in enumerate(p['PTS']):
     print("pT = " + str(pT) + " GeV")
 
     # output[str(pT)] = {}
-    for iev, ev in enumerate(range(0, p["NEVENTS"])):
+    for iev, ev in enumerate(range(p["NEVENTSOFFSET"], p["NEVENTS"]+p["NEVENTSOFFSET"])):
         # print("event " + str(iev+1))
         tau, final_pTs, initial_pTs = simulate(p, ev, pT, deltapTbin)
 

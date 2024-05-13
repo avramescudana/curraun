@@ -149,16 +149,16 @@ end
 
 # ╔═╡ 0fcc8da3-c52c-4aaf-869d-074f82271f1a
 begin
-	function compute_raa(τₛ, quark, Qₛ, energy, pdf_type)
-		nevents_temp = 10
+	function compute_raa_events(τₛ, quark, Qₛ, energy, pdf_type, nevents)
+		# nevents_temp = 30
 		
-		folder= "test_many_events_RAA_"*quark*"_fonll_Qs_"*string(Qₛ)*"_"*representation*"_"*gauge_group*"_formt_m"
+		folder= "clean_RAA_"*quark*"_fonll_Qs_"*string(Qₛ)*"_"*representation*"_"*gauge_group*"_formt_m"
 	
 		filename_param = current_path * "/results/" * folder * "/parameters_" * binning * "_binning.pickle"
 		parameters = Pickle.npyload(filename_param)
 		pTs = parameters["PTS"]
 		npTs = length(parameters["PTS"])
-		nevents = parameters["NEVENTS"]
+		# nevents = parameters["NEVENTS"]
 	
 		τ = parameters["TAU"]
 		τᵢ = findminindex(τₛ, τ)
@@ -177,8 +177,8 @@ begin
 		popt = fit_fonll(xdata, ydata)
 		@. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
 	
-		# for ev in range(1, nevents)
-		for ev in range(1, nevents_temp)
+		for ev in range(1, nevents)
+		# for ev in range(1, nevents_temp)
 			label_ev = "event_"*string(ev)	
 	
 			final_pTs = zeros(0)
@@ -214,11 +214,11 @@ end
 
 # ╔═╡ 47a21094-514f-4863-a4a5-d5d7bd091ec5
 begin
-	τₛ_values = [0.2, 0.4, 0.6]
+	τₛ_values = [0.1, 0.3, 1.0]
 	# τₛ_values = [0.2]
 	dumb_pTs_raa, raa_avg = Dict(), Dict()
 	for τₛ in τₛ_values
-		dumb_pTs_raa[string(τₛ)], raa_avg[string(τₛ)] = compute_raa(τₛ, quark, Qₛ, energy, pdf_type)
+		dumb_pTs_raa[string(τₛ)], raa_avg[string(τₛ)] = compute_raa_events(τₛ, quark, Qₛ, energy, pdf_type, 2)
 	end
 	pTs_raa = dumb_pTs_raa[string(τₛ_values[1])]
 end
@@ -269,9 +269,126 @@ begin
 
 	text!(ax_raa_τ, L"\mathrm{charm}\,@\,Q_s=2\,\mathrm{GeV}", position = (0.35, 1.33), fontsize=18)
 
-	save("plots/clean_raa_tau_dep_quark_"*quark*"_Qs_"*string(Qₛ)*"_fonll_energy_"*string(energy)*"_pdf_"*pdf_type*".png", fig_raa_τ, px_per_unit = 5.0)
+	text!(ax_raa_τ, L"\mathrm{FONLL\,pp\,}5.5\,\mathrm{TeV}", position = (0.35, 0.7), fontsize=16)
+	text!(ax_raa_τ, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.63), fontsize=16)
+
+	# save("plots/clean_raa_tau_dep_quark_"*quark*"_Qs_"*string(Qₛ)*"_fonll_energy_"*string(energy)*"_pdf_"*pdf_type*".png", fig_raa_τ, px_per_unit = 5.0)
 
 	fig_raa_τ
+end
+
+# ╔═╡ 82fc989e-68d0-4b64-83b6-1bf1b9a285c6
+md"---
+### $\sqrt{s}$ initial FONLL dependence of $R_{AA}$ for fixed $Q_s$ and $\tau$"
+
+# ╔═╡ 7aec3bb2-97c5-4626-ac65-a152b9c88e91
+begin
+	τₛ_fonll = 0.6
+	dumb_pTs_raa_fonll, raa_avg_fonll = Dict(), Dict()
+	energies = [2750, 5500, 5030, 5030, 7000, 7000, 13000, 13000]
+	pdf_types = ["cteq", "cteq", "cteq", "nnpdf", "cteq", "nnpdf", "cteq", "nnpdf"]
+	# energies = [5030, 5030, 7000, 7000]
+	# pdf_types = ["cteq", "nnpdf", "cteq", "nnpdf"]
+	
+	for ie in range(1, length(energies))
+		label = string(energies[ie]) * "_" * pdf_types[ie]
+		dumb_pTs_raa_fonll[label], raa_avg_fonll[label] = compute_raa_events(τₛ_fonll, quark, Qₛ, energies[ie], pdf_types[ie], 2)
+	end
+	pTs_raa_fonll = dumb_pTs_raa_fonll[string(energies[1]) * "_" * pdf_types[1]]
+end
+
+# ╔═╡ 4b7f2f8d-4af6-4f3a-95f8-0e386551353c
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig_raa_cteq_edep = Figure(size = (380, 380), font = "CMU Serif")
+	ax_raa_cteq_edep = Axis(fig_raa_cteq_edep[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, aspect = 1)
+
+	segmented_cmap_cteq = cgrad(:dense, 14, categorical = true)
+	custom_colors_cteq = [segmented_cmap_cteq[3], segmented_cmap_cteq[5], segmented_cmap_cteq[7], segmented_cmap_cteq[9], segmented_cmap_cteq[11]]
+
+	# segmented_cmap = cgrad(:tempo, 9, categorical = true)
+	# custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7]]
+
+	lines!(ax_raa_cteq_edep, pTs_raa_fonll, ones(length(pTs_raa_fonll)), color=(:gray, 0.6), linewidth=1.5)
+
+	energies_cteq = ["2750", "5030", "7000", "13000"]
+	labels_cteq = energies_cteq .* "_cteq"
+	for (il, label) in enumerate(labels_cteq)
+		# label = string(energies[ie]) * "_" * pdf_types[ie]
+		string_as_varname("linecteq"*string(il), lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_cteq[il]], color=custom_colors_cteq[il], linewidth=1.5))
+		
+		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=custom_colors[il], linewidth=2, linestyle=:dash)
+		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=(custom_colors[il], 0.5), linewidth=2)
+	end
+
+	band!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_cteq[1]], raa_avg_fonll[labels_cteq[length(labels_cteq)]]; color = range(pTs_raa_fonll[1], pTs_raa_fonll[end], 200), colormap = :dense, alpha=0.2, transparency=true)
+	
+
+	labels_energies_cteq = [2.75, 5.03, 7, 13]
+	e_labels = [L"%$eᵢ" for eᵢ in labels_energies_cteq]
+	axislegend(ax_raa_cteq_edep, [linecteq1, linecteq2, linecteq3, linecteq4], e_labels, L"\sqrt{s}\,\mathrm{[TeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, framecolor=:grey)
+
+	xlims!(ax_raa_cteq_edep, 0, 10)
+	ax_raa_cteq_edep.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+	
+	# ax_raa_fonll.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
+	ylims!(ax_raa_cteq_edep, 0.6, 1.4)
+
+	text!(ax_raa_cteq_edep, L"\mathrm{charm}\,@\,Q_s=2\,\mathrm{GeV}", position = (0.35, 1.33), fontsize=18)
+
+	text!(ax_raa_cteq_edep, L"\mathrm{FONLL\,pp}", position = (0.35, 0.7), fontsize=16)
+	text!(ax_raa_cteq_edep, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.63), fontsize=16)
+
+	save("plots/clean_raa_tau_"*string(τₛ_fonll)*"_quark_"*quark*"_Qs_"*string(Qₛ)*"_fonll_energy_dep_pdf_"*pdf_type*".png", fig_raa_cteq_edep, px_per_unit = 5.0)
+
+	fig_raa_cteq_edep
+end
+
+# ╔═╡ 701f2554-a557-4d45-8a37-35e21b80f298
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig_raa_cteq_nnpdf = Figure(size = (380, 380), font = "CMU Serif")
+	ax_raa_cteq_nnpdf = Axis(fig_raa_cteq_nnpdf[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, aspect = 1)
+
+	segmented_cmap_nnpdf = cgrad(:beach, 14, categorical = true)
+	custom_colors_nnpdf = [segmented_cmap_nnpdf[3], segmented_cmap_nnpdf[5], segmented_cmap_nnpdf[7], segmented_cmap_nnpdf[9], segmented_cmap_nnpdf[11]]
+
+	# segmented_cmap = cgrad(:tempo, 9, categorical = true)
+	# custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7]]
+
+	lines!(ax_raa_cteq_nnpdf, pTs_raa_fonll, ones(length(pTs_raa_fonll)), color=(:gray, 0.6), linewidth=1.5)
+
+	energies_cteq_nnpdf = ["5030", "7000", "13000"]
+	for (ie, labele) in enumerate(energies_cteq_nnpdf)
+		# label = string(energies[ie]) * "_" * pdf_types[ie]
+		label_cteq, label_nnpdf = labele * "_" * "cteq", labele * "_" * "nnpdf"
+		string_as_varname("linecteq"*string(il), lines!(ax_raa_cteq_nnpdf, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=custom_colors_nnpdf[il], linewidth=1.5))
+		
+		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=custom_colors[il], linewidth=2, linestyle=:dash)
+		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=(custom_colors[il], 0.5), linewidth=2)
+	end
+
+	band!(ax_raa_cteq_nnpdf, pTs_raa_fonll, raa_avg_fonll[labels_cteq[1]], raa_avg_fonll[labels_cteq[length(labels_cteq)]]; color = range(pTs_raa_fonll[1], pTs_raa_fonll[end], 200), colormap = :dense, alpha=0.2, transparency=true)
+	
+
+	# labels_energies_cteq = [2.75, 5.03, 7, 13]
+	# e_labels = [L"%$eᵢ" for eᵢ in labels_energies_cteq]
+	# axislegend(ax_raa_cteq_nnpdf, [linecteq1, linecteq2, linecteq3, linecteq4], e_labels, L"\sqrt{s}\,\mathrm{[TeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, framecolor=:grey)
+
+	xlims!(ax_raa_cteq_nnpdf, 0, 10)
+	ax_raa_cteq_nnpdf.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+	
+	# ax_raa_fonll.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
+	ylims!(ax_raa_cteq_nnpdf, 0.6, 1.4)
+
+	text!(ax_raa_cteq_nnpdf, L"\mathrm{charm}\,@\,Q_s=2\,\mathrm{GeV}", position = (0.35, 1.33), fontsize=18)
+
+	text!(ax_raa_cteq_nnpdf, L"\mathrm{FONLL\,pp}", position = (0.35, 0.7), fontsize=16)
+	# text!(ax_raa_cteq_nnpdf, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.63), fontsize=16)
+
+	# save("plots/clean_raa_tau_"*string(τₛ_fonll)*"_quark_"*quark*"_Qs_"*string(Qₛ)*"_fonll_energy_dep_pdf_"*pdf_type*".png", fig_raa_cteq_nnpdf, px_per_unit = 5.0)
+
+	fig_raa_cteq_nnpdf
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -1866,5 +1983,9 @@ version = "3.5.0+0"
 # ╠═2cb1fcc2-8643-4b5e-93df-86b5a274d261
 # ╠═ff771af6-a67d-4dc2-b203-0972b5400ebc
 # ╠═44463e1b-aded-4c57-a405-af6059263c3c
+# ╠═82fc989e-68d0-4b64-83b6-1bf1b9a285c6
+# ╠═7aec3bb2-97c5-4626-ac65-a152b9c88e91
+# ╠═4b7f2f8d-4af6-4f3a-95f8-0e386551353c
+# ╠═701f2554-a557-4d45-8a37-35e21b80f298
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
