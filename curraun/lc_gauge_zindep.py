@@ -232,7 +232,7 @@ def act_vlc_uminus_kernel(yi, xplus, nplus, um_lc, um_temp, vlc1):
 
 """
 Carlos' functions for the z-independent gauge transformation
-CPU version only, for numerical cheks
+CPU version only, for numerical checks
 """
 
 # Constructs the plus links in temporal gauge over the x^+ axis

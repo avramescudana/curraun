@@ -137,6 +137,11 @@ def get_index(ix, iy, n):  # TODO: remove
 def get_index_nm(ix, iy, n):
     return n * ix + iy
 
+# index from grid point (no modulo) in a n2xm lattice
+@myjit
+def get_index_n2xm(ixplus, iy, iz, n):
+    return (n*n) * ixplus + n * iy + iz
+
 # compute grid point from index
 @myjit
 def get_point(x, n):
@@ -144,12 +149,14 @@ def get_point(x, n):
     r0 = (x - r1) // n
     return r0, r1
 
-# compute grid point from index for a nxm lattice
+# compute grid point from index for a n2xm lattice
 @myjit
-def get_point_nxm(x, n, m):
-    r1 = x % n
-    r0 = (x - r1) // m
-    return r0, r1
+def get_point_n2xm(x, n):
+    i = x % (n*n)
+    r2 = i % n
+    r1 = (i - r2) // n
+    r0 = (x - i) // (n*n)
+    return r0, r1, r2
 
 # index shifting
 #@myjit
