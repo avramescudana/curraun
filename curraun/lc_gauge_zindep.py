@@ -54,11 +54,6 @@ class LCGaugeTransf:
         self.d_vlc0 = self.vlc0
         self.d_vlc1 = self.vlc1
         
-
-        # Move data to GPU
-        if use_cuda:
-            self.copy_to_device()
-
         self.initialized = False
 
     def copy_to_device(self):
