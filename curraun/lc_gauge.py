@@ -64,7 +64,7 @@ class LCGaugeTransf:
         self.initialized = True
 
     # We evolve the gauge transformation
-    def evolve_lc(self, xplus):
+    def evolve_lc(self, xplus, a):
         
         # We copy the objects to the GPU if they have not been copied yet
         if not self.initialized:
@@ -74,11 +74,11 @@ class LCGaugeTransf:
         if self.s.t % self.s.dt == 0:
 
             # At each time step we compute the gauge transformation operator
-            compute_vlc(self.d_vlc0, self.d_vlc1, xplus, self.s.n, self.nplus, self.s.d_u1)
+            compute_vlc(self.d_vlc0, self.d_vlc1, xplus, a, self.s.n, self.nplus, self.s.d_u1, self.s.d_aeta1)
             
             # We construct the U_+ in temporal gauge and transform them
             # TODO: Merge the two kernels into one
-            compute_uplus_temp(self.d_up_temp, xplus, self.s.n, self.s.d_u0)
+            compute_uplus_temp(self.d_up_temp, xplus, a, self.s.n, self.s.d_u0, self.s.d_aeta0)
             act_vlc_uplus(self.s.n, xplus, self.d_up_lc, self.d_up_temp, self.d_vlc0, self.d_vlc1)
 
         if use_cuda:
@@ -98,24 +98,29 @@ def init_vlc_kernel(yi, vlc0, vlc1):
     Computes the infinitesimal gauge transformation V_LC. 
 """
 
-def compute_vlc(vlc0, vlc1, t, n, nplus, u1):
-    my_parallel_loop(compute_vlc_kernel, n*nplus, n, t, u1, vlc0, vlc1)  
+def compute_vlc(vlc0, vlc1, t, a, n, nplus, u1, aeta1):
+    my_parallel_loop(compute_vlc_kernel, n*n*nplus, n, t, a, u1, aeta1, vlc0, vlc1)  
 
 @myjit
-def compute_vlc_kernel(yi, n, t, u1, vlc0, vlc1):
+def compute_vlc_kernel(yi, n, t, a, u1, aeta1, vlc0, vlc1):
 
-    xplusy = l.get_point(yi, n)
-    xplus, y = xplusy[0], xplusy[1]
+    indices = l.get_point_n2xm(yi, n)
+    xp_slice, y, z = indices[0], indices[1], indices[2]
 
-    if xplus > t and xplus!=0:
+    if xp_slice > t and xp_slice!=0:
 
-        xy_latt = l.get_index_nm(xplus+xplus-t, y, n)
+        xy_latt = l.get_index_nm(xp_slice+xp_slice-t, y, n)
+        
         ux_latt = u1[xy_latt, 0, :]
         ux_dag = su.dagger(ux_latt)
 
-        #TODO: Add here the aeta terms
+        aeta_latt = aeta1[xy_latt, :]
+        aeta_fact = su.mul_s(aeta_latt, (z-n//2)*a/t**2)
+        ueta = su.mexp(aeta_fact)
+        ueta_dag = su.dagger(ueta)
 
-        res = su.mul(ux_dag, vlc0[yi])
+        umin = su.mul(ux_dag, ueta_dag)
+        res = su.mul(vlc0[yi], umin)
         su.store(vlc1[yi], res)
 
 
@@ -123,19 +128,28 @@ def compute_vlc_kernel(yi, n, t, u1, vlc0, vlc1):
     Extracts the value of U_+ along the x^+ axis.
 """
 
-def compute_uplus_temp(up_temp, t, n, u0):
-    my_parallel_loop(compute_uplus_temp_kernel, n, t, n, u0, up_temp)  
+def compute_uplus_temp(up_temp, t, a, n, u0, aeta0):
+    my_parallel_loop(compute_uplus_temp_kernel, n*n, t, a, n, u0, aeta0, up_temp)  
 
 @myjit
-def compute_uplus_temp_kernel(yi, t, n, u0, up_temp):
-    ty_latt = l.get_index_nm(t, yi, n)
+def compute_uplus_temp_kernel(yi, t, a, n, u0, aeta0, up_temp):
+    
+    yz = l.get_point(yi, n)
+    y, z = yz[0], yz[1]
+    
+    ty_latt = l.get_index_nm(t, y, n)
 
     ux_latt = u0[ty_latt, 0, :]
-    ux_dag_latt = su.dagger(ux_latt)
+    ux_dag = su.dagger(ux_latt)
     
-    #TODO: Add here the aeta terms
+    aeta_latt = aeta0[ty_latt, :]
+    aeta_fact = su.mul_s(aeta_latt, (z-n//2)*a/t**2)
+    ueta = su.mexp(aeta_fact)
     
-    su.store(up_temp[yi], ux_dag_latt)
+    res = su.mul(ueta, ux_dag)
+    
+    
+    su.store(up_temp[yi], res)
 
 
 """
@@ -143,53 +157,17 @@ def compute_uplus_temp_kernel(yi, t, n, u0, up_temp):
 """
 
 def act_vlc_uplus(n, xplus, up_lc, up_temp, vlc0, vlc1):
-    my_parallel_loop(act_vlc_uplus_kernel, n, xplus, n, up_lc, up_temp, vlc0, vlc1)  
+    my_parallel_loop(act_vlc_uplus_kernel, n*n, xplus, n, up_lc, up_temp, vlc0, vlc1)  
 
 @myjit
 def act_vlc_uplus_kernel(yi, xplus, n, up_lc, up_temp, vlc0, vlc1):
+    
     xplusy_latt = l.get_index_nm(xplus, yi, n)
-
     buff0 = su.dagger(vlc1[xplusy_latt])
+    
     buff1 = su.mul(buff0, up_temp[yi])
     
     xplusy_prev = l.get_index_nm(xplus-1, yi, n)
     buff2 = su.mul(buff1, vlc0[xplusy_prev])
 
     su.store(up_lc[yi], buff2)
-
-
-
-"""
-    Extracts the value of U_- along the x^+ axis.
-"""
-
-def compute_uminus_temp(um_temp, t, n, u0):
-    my_parallel_loop(compute_uminus_temp_kernel, n, t, n, u0, um_temp)  
-
-@myjit
-def compute_uminus_temp_kernel(yi, t, n, u0, um_temp):
-    ty_latt = l.get_index_nm(t, yi, n)
-    ux_latt = u0[ty_latt, 0, :]   
-
-    su.store(um_temp[yi], ux_latt)
-
-
-"""
-    Aplies the gauge transformation V_LC on the U_+ gauge link.
-"""
-
-def act_vlc_uminus(n, xplus, nplus, um_lc, um_temp, vlc1):
-    my_parallel_loop(act_vlc_uminus_kernel, n, xplus, nplus, um_lc, um_temp, vlc1)  
-
-@myjit
-def act_vlc_uminus_kernel(yi, xplus, nplus, um_lc, um_temp, vlc1):
-    xplusy_latt = l.get_index_nm(xplus, yi, nplus)
-
-    # Gauge operator at x^- + delta x^-
-    vlc2 = su.mul(um_temp[yi], vlc1[xplusy_latt])
-
-    buff0 = su.dagger(vlc2)
-    buff1 = su.mul(buff0, um_temp[yi])
-    buff2 = su.mul(buff1, vlc1[xplusy_latt])
-    
-    su.store(um_lc[yi], buff2)
