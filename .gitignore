@@ -117,6 +117,10 @@ venv.bak/
 *.npy
 *.zip
 
+# Julia files
+*.jld
+*.jld2
+
 # VSCode files
 .vscode/
 

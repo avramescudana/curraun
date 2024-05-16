@@ -27,7 +27,7 @@ initialization = 'pT'
 ntp = 10**4 
 
 nevents = 30
-nevents_offset = 0
+noffset = 0
 
 representation = 'quantum fundamental'     
 # representation = 'test'     
@@ -55,7 +55,7 @@ p = {
     'TSIM': tau_sim,
     'QS': Qs,            
     'NEVENTS': nevents,
-    'NEVENTSOFFSET': nevents_offset,
+    'NOFFSET': noffset,
     'NTP': ntp,   
     'PTS': pTbins,
     'NPTBINS': npTbins,
@@ -85,6 +85,7 @@ parser.add_argument('-SUGROUP',    type=str,   help="SU(2) or SU(3)")
 parser.add_argument('-FORMTIME',    type=float,   help="Formation time propto 1/2m or 1/2mT")
 parser.add_argument('-BINNING',    type=str,   help="Type of binning")
 parser.add_argument('-TSIM',    type=float,   help="Simulation time [fm/c]")
+parser.add_argument('-NOFFSET',    type=int,   help="Number of offset events")
 
 # parse args and update parameters dict
 args = parser.parse_args()
@@ -253,11 +254,11 @@ for ipT, pT in enumerate(p['PTS']):
     print("pT = " + str(pT) + " GeV")
 
     # output[str(pT)] = {}
-    for iev, ev in enumerate(range(p["NEVENTSOFFSET"], p["NEVENTS"]+p["NEVENTSOFFSET"])):
+    for iev, ev in enumerate(range(p["NOFFSET"], p["NEVENTS"]+p["NOFFSET"])):
         # print("event " + str(iev+1))
         tau, final_pTs, initial_pTs = simulate(p, ev, pT, deltapTbin)
 
-        filename_pT_ev = p["BINNING"] + '_bin_' + str(ipT+1) + '_ev_' + str(iev+1)
+        filename_pT_ev = p["BINNING"] + '_bin_' + str(ipT+1) + '_ev_' + str(ev+1)
         np.savez_compressed(filename_pT_ev, pTs=final_pTs, initial_pTs=initial_pTs)
 
 p["TAU"] = tau

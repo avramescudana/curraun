@@ -177,9 +177,11 @@ class TransMom:
 
         # pTs
         self.pT = np.zeros(n_particles, dtype=np.double)
+        self.p2 = np.zeros((n_particles, 3), dtype=np.double)
 
         # set-up device pointers
         self.d_pT = self.pT
+        self.d_p2 = self.p2
 
         # move data to GPU
         if use_cuda:
@@ -187,17 +189,22 @@ class TransMom:
 
     def copy_to_device(self):
         self.d_pT = cuda.to_device(self.pT)
+        self.d_p2 = cuda.to_device(self.p2)
 
     def copy_to_host(self):
         self.d_pT.copy_to_host(self.pT)
+        self.d_p2.copy_to_host(self.p2)
 
     def compute(self):
 
-        my_parallel_loop(compute_trans_mom_kernel, self.n_particles, self.d_pT, self.wong.d_p)
+        my_parallel_loop(compute_trans_mom_kernel, self.n_particles, self.d_pT, self.d_p2, self.wong.d_p)
 
         if use_cuda:
             self.copy_to_host()
 
 @myjit
-def compute_trans_mom_kernel(index, pT, p):
+def compute_trans_mom_kernel(index, pT, p2, p):
     pT[index] = math.sqrt(p[index, 1]**2 + p[index, 2] **2)
+    p2[index, 0] = p[index, 1]**2 
+    p2[index, 1] = p[index, 2]**2 
+    p2[index, 2] = p[index, 1]**2 + p[index, 2] **2

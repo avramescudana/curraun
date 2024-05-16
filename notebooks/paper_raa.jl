@@ -31,6 +31,9 @@ begin
 	using DataInterpolations
 
 	using Statistics
+
+	using JLD2
+	using HDF5
 end
 
 # ╔═╡ 9210b4b6-0d30-11ef-0b3e-cd9d3898ef9e
@@ -74,6 +77,9 @@ end
 
 # ╔═╡ 4dd68346-657a-47b7-8f18-68303974be5e
 md"This function reads the momenta at a fixed time $\tau_s$ and returns the transverse momenta vector $p_T(\tau_s)$ and the initial momenta spectra $p_T(\tau_0)$." 
+
+# ╔═╡ 4035a5a6-65fa-43e7-85cb-ececb4c902ca
+quarks = ["charm", "beauty"]
 
 # ╔═╡ 8c017469-fa13-4445-badc-12be5824c02c
 md"### FONLL
@@ -217,10 +223,13 @@ begin
 	τₛ_values = [0.1, 0.3, 1.0]
 	# τₛ_values = [0.2]
 	dumb_pTs_raa, raa_avg = Dict(), Dict()
-	for τₛ in τₛ_values
-		dumb_pTs_raa[string(τₛ)], raa_avg[string(τₛ)] = compute_raa_events(τₛ, quark, Qₛ, energy, pdf_type, 2)
+	for quark in quarks
+		dumb_pTs_raa[quark], raa_avg[quark] = Dict(), Dict()
+		for τₛ in τₛ_values
+			dumb_pTs_raa[quark][string(τₛ)], raa_avg[quark][string(τₛ)] = compute_raa_events(τₛ, quark, Qₛ, energy, pdf_type, 50)
+		end
 	end
-	pTs_raa = dumb_pTs_raa[string(τₛ_values[1])]
+	pTs_raa = dumb_pTs_raa[quarks[1]][string(τₛ_values[1])]
 end
 
 # ╔═╡ 3fa82e08-1209-463d-a89e-1b9f54dcd290
@@ -228,6 +237,33 @@ raa_avg
 
 # ╔═╡ 0066551b-ee58-4a94-9253-6826bef17872
 pTs_raa
+
+# ╔═╡ 7645afc8-70f6-4fc5-865e-1cfbec6459f6
+begin
+	lens = [20, 20]
+	pTs_sel, ind_sel =  Dict(), Dict()
+	for (iq, quark) in enumerate(quarks)
+		pTs_sel[quark], ind_sel[quark] =  Dict(), Dict()
+		
+		pTs_sel[quark] = LinRange(pTs_raa[1],pTs_raa[length(pTs_raa)],lens[iq])
+		ind_sel[quark] = floor.(Int, LinRange(1,length(pTs_raa),lens[iq]))
+	end
+end
+
+# ╔═╡ e7f82c9e-ef4d-4302-a0c1-a6160382ae24
+begin
+	data_jld = Dict()
+	data_jld["pTs_raa"] = pTs_raa
+	data_jld["raa_avg"] = raa_avg
+
+	save(current_path * "paper_raa_tau_dep_charm_beauty.jld2", "data", data_jld)
+end
+
+# ╔═╡ 7a58df0a-3a46-4555-ba37-546bf67b1695
+# begin
+# 	data_test = JLD2.load(current_path * "paper_raa_tau_dep_charm_beauty.jld2")["data"]
+# 	data_test["raa_avg"]
+# end
 
 # ╔═╡ b85c8694-8a9f-4717-8d74-6f1b46a88677
 md"---
@@ -252,10 +288,17 @@ begin
 	custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7]]
 
 	lines!(ax_raa_τ, pTs_raa, ones(length(pTs_raa)), color=(:gray, 0.6), linewidth=1.5)
+
+	markers = [:circle, :utriangle]
+	quark_labels = [L"\mathrm{charm}", L"\mathrm{beauty}"]
 	
 	# lines!(ax_raa_fonll, pTs_raa, raa[string(τₛ)]["event_1"], color=colors[3])
 	for (iτ, τₛ) in enumerate(τₛ_values)
-		string_as_varname("line"*string(iτ), lines!(ax_raa_τ, pTs_raa, raa_avg[string(τₛ)], color=custom_colors[iτ], linewidth=2))
+		string_as_varname("line"*string(iτ), lines!(ax_raa_τ, pTs_raa, raa_avg["charm"][string(τₛ)], color=custom_colors[iτ], linewidth=2))
+		# scatter!(ax_raa_τ, pTs_sel["charm"], raa_avg["charm"][string(τₛ)][ind_sel["charm"]], color=custom_colors[iτ], marker=markers[1], markersize=9)
+
+		# lines!(ax_raa_τ, pTs_raa, raa_avg["beauty"][string(τₛ)], color=custom_colors[iτ], linewidth=2)
+		# scatter!(ax_raa_τ, pTs_sel["beauty"], raa_avg["beauty"][string(τₛ)][ind_sel["beauty"]], color=custom_colors[iτ], marker=markers[2], markersize=9)
 	end
 
 	τ_labels = [L"%$τᵢ" for τᵢ in τₛ_values]
@@ -277,118 +320,56 @@ begin
 	fig_raa_τ
 end
 
-# ╔═╡ 82fc989e-68d0-4b64-83b6-1bf1b9a285c6
-md"---
-### $\sqrt{s}$ initial FONLL dependence of $R_{AA}$ for fixed $Q_s$ and $\tau$"
-
-# ╔═╡ 7aec3bb2-97c5-4626-ac65-a152b9c88e91
-begin
-	τₛ_fonll = 0.6
-	dumb_pTs_raa_fonll, raa_avg_fonll = Dict(), Dict()
-	energies = [2750, 5500, 5030, 5030, 7000, 7000, 13000, 13000]
-	pdf_types = ["cteq", "cteq", "cteq", "nnpdf", "cteq", "nnpdf", "cteq", "nnpdf"]
-	# energies = [5030, 5030, 7000, 7000]
-	# pdf_types = ["cteq", "nnpdf", "cteq", "nnpdf"]
-	
-	for ie in range(1, length(energies))
-		label = string(energies[ie]) * "_" * pdf_types[ie]
-		dumb_pTs_raa_fonll[label], raa_avg_fonll[label] = compute_raa_events(τₛ_fonll, quark, Qₛ, energies[ie], pdf_types[ie], 2)
-	end
-	pTs_raa_fonll = dumb_pTs_raa_fonll[string(energies[1]) * "_" * pdf_types[1]]
-end
-
-# ╔═╡ 4b7f2f8d-4af6-4f3a-95f8-0e386551353c
+# ╔═╡ 6acf50b9-e07b-46f3-88d1-cdddbd00fd1d
 begin
 	set_theme!(fonts = (; regular = "CMU Serif"))
-	fig_raa_cteq_edep = Figure(size = (380, 380), font = "CMU Serif")
-	ax_raa_cteq_edep = Axis(fig_raa_cteq_edep[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, aspect = 1)
+	fig_raa_τ_cb = Figure(size = (800, 380), font = "CMU Serif")
+	# ax_raa_τ_cb = Axis(fig_raa_τ_cb[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, aspect = 1)
 
-	segmented_cmap_cteq = cgrad(:dense, 14, categorical = true)
-	custom_colors_cteq = [segmented_cmap_cteq[3], segmented_cmap_cteq[5], segmented_cmap_cteq[7], segmented_cmap_cteq[9], segmented_cmap_cteq[11]]
+	ax_raa_τ_cb = [Axis(fig_raa_τ_cb[1, i], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true,
+	) for i in 1:2]
 
-	# segmented_cmap = cgrad(:tempo, 9, categorical = true)
-	# custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7]]
+	lines!(ax_raa_τ_cb[1], pTs_raa, ones(length(pTs_raa)), color=(:gray, 0.6), linewidth=1.5)
+	lines!(ax_raa_τ_cb[2], pTs_raa, ones(length(pTs_raa)), color=(:gray, 0.6), linewidth=1.5)
+	
+	# lines!(ax_raa_fonll, pTs_raa, raa[string(τₛ)]["event_1"], color=colors[3])
+	for (iτ, τₛ) in enumerate(τₛ_values)
+		string_as_varname("line"*string(iτ), lines!(ax_raa_τ_cb[1], pTs_raa, raa_avg["charm"][string(τₛ)], color=custom_colors[iτ], linewidth=2))
+		scatter!(ax_raa_τ_cb[1], pTs_sel["charm"], raa_avg["charm"][string(τₛ)][ind_sel["charm"]], color=custom_colors[iτ], marker=markers[1], markersize=10)
 
-	lines!(ax_raa_cteq_edep, pTs_raa_fonll, ones(length(pTs_raa_fonll)), color=(:gray, 0.6), linewidth=1.5)
-
-	energies_cteq = ["2750", "5030", "7000", "13000"]
-	labels_cteq = energies_cteq .* "_cteq"
-	for (il, label) in enumerate(labels_cteq)
-		# label = string(energies[ie]) * "_" * pdf_types[ie]
-		string_as_varname("linecteq"*string(il), lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_cteq[il]], color=custom_colors_cteq[il], linewidth=1.5))
-		
-		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=custom_colors[il], linewidth=2, linestyle=:dash)
-		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=(custom_colors[il], 0.5), linewidth=2)
+		lines!(ax_raa_τ_cb[2], pTs_raa, raa_avg["beauty"][string(τₛ)], color=custom_colors[iτ], linewidth=2)
+		scatter!(ax_raa_τ_cb[2], pTs_sel["beauty"], raa_avg["beauty"][string(τₛ)][ind_sel["beauty"]], color=custom_colors[iτ], marker=markers[2], markersize=10)
 	end
 
-	band!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_cteq[1]], raa_avg_fonll[labels_cteq[length(labels_cteq)]]; color = range(pTs_raa_fonll[1], pTs_raa_fonll[end], 200), colormap = :dense, alpha=0.2, transparency=true)
-	
+	axislegend(ax_raa_τ_cb[1], [line1, line2, line3], [L"0.1", L"0.3", L"1.0"], L"\tau\,\mathrm{[fm/c]}", labelsize=18, titlesize=20, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
 
-	labels_energies_cteq = [2.75, 5.03, 7, 13]
-	e_labels = [L"%$eᵢ" for eᵢ in labels_energies_cteq]
-	axislegend(ax_raa_cteq_edep, [linecteq1, linecteq2, linecteq3, linecteq4], e_labels, L"\sqrt{s}\,\mathrm{[TeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, framecolor=:grey)
-
-	xlims!(ax_raa_cteq_edep, 0, 10)
-	ax_raa_cteq_edep.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
-	
-	# ax_raa_fonll.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
-	ylims!(ax_raa_cteq_edep, 0.6, 1.4)
-
-	text!(ax_raa_cteq_edep, L"\mathrm{charm}\,@\,Q_s=2\,\mathrm{GeV}", position = (0.35, 1.33), fontsize=18)
-
-	text!(ax_raa_cteq_edep, L"\mathrm{FONLL\,pp}", position = (0.35, 0.7), fontsize=16)
-	text!(ax_raa_cteq_edep, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.63), fontsize=16)
-
-	save("plots/clean_raa_tau_"*string(τₛ_fonll)*"_quark_"*quark*"_Qs_"*string(Qₛ)*"_fonll_energy_dep_pdf_"*pdf_type*".png", fig_raa_cteq_edep, px_per_unit = 5.0)
-
-	fig_raa_cteq_edep
-end
-
-# ╔═╡ 701f2554-a557-4d45-8a37-35e21b80f298
-begin
-	set_theme!(fonts = (; regular = "CMU Serif"))
-	fig_raa_cteq_nnpdf = Figure(size = (380, 380), font = "CMU Serif")
-	ax_raa_cteq_nnpdf = Axis(fig_raa_cteq_nnpdf[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, aspect = 1)
-
-	segmented_cmap_nnpdf = cgrad(:beach, 14, categorical = true)
-	custom_colors_nnpdf = [segmented_cmap_nnpdf[3], segmented_cmap_nnpdf[5], segmented_cmap_nnpdf[7], segmented_cmap_nnpdf[9], segmented_cmap_nnpdf[11]]
-
-	# segmented_cmap = cgrad(:tempo, 9, categorical = true)
-	# custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7]]
-
-	lines!(ax_raa_cteq_nnpdf, pTs_raa_fonll, ones(length(pTs_raa_fonll)), color=(:gray, 0.6), linewidth=1.5)
-
-	energies_cteq_nnpdf = ["5030", "7000", "13000"]
-	for (ie, labele) in enumerate(energies_cteq_nnpdf)
-		# label = string(energies[ie]) * "_" * pdf_types[ie]
-		label_cteq, label_nnpdf = labele * "_" * "cteq", labele * "_" * "nnpdf"
-		string_as_varname("linecteq"*string(il), lines!(ax_raa_cteq_nnpdf, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=custom_colors_nnpdf[il], linewidth=1.5))
+	for i in 1:2
+		xlims!(ax_raa_τ_cb[i], 0, 10)
+		ax_raa_τ_cb[i].xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
 		
-		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=custom_colors[il], linewidth=2, linestyle=:dash)
-		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=(custom_colors[il], 0.5), linewidth=2)
+		ax_raa_τ_cb[i].yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
+		ylims!(ax_raa_τ_cb[i], 0.6, 1.4)
 	end
 
-	band!(ax_raa_cteq_nnpdf, pTs_raa_fonll, raa_avg_fonll[labels_cteq[1]], raa_avg_fonll[labels_cteq[length(labels_cteq)]]; color = range(pTs_raa_fonll[1], pTs_raa_fonll[end], 200), colormap = :dense, alpha=0.2, transparency=true)
-	
+	hideydecorations!(ax_raa_τ_cb[2], ticklabels = false, grid = false, minorgrid = false)
 
-	# labels_energies_cteq = [2.75, 5.03, 7, 13]
-	# e_labels = [L"%$eᵢ" for eᵢ in labels_energies_cteq]
-	# axislegend(ax_raa_cteq_nnpdf, [linecteq1, linecteq2, linecteq3, linecteq4], e_labels, L"\sqrt{s}\,\mathrm{[TeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, framecolor=:grey)
+	text!(ax_raa_τ_cb[1], L"Q_s=2\,\mathrm{GeV}", position = (0.35, 1.31), fontsize=20)
 
-	xlims!(ax_raa_cteq_nnpdf, 0, 10)
-	ax_raa_cteq_nnpdf.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
-	
-	# ax_raa_fonll.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
-	ylims!(ax_raa_cteq_nnpdf, 0.6, 1.4)
+	text!(ax_raa_τ_cb[2], L"\mathrm{FONLL\,}\sqrt{s_\mathrm{pp}}=5.5\,\mathrm{TeV}", position = (0.35, 0.63), fontsize=16)
+	text!(ax_raa_τ_cb[2], L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.7), fontsize=16)
 
-	text!(ax_raa_cteq_nnpdf, L"\mathrm{charm}\,@\,Q_s=2\,\mathrm{GeV}", position = (0.35, 1.33), fontsize=18)
+	color_index = 2
+	for (iq, quark) in enumerate(quarks)
+		string_as_varname("line_"*quark, [LineElement(color = (custom_colors[color_index], 1), linestyle = nothing), MarkerElement(color = custom_colors[color_index], marker = markers[iq], markersize = 10, strokecolor = custom_colors[color_index])])
+	end
 
-	text!(ax_raa_cteq_nnpdf, L"\mathrm{FONLL\,pp}", position = (0.35, 0.7), fontsize=16)
-	# text!(ax_raa_cteq_nnpdf, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.63), fontsize=16)
+	axislegend(ax_raa_τ_cb[2], [line_charm, line_beauty], quark_labels, labelsize=20, titlesize=18, position = :rt, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
 
-	# save("plots/clean_raa_tau_"*string(τₛ_fonll)*"_quark_"*quark*"_Qs_"*string(Qₛ)*"_fonll_energy_dep_pdf_"*pdf_type*".png", fig_raa_cteq_nnpdf, px_per_unit = 5.0)
+	colgap!(fig_raa_τ_cb.layout, 0)
 
-	fig_raa_cteq_nnpdf
+	save("plots/clean_raa_tau_dep_quarks_charm_beauty_Qs_"*string(Qₛ)*"_fonll_energy_"*string(energy)*"_pdf_"*pdf_type*".png", fig_raa_τ_cb, px_per_unit = 5.0)
+
+	fig_raa_τ_cb
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -398,6 +379,8 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 KernelDensity = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
 NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
 NumericalIntegration = "e7bfaba1-d571-5449-8927-abc22e82249b"
@@ -406,9 +389,11 @@ PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
-CairoMakie = "~0.11.11"
+CairoMakie = "~0.12.0"
 DataFrames = "~1.6.1"
 DataInterpolations = "~4.6.0"
+HDF5 = "~0.17.2"
+JLD2 = "~0.4.47"
 KernelDensity = "~0.6.9"
 NPZ = "~0.4.3"
 NumericalIntegration = "~0.3.3"
@@ -422,7 +407,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "1c8f1ac28f0e80dd2740301dbff877ebce3186eb"
+project_hash = "1f57ee461283f1cd75af14e65de965fec9ac19dd"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -551,9 +536,9 @@ version = "1.0.5"
 
 [[deps.CairoMakie]]
 deps = ["CRC32c", "Cairo", "Colors", "FileIO", "FreeType", "GeometryBasics", "LinearAlgebra", "Makie", "PrecompileTools"]
-git-tree-sha1 = "d69c7593fe9d7d617973adcbe4762028c6899b2c"
+git-tree-sha1 = "aec444a07f2b3df8d41a47fabd02841b32be2dc5"
 uuid = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
-version = "0.11.11"
+version = "0.12.0"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -587,9 +572,9 @@ version = "0.4.0"
 
 [[deps.ColorSchemes]]
 deps = ["ColorTypes", "ColorVectorSpace", "Colors", "FixedPointNumbers", "PrecompileTools", "Random"]
-git-tree-sha1 = "67c1f244b991cad9b0aa4b7540fb758c2488b129"
+git-tree-sha1 = "4b270d6465eb21ae89b732182c20dc165f8bf9f2"
 uuid = "35d6a980-a343-548e-a6ea-1d62b119f2f4"
-version = "3.24.0"
+version = "3.25.0"
 
 [[deps.ColorTypes]]
 deps = ["FixedPointNumbers", "Random"]
@@ -676,9 +661,9 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 
 [[deps.DelaunayTriangulation]]
 deps = ["EnumX", "ExactPredicates", "Random"]
-git-tree-sha1 = "1ef41f49ab90d95f545105c138d9340e4124d079"
+git-tree-sha1 = "1755070db557ec2c37df2664c75600298b0c1cfc"
 uuid = "927a84f5-c5f4-47a5-9785-b46e178433df"
-version = "1.0.1"
+version = "1.0.3"
 
 [[deps.DelimitedFiles]]
 deps = ["Mmap"]
@@ -907,20 +892,38 @@ version = "1.3.14+0"
 
 [[deps.GridLayoutBase]]
 deps = ["GeometryBasics", "InteractiveUtils", "Observables"]
-git-tree-sha1 = "6f93a83ca11346771a93bbde2bdad2f65b61498f"
+git-tree-sha1 = "fc713f007cff99ff9e50accba6373624ddd33588"
 uuid = "3955a311-db13-416c-9275-1d80ed98e5e9"
-version = "0.10.2"
+version = "0.11.0"
 
 [[deps.Grisu]]
 git-tree-sha1 = "53bb909d1151e57e2484c3d1b53e19552b887fb2"
 uuid = "42e2da0e-8278-4e71-bc24-59509adca0fe"
 version = "1.0.2"
 
+[[deps.HDF5]]
+deps = ["Compat", "HDF5_jll", "Libdl", "MPIPreferences", "Mmap", "Preferences", "Printf", "Random", "Requires", "UUIDs"]
+git-tree-sha1 = "e856eef26cf5bf2b0f95f8f4fc37553c72c8641c"
+uuid = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
+version = "0.17.2"
+
+[[deps.HDF5_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LLVMOpenMP_jll", "LazyArtifacts", "LibCURL_jll", "Libdl", "MPICH_jll", "MPIPreferences", "MPItrampoline_jll", "MicrosoftMPI_jll", "OpenMPI_jll", "OpenSSL_jll", "TOML", "Zlib_jll", "libaec_jll"]
+git-tree-sha1 = "38c8874692d48d5440d5752d6c74b0c6b0b60739"
+uuid = "0234f1f7-429e-5d53-9886-15a909be8d59"
+version = "1.14.2+1"
+
 [[deps.HarfBuzz_jll]]
 deps = ["Artifacts", "Cairo_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "Graphite2_jll", "JLLWrappers", "Libdl", "Libffi_jll", "Pkg"]
 git-tree-sha1 = "129acf094d168394e80ee1dc4bc06ec835e510a3"
 uuid = "2e76f6c2-a576-52d4-95c1-20adfe4de566"
 version = "2.8.1+1"
+
+[[deps.Hwloc_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "ca0f6bf568b4bfc807e7537f081c81e35ceca114"
+uuid = "e33a78d0-f292-5ffc-b300-72abe9b543c8"
+version = "2.10.0+0"
 
 [[deps.HypergeometricFunctions]]
 deps = ["DualNumbers", "LinearAlgebra", "OpenLibm_jll", "SpecialFunctions"]
@@ -1046,6 +1049,12 @@ git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
 
+[[deps.JLD2]]
+deps = ["FileIO", "MacroTools", "Mmap", "OrderedCollections", "Pkg", "PrecompileTools", "Printf", "Reexport", "Requires", "TranscodingStreams", "UUIDs"]
+git-tree-sha1 = "dca9ff5abdf5fab4456876bc93f80c59a37b81df"
+uuid = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+version = "0.4.47"
+
 [[deps.JLLWrappers]]
 deps = ["Artifacts", "Preferences"]
 git-tree-sha1 = "7e5d6779a1e09a36db2a7b6cff50942a0a7d0fca"
@@ -1066,9 +1075,9 @@ version = "0.1.5"
 
 [[deps.JpegTurbo_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "3336abae9a713d2210bb57ab484b1e065edd7d23"
+git-tree-sha1 = "c84a835e1a09b289ffcd2271bf2a337bbdda6637"
 uuid = "aacddb02-875f-59d6-b918-886e6ef4fbf8"
-version = "3.0.2+0"
+version = "3.0.3+0"
 
 [[deps.JuliaNVTXCallbacks_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1214,6 +1223,24 @@ git-tree-sha1 = "80b2833b56d466b3858d565adcd16a4a05f2089b"
 uuid = "856f044c-d86e-5d09-b602-aeab76dc8ba7"
 version = "2024.1.0+0"
 
+[[deps.MPICH_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Hwloc_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML"]
+git-tree-sha1 = "4099bb6809ac109bfc17d521dad33763bcf026b7"
+uuid = "7cb0a576-ebde-5e09-9194-50597f1243b4"
+version = "4.2.1+1"
+
+[[deps.MPIPreferences]]
+deps = ["Libdl", "Preferences"]
+git-tree-sha1 = "c105fe467859e7f6e9a852cb15cb4301126fac07"
+uuid = "3da0fdf6-3ccc-4f1b-acd9-58baa6c99267"
+version = "0.1.11"
+
+[[deps.MPItrampoline_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "TOML"]
+git-tree-sha1 = "ce0ca3dd147c43de175c5aff161315a424f4b8ac"
+uuid = "f1f71cc9-e9ae-5b93-9b94-4fe0e1ad3748"
+version = "5.3.3+1"
+
 [[deps.MacroTools]]
 deps = ["Markdown", "Random"]
 git-tree-sha1 = "2fa9ee3e63fd3a4f7a9a4f4744a52f4856de82df"
@@ -1221,16 +1248,16 @@ uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
 version = "0.5.13"
 
 [[deps.Makie]]
-deps = ["Animations", "Base64", "CRC32c", "ColorBrewer", "ColorSchemes", "ColorTypes", "Colors", "Contour", "DelaunayTriangulation", "Distributions", "DocStringExtensions", "Downloads", "FFMPEG_jll", "FileIO", "FilePaths", "FixedPointNumbers", "Format", "FreeType", "FreeTypeAbstraction", "GeometryBasics", "GridLayoutBase", "ImageIO", "InteractiveUtils", "IntervalSets", "Isoband", "KernelDensity", "LaTeXStrings", "LinearAlgebra", "MacroTools", "MakieCore", "Markdown", "MathTeXEngine", "Observables", "OffsetArrays", "Packing", "PlotUtils", "PolygonOps", "PrecompileTools", "Printf", "REPL", "Random", "RelocatableFolders", "Scratch", "ShaderAbstractions", "Showoff", "SignedDistanceFields", "SparseArrays", "Statistics", "StatsBase", "StatsFuns", "StructArrays", "TriplotBase", "UnicodeFun"]
-git-tree-sha1 = "4d49c9ee830eec99d3e8de2425ff433ece7cc1bc"
+deps = ["Animations", "Base64", "CRC32c", "ColorBrewer", "ColorSchemes", "ColorTypes", "Colors", "Contour", "Dates", "DelaunayTriangulation", "Distributions", "DocStringExtensions", "Downloads", "FFMPEG_jll", "FileIO", "FilePaths", "FixedPointNumbers", "Format", "FreeType", "FreeTypeAbstraction", "GeometryBasics", "GridLayoutBase", "ImageIO", "InteractiveUtils", "IntervalSets", "Isoband", "KernelDensity", "LaTeXStrings", "LinearAlgebra", "MacroTools", "MakieCore", "Markdown", "MathTeXEngine", "Observables", "OffsetArrays", "Packing", "PlotUtils", "PolygonOps", "PrecompileTools", "Printf", "REPL", "Random", "RelocatableFolders", "Scratch", "ShaderAbstractions", "Showoff", "SignedDistanceFields", "SparseArrays", "Statistics", "StatsBase", "StatsFuns", "StructArrays", "TriplotBase", "UnicodeFun", "Unitful"]
+git-tree-sha1 = "e96f6e1dba3c008d95b97103a330be6287411c67"
 uuid = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
-version = "0.20.10"
+version = "0.21.0"
 
 [[deps.MakieCore]]
-deps = ["Observables", "REPL"]
-git-tree-sha1 = "248b7a4be0f92b497f7a331aed02c1e9a878f46b"
+deps = ["ColorTypes", "GeometryBasics", "IntervalSets", "Observables"]
+git-tree-sha1 = "f23e301d977e037ff8df4e1f5d8035cd78a1e250"
 uuid = "20f20a25-4f0e-4fdf-b5d1-57303727442b"
-version = "0.7.3"
+version = "0.8.0"
 
 [[deps.MappedArrays]]
 git-tree-sha1 = "2dab0221fe2b0f2cb6754eaa743cc266339f527e"
@@ -1243,14 +1270,20 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[deps.MathTeXEngine]]
 deps = ["AbstractTrees", "Automa", "DataStructures", "FreeTypeAbstraction", "GeometryBasics", "LaTeXStrings", "REPL", "RelocatableFolders", "UnicodeFun"]
-git-tree-sha1 = "96ca8a313eb6437db5ffe946c457a401bbb8ce1d"
+git-tree-sha1 = "1865d0b8a2d91477c8b16b49152a32764c7b1f5f"
 uuid = "0a4f8689-d25c-4efe-a92b-7142dfc1aa53"
-version = "0.5.7"
+version = "0.6.0"
 
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "c8ffd9c3-330d-5841-b78e-0817d7145fa1"
 version = "2.28.0+0"
+
+[[deps.MicrosoftMPI_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "f12a29c4400ba812841c6ace3f4efbb6dbb3ba01"
+uuid = "9237b28f-5490-5468-be7b-bb81f5f5e6cf"
+version = "10.1.4+2"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
@@ -1350,6 +1383,12 @@ deps = ["Artifacts", "Libdl"]
 uuid = "05823500-19ac-5b8b-9628-191a04bc5112"
 version = "0.8.1+0"
 
+[[deps.OpenMPI_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "Hwloc_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MPIPreferences", "PMIx_jll", "TOML", "Zlib_jll", "libevent_jll", "prrte_jll"]
+git-tree-sha1 = "f46caf663e069027a06942d00dced37f1eb3d8ad"
+uuid = "fe0851c0-eecd-5654-98d4-656369965a5c"
+version = "5.0.2+0"
+
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
 git-tree-sha1 = "3da7367955dcc5c54c1ba4d402ccdc09a1a3e046"
@@ -1383,6 +1422,12 @@ deps = ["LinearAlgebra", "SparseArrays", "SuiteSparse"]
 git-tree-sha1 = "949347156c25054de2db3b166c52ac4728cbad65"
 uuid = "90014a1f-27ba-587c-ab20-58faa44d9150"
 version = "0.11.31"
+
+[[deps.PMIx_jll]]
+deps = ["Artifacts", "Hwloc_jll", "JLLWrappers", "Libdl", "Zlib_jll", "libevent_jll"]
+git-tree-sha1 = "360f48126b5f2c2f0c833be960097f7c62705976"
+uuid = "32165bc3-0280-59bc-8c0b-c33b6203efab"
+version = "4.2.9+0"
 
 [[deps.PNGFiles]]
 deps = ["Base64", "CEnum", "ImageCore", "IndirectArrays", "OffsetArrays", "libpng_jll"]
@@ -1789,6 +1834,12 @@ git-tree-sha1 = "53915e50200959667e78a92a418594b428dffddf"
 uuid = "1cfade01-22cf-5700-b092-accc4b62d6e1"
 version = "0.4.1"
 
+[[deps.Unitful]]
+deps = ["ConstructionBase", "Dates", "InverseFunctions", "LinearAlgebra", "Random"]
+git-tree-sha1 = "3c793be6df9dd77a0cf49d80984ef9ff996948fa"
+uuid = "1986cc42-f94f-5a68-af5c-568840ba703d"
+version = "1.19.0"
+
 [[deps.UnsafeAtomics]]
 git-tree-sha1 = "6331ac3440856ea1988316b46045303bef658278"
 uuid = "013be700-e6cd-48c3-b4a1-df204f14c38f"
@@ -1888,6 +1939,12 @@ git-tree-sha1 = "51b5eeb3f98367157a7a12a1fb0aa5328946c03c"
 uuid = "9a68df92-36a6-505f-a73e-abb412b6bfb4"
 version = "0.2.3+0"
 
+[[deps.libaec_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "46bf7be2917b59b761247be3f317ddf75e50e997"
+uuid = "477f73a3-ac25-53e9-8cc3-50b2fa2566f0"
+version = "1.1.2+0"
+
 [[deps.libaom_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "3a2ea60308f0996d26f1e5354e10c24e9ef905d4"
@@ -1904,6 +1961,12 @@ version = "0.15.1+0"
 deps = ["Artifacts", "Libdl", "OpenBLAS_jll"]
 uuid = "8e850b90-86db-534c-a0d3-1478176c7d93"
 version = "5.1.1+0"
+
+[[deps.libevent_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl", "OpenSSL_jll"]
+git-tree-sha1 = "f04ec6d9a186115fb38f858f05c0c4e1b7fc9dcb"
+uuid = "1080aeaf-3a6a-583e-a51c-c537b09f60ec"
+version = "2.1.13+1"
 
 [[deps.libfdk_aac_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1945,6 +2008,12 @@ deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
 version = "17.4.0+0"
 
+[[deps.prrte_jll]]
+deps = ["Artifacts", "Hwloc_jll", "JLLWrappers", "Libdl", "PMIx_jll", "libevent_jll"]
+git-tree-sha1 = "5adb2d7a18a30280feb66cad6f1a1dfdca2dc7b0"
+uuid = "eb928a42-fffd-568d-ab9c-3f5d54fc65b9"
+version = "3.0.2+0"
+
 [[deps.x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "4fea590b89e6ec504593146bf8b988b2c00922b2"
@@ -1968,9 +2037,11 @@ version = "3.5.0+0"
 # ╠═710fc78f-a426-4a20-bef6-89b1255201a9
 # ╠═4dd68346-657a-47b7-8f18-68303974be5e
 # ╠═0fcc8da3-c52c-4aaf-869d-074f82271f1a
+# ╠═4035a5a6-65fa-43e7-85cb-ececb4c902ca
 # ╠═47a21094-514f-4863-a4a5-d5d7bd091ec5
 # ╠═3fa82e08-1209-463d-a89e-1b9f54dcd290
 # ╠═0066551b-ee58-4a94-9253-6826bef17872
+# ╠═7645afc8-70f6-4fc5-865e-1cfbec6459f6
 # ╠═8c017469-fa13-4445-badc-12be5824c02c
 # ╠═6c9529f9-d636-4ad2-943c-3503dc1715f0
 # ╠═2054f123-58c4-4f13-aa17-8d98858353e0
@@ -1979,13 +2050,12 @@ version = "3.5.0+0"
 # ╠═79983bb8-c520-4bd8-940a-a9f6ffe19ee1
 # ╠═f9c524f7-4e66-49dd-90d5-ea77c2e6f8fa
 # ╠═5e5e2f10-9ab5-4f61-85ee-fc97391fb28d
+# ╠═e7f82c9e-ef4d-4302-a0c1-a6160382ae24
+# ╠═7a58df0a-3a46-4555-ba37-546bf67b1695
 # ╠═b85c8694-8a9f-4717-8d74-6f1b46a88677
 # ╠═2cb1fcc2-8643-4b5e-93df-86b5a274d261
 # ╠═ff771af6-a67d-4dc2-b203-0972b5400ebc
 # ╠═44463e1b-aded-4c57-a405-af6059263c3c
-# ╠═82fc989e-68d0-4b64-83b6-1bf1b9a285c6
-# ╠═7aec3bb2-97c5-4626-ac65-a152b9c88e91
-# ╠═4b7f2f8d-4af6-4f3a-95f8-0e386551353c
-# ╠═701f2554-a557-4d45-8a37-35e21b80f298
+# ╠═6acf50b9-e07b-46f3-88d1-cdddbd00fd1d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
