@@ -119,6 +119,9 @@ folder = 'clean_RAA_' + p["QUARK"] + '_fonll_Qs_' + str(p["QS"]) + '_' + repr_na
 # filename = 'all_pTs_' + binning + '_bins.pickle'
 
 import os
+
+# os.environ["CUDA_VISIBLE_DEVICES"]="7"
+
 os.environ["MY_NUMBA_TARGET"] = "cuda"
 os.environ["PRECISION"] = "double"
 os.environ["GAUGE_GROUP"] = p["SUGROUP"]

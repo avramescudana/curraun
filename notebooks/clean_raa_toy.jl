@@ -226,6 +226,7 @@ begin
 
 	pTs = results_glasma["pTs"]
 	σ_pTs = results_glasma["sigmapT"]
+	tau = results_glasma["tau"]
 end
 
 # ╔═╡ 91239df5-d147-4d56-95f9-0827eef1f46f
@@ -282,7 +283,7 @@ begin
 	segmented_cmap = cgrad(:redblue, 8, categorical = true, rev=false)
 	custom_colors = [segmented_cmap[2], segmented_cmap[7], segmented_cmap[8]]
 
-	for (iσ, σ) in enumerate(στ_glasma)
+	for (iσ, σ) in enumerate(στ_glasma[1:2])
 		string_as_varname("line"*string(iσ), lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)], color=custom_colors[iσ+1], linewidth=2, label=string(σ)))
 	end
 
@@ -305,6 +306,104 @@ begin
 	save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll.png", fig_glasma, px_per_unit = 5.0)
 	
 	fig_glasma
+end
+
+# ╔═╡ a88e05d9-fb22-4d2f-935e-cd32fb54c043
+md"---
+### Toy model with $\sigma(p_T,\tau)$ from Glasma simulations"
+
+# ╔═╡ b8a8ab8b-c88b-4758-aa45-52c19105ff30
+function findminindex(value, array)
+	return findmin(element->abs(element-value),array)[2]
+end 
+
+# ╔═╡ d1cebd5a-ec22-4ab1-821b-b8125dd12ee9
+begin
+	# τs_values = [0.1, 0.3, 1.0]
+	τs_values = [0.3]
+	τs_indices = findminindex(τs_values[1], tau)
+
+	στs_glasma = Float64[]
+	for pT in pTs
+		append!(στs_glasma, σ_pTs[string(pT)][τs_indices])
+	end
+end
+
+# ╔═╡ 499c6d0a-923b-41bf-ad11-58b5d401c97d
+στs_pT_interp = CubicSpline(στs_glasma, pTs)
+
+# ╔═╡ 843c07ef-c607-4f49-a41b-95c2e861c4f2
+function Nτ_fixedq_interp(p, q)
+	σ = στs_pT_interp(q)
+	return sqrt(2*π)/σ * exp(-(p^2+q^2)/(2*σ^2)) * besseli(0,p*q/σ^2)
+end
+
+# ╔═╡ 9d5c4794-f88e-426a-9a1a-c4e4a74afa1d
+function Nτ_fixedq_qdq_interp(p, q)
+	return Nτ_fixedq_interp(p, q) * q
+end
+
+# ╔═╡ 2c6a4fad-c9d5-453e-b00b-bbbd2e58eadb
+function Nτ_fixedq_qdq_fonll_fit_interp(p, q, fit_type)
+	return Nτ_fixedq_interp(p, q) * q * N₀_fit(q, fit_type)
+end
+
+# ╔═╡ e0c0faba-bd15-4a8f-bc96-a54a15c6dd41
+function Nτ_fonll_fit_interp(p, fit_type, pₘₐₓ)
+	q_range = range(pₘᵢₙ, pₘₐₓ, 100)
+	Nτ_fixedq_qdq_num = Nτ_fixedq_qdq_fonll_fit_interp.(p, q_range, fit_type)
+	return integrate(q_range, Nτ_fixedq_qdq_num)
+end
+
+# ╔═╡ 238fd929-659e-4306-989f-73b8c3eca19f
+begin
+	# RAAs_glasma_interp = Dict()
+	
+	# for σ in στs_glasma
+		Nτ_p_fonll_fit_interp = Nτ_fonll_fit_interp.(p_range_fit, fit_type, pₘₐₓ)
+		Nτ_p_fonll_fit_norm_interp = Nτ_p_fonll_fit_interp./integrate(p_range_fit, Nτ_p_fonll_fit_interp)
+	
+		N₀_fonll_fit = N₀_fit.(p_range_fit, fit_type)
+		N₀_fonll_fit_norm = N₀_fonll_fit./integrate(p_range_fit, N₀_fonll_fit)
+	
+		RAA_fonll_fit_interp = Nτ_p_fonll_fit_norm_interp./N₀_fonll_fit_norm
+		# RAAs_glasma[string(σ)] = RAA_fonll_fit
+	# end
+end
+
+# ╔═╡ 4da1eb8e-f23c-4d43-9590-f2a1f7036698
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	
+	# Create Figure and Axis
+	fig_glasma_interp = Figure(size = (380, 380))
+	ax_glasma_interp = Axis(fig_glasma_interp[1, 1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true)
+
+	lines!(ax_glasma_interp, p_range_fit, ones(length(p_range_fit)), color=(:gray, 0.7), linewidth=1.5)
+
+	# for (iσ, σ) in enumerate(στ_glasma[1:2])
+	# 	string_as_varname("line"*string(iσ), lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)], color=custom_colors[iσ+1], linewidth=2, label=string(σ)))
+	# end
+
+	lines!(ax_glasma_interp, p_range_fit, RAA_fonll_fit_interp, color=custom_colors[1], linewidth=2)
+
+	# lines!(ax_glasma, pTs_raa_script, raa_script, color=custom_colors[1], linewidth=2)
+	# scatter!(ax_glasma, pTs_sel, raa_script[ind_sel], color=custom_colors[1], marker=:circle, markersize=10)
+
+	# line_glasma = [LineElement(color = (custom_colors[1], 1), linestyle = nothing), MarkerElement(color = custom_colors[1], marker = :circle, markersize = 10, strokecolor = custom_colors[1])]
+
+	# axislegend(ax_glasma_interp, [line_glasma, line1, line2], [L"\mathrm{Glasma\,simulation}", L"\mathrm{Toy\,model\,}\sigma=0.96\,\mathrm{GeV}", L"\mathrm{Toy\,model\,}\sigma=1.28\,\mathrm{GeV}"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	
+	# ylims!(ax_glasma_interp, 0, 2)
+
+	xlims!(ax_glasma_interp, 0, 10)
+	ax_glasma_interp.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+
+	text!(ax_glasma_interp, L"\tau=1\,\mathrm{fm/c}", position = (0.35, 1.8), fontsize=18)
+	
+	# save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll.png", fig_glasma_interp, px_per_unit = 5.0)
+	
+	fig_glasma_interp
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2059,5 +2158,15 @@ version = "3.5.0+0"
 # ╠═3e1f3283-894f-4fd4-84a0-2169b8bf6a36
 # ╠═4ef35d3b-d2f0-4e5a-8ec6-acbb04db36e7
 # ╠═36f5d644-a066-44d7-814a-4749183c55c4
+# ╠═a88e05d9-fb22-4d2f-935e-cd32fb54c043
+# ╠═b8a8ab8b-c88b-4758-aa45-52c19105ff30
+# ╠═d1cebd5a-ec22-4ab1-821b-b8125dd12ee9
+# ╠═499c6d0a-923b-41bf-ad11-58b5d401c97d
+# ╠═843c07ef-c607-4f49-a41b-95c2e861c4f2
+# ╠═9d5c4794-f88e-426a-9a1a-c4e4a74afa1d
+# ╠═2c6a4fad-c9d5-453e-b00b-bbbd2e58eadb
+# ╠═e0c0faba-bd15-4a8f-bc96-a54a15c6dd41
+# ╠═238fd929-659e-4306-989f-73b8c3eca19f
+# ╠═4da1eb8e-f23c-4d43-9590-f2a1f7036698
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

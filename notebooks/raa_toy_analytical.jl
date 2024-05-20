@@ -281,7 +281,7 @@ begin
 	lines!(ax, p_range, ones(length(p_range)), color=(:gray, 0.7), linewidth=1.5)
 	xlims!(ax, 0, 10)
 
-	axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
+	axislegend(L"\sigma\,\mathrm{[GeV]}", position = :rt, titlesize = 16, labelsize=14)
 
 	# save("plots/analytical_raa_fixed_sigma_" * fonll_type * "_fonll.png", fig, px_per_unit = 5.0)
 	
@@ -372,7 +372,7 @@ begin
 
 	axislegend(ax_interp, [raa_fit, raa_interp], [L"\mathrm{fit}", L"\mathrm{interp}"], position = :rb, titlesize = 16, labelsize=14, orientation = :horizontal)
 
-	save("plots/analytical_raa_fixed_sigma_fit_vs_interp_fonll.png", fig_interp, px_per_unit = 5.0)
+	# save("plots/analytical_raa_fixed_sigma_fit_vs_interp_fonll.png", fig_interp, px_per_unit = 5.0)
 	
 	fig_interp
 end
