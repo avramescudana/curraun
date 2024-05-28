@@ -29,6 +29,8 @@ class LCGaugeTransf:
 
         # We create the LC gauge transformation operator at tau_{n+1}
         self.vlc1 = np.zeros((self.n**2 * nplus, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        
+        self.initialize_vlc()
 
         # We create the pointers to the GPU
         self.d_up_temp = self.up_temp
@@ -36,7 +38,6 @@ class LCGaugeTransf:
         self.d_vlc0 = self.vlc0
         self.d_vlc1 = self.vlc1
 
-        self.initialize_vlc()
         
         self.initialized = False
 
@@ -52,7 +53,6 @@ class LCGaugeTransf:
         self.d_up_lc.copy_to_host(self.up_lc)
 
     # We initialize the gauge transformation operator as unity
-    # TODO: Initialize using the fields at tau=1
     def initialize_vlc(self):
         n = self.s.n
         nplus = self.nplus
@@ -64,13 +64,20 @@ class LCGaugeTransf:
             self.copy_to_device()
 
         self.initialized = True
-
-    # We evolve the gauge transformation
-    def evolve_lc(self, xplus):
+        
+    def initialize_lc(self):
         
         # We copy the objects to the GPU if they have not been copied yet
         if not self.initialized:
             self.init()
+            
+        compute_uplus_temp(self.d_up_temp, self.dts, self.s.n, self.s.d_u1, self.s.d_aeta1)
+        compute_vlc(self.d_vlc0, self.d_vlc1, self.dts, self.s.n, self.nplus, self.s.d_u1, self.s.d_aeta1)
+        update_vlc(self.d_vlc0, self.d_vlc1, self.s.n, self.nplus)
+        
+
+    # We evolve the gauge transformation
+    def evolve_lc(self, xplus):
 
         # We restrict to the points where the two lattices are the same
         if self.s.t % self.s.dt == 0:
@@ -80,8 +87,8 @@ class LCGaugeTransf:
             
             # We construct the U_+ in temporal gauge and transform them
             # TODO: Merge the two kernels into one
-            compute_uplus_temp(self.d_up_temp, xplus, self.s.n, self.s.d_u0, self.s.d_aeta0)
-            act_vlc_uplus(self.s.n, xplus, self.d_up_lc, self.d_up_temp, self.d_vlc0, self.d_vlc1)
+            act_vlc_uplus(self.s.n, xplus, self.d_up_lc, self.d_up_temp, self.d_vlc1)
+            compute_uplus_temp(self.d_up_temp, xplus, self.s.n, self.s.d_u1, self.s.d_aeta1)
             
             # We save vlc1 into vlc0
             update_vlc(self.d_vlc0, self.d_vlc1, self.s.n, self.nplus)
@@ -117,15 +124,15 @@ def compute_vlc_kernel(yi, n, t, u1, aeta1, vlc0, vlc1):
         xy_latt = l.get_index_nm(xp_slice+xp_slice-t, y, n)
         
         ux_latt = u1[xy_latt, 0, :]
-        ux_dag = su.dagger(ux_latt)
 
         aeta_latt = aeta1[xy_latt, :]
         aeta_fact = su.mul_s(aeta_latt, (z-n//2)/t**2)
         ueta = su.mexp(aeta_fact)
-        ueta_dag = su.dagger(ueta)
 
-        umin = su.mul(ux_dag, ueta_dag)
-        res = su.mul(umin, vlc0[yi])
+        umin = su.mul(ueta, ux_latt)
+        umin_dag = su.dagger(umin)
+        
+        res = su.mul(umin_dag, vlc0[yi])
         su.store(vlc1[yi], res)
 
 
@@ -133,21 +140,21 @@ def compute_vlc_kernel(yi, n, t, u1, aeta1, vlc0, vlc1):
     Extracts the value of U_+ along the x^+ axis.
 """
 
-def compute_uplus_temp(up_temp, t, n, u0, aeta0):
-    my_parallel_loop(compute_uplus_temp_kernel, n*n, t, n, u0, aeta0, up_temp)  
+def compute_uplus_temp(up_temp, t, n, u1, aeta1):
+    my_parallel_loop(compute_uplus_temp_kernel, n*n, t, n, u1, aeta1, up_temp)  
 
 @myjit
-def compute_uplus_temp_kernel(yi, t, n, u0, aeta0, up_temp):
+def compute_uplus_temp_kernel(yi, t, n, u1, aeta1, up_temp):
     
     yz = l.get_point(yi, n)
     y, z = yz[0], yz[1]
     
     ty_latt = l.get_index_nm(t, y, n)
 
-    ux_latt = u0[ty_latt, 0, :]
+    ux_latt = u1[ty_latt, 0, :]
     ux_dag = su.dagger(ux_latt)
     
-    aeta_latt = aeta0[ty_latt, :]
+    aeta_latt = aeta1[ty_latt, :]
     aeta_fact = su.mul_s(aeta_latt, (z-n//2)/t**2)
     ueta = su.mexp(aeta_fact)
     
@@ -158,22 +165,22 @@ def compute_uplus_temp_kernel(yi, t, n, u0, aeta0, up_temp):
 
 
 """
-    Aplies the gauge transformation V_LC on the U_+ gauge link.
+    Applies the gauge transformation V_LC on the U_+ gauge link.
 """
 
-def act_vlc_uplus(n, xplus, up_lc, up_temp, vlc0, vlc1):
-    my_parallel_loop(act_vlc_uplus_kernel, n*n, xplus, n, up_lc, up_temp, vlc0, vlc1)  
+def act_vlc_uplus(n, xplus, up_lc, up_temp, vlc1):
+    my_parallel_loop(act_vlc_uplus_kernel, n*n, xplus, n, up_lc, up_temp, vlc1)  
 
 @myjit
-def act_vlc_uplus_kernel(yi, xplus, n, up_lc, up_temp, vlc0, vlc1):
+def act_vlc_uplus_kernel(yi, xplus, n, up_lc, up_temp, vlc1):
     
-    xplusy_latt = l.get_index_nm(xplus, yi, n)
+    xplusy_latt = l.get_index_nm(xplus, yi, n*n)
     buff0 = su.dagger(vlc1[xplusy_latt])
     
     buff1 = su.mul(buff0, up_temp[yi])
     
-    xplusy_prev = l.get_index_nm(xplus-1, yi, n)
-    buff2 = su.mul(buff1, vlc0[xplusy_prev])
+    xplusy_prev = l.get_index_nm(xplus-1, yi, n*n)
+    buff2 = su.mul(buff1, vlc1[xplusy_prev])
 
     su.store(up_lc[yi], buff2)
     
@@ -183,7 +190,7 @@ def act_vlc_uplus_kernel(yi, xplus, n, up_lc, up_temp, vlc0, vlc1):
 """
 
 def update_vlc(vlc0, vlc1, n, nplus):
-    my_parallel_loop(update_vlc_kernel, n*nplus, vlc0, vlc1)  
+    my_parallel_loop(update_vlc_kernel, n**2*nplus, vlc0, vlc1)  
 
 @myjit
 def update_vlc_kernel(yi, vlc0, vlc1):
