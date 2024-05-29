@@ -50,7 +50,7 @@ md"### Glasma
 # ╔═╡ 98fe0b35-c9d8-49d2-8290-001d63125184
 begin
 	# Simulation time
-	τₛ = 0.2
+	τₛ = 0.3
 	
 	# Gauge group
 	gauge_group = "su3"
@@ -86,6 +86,7 @@ md"### FONLL
 # ╔═╡ 00d9b329-dc77-41ce-b24a-bc4978a46021
 begin
 	energy = 5500
+	# energy = 7000
 	pdf_type = "cteq"
 	
 	data_fonll = "dsdpt"
@@ -122,6 +123,9 @@ begin
 	end
 end
 
+# ╔═╡ 4b574705-f023-49b6-8a10-b912fbecb651
+df_pdf = df_fonll(quark, energy, "cteq", data_fonll)
+
 # ╔═╡ fc82dc0b-52d4-4382-9ada-9fb0421d10bc
 md"### Glasma weighted KDEs
 ---
@@ -144,12 +148,12 @@ function raa_kde_weighted(collect_initial_pTs, collect_pTs, w₀, npoints, bound
 
 	raa_kde = dndpt₁_weight_kde./dndpt₀_weight_kde
 	# return pt₁_weight_kde, raa_kde
-	return raa_kde
+	return dndpt₀_weight_kde, dndpt₁_weight_kde, raa_kde
 end
 
 # ╔═╡ 7925a362-5755-4b6a-93a7-6e3850421a2c
 begin
-	function compute_raa_events(τₛ, quark, Qₛ, energy, pdf_type, nevents)
+	function compute_raa_events(τₛ, quark, Qₛ, df, nevents)
 		# nevents_temp = 30
 		
 		folder= "clean_RAA_"*quark*"_fonll_Qs_"*string(Qₛ)*"_"*representation*"_"*gauge_group*"_formt_m"
@@ -164,13 +168,13 @@ begin
 		τᵢ = findminindex(τₛ, τ)
 	
 		raas = Array{Float64}[]
+		dndpt₀ = Array{Float64}[]
+		dndpt₁ = Array{Float64}[]
 	
 		npoints_raa = 100
 		boundary_raa = (pTs[1], pTs[length(pTs)])
 
 		# FONLL
-		df = df_fonll(quark, energy, pdf_type, data_fonll)
-
 		xdata = df[!, "pt"]
 		ydata = df[!, "central"]
 
@@ -200,15 +204,17 @@ begin
 			# Normalize weights
 			w₀ ./ sum(w₀)
 	
-			raa_ev = raa_kde_weighted(initial_pTs, final_pTs, w₀, npoints_raa, boundary_raa)
+			dndpt₀_ev, dndpt₁_ev, raa_ev = raa_kde_weighted(initial_pTs, final_pTs, w₀, npoints_raa, boundary_raa)
 			push!(raas, raa_ev)
+			push!(dndpt₀, dndpt₀_ev)
+			push!(dndpt₁, dndpt₁_ev)
 		end
 
 		pTs_raa = range(start=pTs[1], stop=pTs[length(pTs)], length=100)
 	
 		raa_avg = mean(raas, dims=1)[1]
 		
-		return pTs_raa, raa_avg
+		return pTs_raa, raa_avg, dndpt₀, dndpt₁
 	end
 end
 
@@ -282,10 +288,11 @@ function df_fonll_interp(quark, energy, pdf)
 
 	interp_map_npdf = CubicSpline(df_npdf_sort.integral, df_npdf_sort.pt)
 
+	n_interp = 100
 	pt_npdf_interp = range(df_npdf_sort.pt[1], stop=df_npdf_sort.pt[end], length=n_interp)
 	integral_npdf_interp = interp_map_npdf(pt_npdf_interp)
 
-	df_npdf_interp = DataFrame(pt=pt_npdf_interp, integral=integral_npdf_interp)
+	df_npdf_interp = DataFrame(pt=pt_npdf_interp, central=integral_npdf_interp)
 	return df_npdf_interp
 end
 
@@ -297,23 +304,114 @@ md"---
 ### PDFs vs nPDFs FONLL dependence of $R_{AA}$ for fixed $Q_s$ and $\tau$"
 
 # ╔═╡ bf0bd163-2825-4075-b488-6c81e9b88b6d
-nevents = 50
+nevents = 1
 
 # ╔═╡ a21d2f55-c1c0-4669-9229-d48305b1b4cf
 begin
 	τₛ_fonll = 0.3
-	dumb_pTs_raa_fonll, raa_avg_fonll = Dict(), Dict()
-	# energies = [2750, 5500, 5030, 5030, 7000, 7000, 13000, 13000]
-	# pdf_types = ["cteq", "cteq", "cteq", "nnpdf", "cteq", "nnpdf", "cteq", "nnpdf"]
-	
-	energies = [2750, 5500, 7000, 13000]
-	pdf_types = ["cteq", "cteq", "cteq", "cteq"]
+	pTs_raa_fonll, raa_avg_fonll = Dict(), Dict()
+	dndpt₀_fonll, dndpt₁_fonll = Dict(), Dict()
 
-	for ie in range(1, length(energies))
-		label = string(energies[ie]) * "_" * pdf_types[ie]
-		dumb_pTs_raa_fonll[label], raa_avg_fonll[label] = compute_raa_events(τₛ_fonll, quark, Qₛ, energies[ie], pdf_types[ie], nevents)
+	pTs_raa_fonll["pdf"], raa_avg_fonll["pdf"], dndpt₀_fonll["pdf"], dndpt₁_fonll["pdf"] = compute_raa_events(τₛ_fonll, quark, Qₛ, df_pdf, nevents)
+
+	pTs_raa_fonll["npdf"], raa_avg_fonll["npdf"], dndpt₀_fonll["npdf"], dndpt₁_fonll["npdf"] = compute_raa_events(τₛ_fonll, quark, Qₛ, df_npdf_interp, nevents)
+	
+end
+
+# ╔═╡ 28d6c4b9-e377-47c0-aee7-86bc988abca4
+begin
+	collect_raa_npdf = Array{Float64}[]
+	collect_raa_gl_npdf, collect_raa_gl_pdf = Array{Float64}[], Array{Float64}[]
+	
+	for ev in range(1, nevents)
+		ratio_npdf = dndpt₀_fonll["npdf"][ev]./dndpt₀_fonll["pdf"][ev]
+		push!(collect_raa_npdf, ratio_npdf)
+
+		ratio_gl_npdf = dndpt₁_fonll["npdf"][ev]./dndpt₀_fonll["pdf"][ev]
+		push!(collect_raa_gl_npdf, ratio_gl_npdf)
+
+		ratio_gl_pdf = dndpt₁_fonll["pdf"][ev]./dndpt₀_fonll["pdf"][ev]
+		push!(collect_raa_gl_pdf, ratio_gl_pdf)
 	end
-	pTs_raa_fonll = dumb_pTs_raa_fonll[string(energies[1]) * "_" * pdf_types[1]]
+	
+	raa_npdf = mean(collect_raa_npdf, dims=1)[1]
+	raa_gl_npdf = mean(collect_raa_gl_npdf, dims=1)[1]
+	raa_gl_pdf = mean(collect_raa_gl_pdf, dims=1)[1]
+end
+
+# ╔═╡ c4692357-6de9-47e2-a4d2-76cfae425c60
+begin
+	data_jld = Dict()
+	data_jld["pTs_raa_fonll"] = pTs_raa_fonll
+	data_jld["raa_avg_fonll"] = raa_avg_fonll
+
+	data_jld["raa_npdf"] = raa_npdf
+	data_jld["raa_gl_npdf"] = raa_gl_npdf
+	data_jld["raa_gl_pdf"] = raa_gl_pdf
+
+	# save(current_path * "paper_raa_qs_fonll_pdf_npdf_charm.jld2", "data", data_jld)
+end
+
+# ╔═╡ fe86a123-42b9-4f60-95ac-187b1aec496b
+function string_as_varname(s::AbstractString,v::Any)
+    s=Symbol(s)
+    return @eval (($s) = ($v))
+end
+
+# ╔═╡ bd93d2ec-48d5-437f-8158-6e1ab39bb8cd
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig_raa_fonll = Figure(size = (400, 400), font = "CMU Serif")
+
+	ax_raa_fonll = Axis(fig_raa_fonll[1, 1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 21, ylabelsize = 25, xticklabelsize = 15, yticklabelsize = 15, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true,
+	)
+
+	# segmented_cmap_fonll = cgrad(:watermelon, 11, categorical = true, rev=true)
+	# custom_colors_fonll = [segmented_cmap_fonll[8], segmented_cmap_fonll[2], segmented_cmap_fonll[1]]
+	segmented_cmap_fonll = cgrad(:redblue, 8, categorical = true, rev=false)
+	custom_colors_fonll = [segmented_cmap_fonll[7], segmented_cmap_fonll[3], segmented_cmap_fonll[2]]
+
+	# labels_fonll = ["pdf", "npdf"]
+	# for (il, label) in enumerate(labels_fonll)
+	# 	string_as_varname("line_"*label, lines!(ax_raa_fonll, pTs_raa_fonll[label], raa_avg_fonll[label], color=custom_colors_fonll[il], linewidth=2))
+	# end
+
+	# axislegend(ax_raa_fonll, [line_pdf, line_npdf], [L"\mathrm{pp\,CTEQ6.6}", L"\mathrm{PbPb\,EPPS16}"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+
+	line_npdf = lines!(ax_raa_fonll, pTs_raa_fonll["npdf"], raa_npdf, color=custom_colors_fonll[1], linewidth=2)
+
+	line_gl_pdf = lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], raa_gl_pdf, color=custom_colors_fonll[2], linewidth=2)
+
+	line_gl_npdf = lines!(ax_raa_fonll, pTs_raa_fonll["npdf"], raa_gl_npdf, color=custom_colors_fonll[3], linewidth=2)
+
+	lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], ones(length(pTs_raa_fonll["pdf"])), color=(:gray, 0.6), linewidth=1.5)
+
+	# axislegend(ax_raa_fonll, [line_npdf, line_gl_pdf, line_gl_npdf], [L"\scrN_{\mathrm{AA}}(\tau_\mathrm{form})/\scrN_{\mathrm{pp}}(\tau_\mathrm{form})", L"\scrN_{\mathrm{pp}}(\tau\,)/\scrN_{\mathrm{pp}}(\tau_\mathrm{form})", L"\scrN_{\mathrm{AA}}(\tau\,)/\scrN_{\mathrm{pp}}(\tau_\mathrm{form})"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+
+	axislegend(ax_raa_fonll, [line_npdf, line_gl_pdf, line_gl_npdf], [L"\mathrm{nPDF/PDF}", L"\mathrm{(GL+PDF)/PDF}", L"\mathrm{(GL+nPDF)/PDF}"], labelsize=18, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	
+	xlims!(ax_raa_fonll, 0, 10)
+	ax_raa_fonll.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+	
+	ax_raa_fonll.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
+	# ylims!(ax_raa_fonll, 0.6, 1.4
+	ylims!(ax_raa_fonll, 0.5, 1.5)
+
+	text!(ax_raa_fonll, L"Q_s=2\,\mathrm{GeV}", position = (0.35, 1.3), fontsize=16)
+	text!(ax_raa_fonll, L"\tau=0.3\,\mathrm{fm/c}", position = (0.4, 1.25), fontsize=16)
+	text!(ax_raa_fonll, L"\mathrm{charm\,quarks}", position = (0.35, 1.41), fontsize=18)
+
+	text!(ax_raa_fonll, L"\mathrm{pp\,CTEQ6.6}", position = (6.8, 1.41), fontsize=16)
+	text!(ax_raa_fonll, L"\mathrm{PbPb\,EPPS16}", position = (6.45, 1.35), fontsize=16)
+
+	text!(ax_raa_fonll, L"\sqrt{s}=5.5\,\mathrm{TeV}", position = (0.35, 0.53), fontsize=16)
+	text!(ax_raa_fonll, L"\mathrm{FONLL}", position = (0.35, 0.6), fontsize=16)
+
+	# text!(ax_raa_fonll_qs[2], L"\mathrm{FONLL\,}\sqrt{s_\mathrm{pp}}=5.5\,\mathrm{TeV}", position = (0.35, 0.63), fontsize=16)
+	
+	# save("plots/clean_raa_tau_0.3_charm_quark_Qs_2.0_fonll_pdf_vs_npdf_v2.png", fig_raa_fonll, px_per_unit = 5.0)
+
+	fig_raa_fonll
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2034,6 +2132,7 @@ version = "3.5.0+0"
 # ╠═26e6df1a-c17f-4c2c-8d3f-4d935ad5101f
 # ╠═4f6bd683-cc2f-4b5d-9b18-bef03ca5cfb3
 # ╠═79a9bacf-191d-4015-97d7-8c0fd99c58a8
+# ╠═4b574705-f023-49b6-8a10-b912fbecb651
 # ╠═fc82dc0b-52d4-4382-9ada-9fb0421d10bc
 # ╠═62e590e0-f4bd-4b8d-85aa-9d7f9670c8ac
 # ╠═da9b4d39-5d95-45ba-b610-7b6e04537465
@@ -2044,5 +2143,9 @@ version = "3.5.0+0"
 # ╠═7dec08c7-f922-48cb-b88c-b1131c3c2216
 # ╠═bf0bd163-2825-4075-b488-6c81e9b88b6d
 # ╠═a21d2f55-c1c0-4669-9229-d48305b1b4cf
+# ╠═28d6c4b9-e377-47c0-aee7-86bc988abca4
+# ╠═c4692357-6de9-47e2-a4d2-76cfae425c60
+# ╠═fe86a123-42b9-4f60-95ac-187b1aec496b
+# ╠═bd93d2ec-48d5-437f-8158-6e1ab39bb8cd
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -50,7 +50,7 @@ md"### Glasma
 # ╔═╡ 98fe0b35-c9d8-49d2-8290-001d63125184
 begin
 	# Simulation time
-	τₛ = 0.2
+	τₛ = 0.3
 	
 	# Gauge group
 	gauge_group = "su3"
@@ -86,7 +86,11 @@ md"### FONLL
 # ╔═╡ 00d9b329-dc77-41ce-b24a-bc4978a46021
 begin
 	energy = 5500
-	pdf_type = "cteq"
+	# pdf_type = "cteq"
+	# energy = 5030
+	pdf_type = "ct14"
+	# Use FONLL from script run, not the web form
+	# pdf_type = "cteq_script"
 	
 	data_fonll = "dsdpt"
 	fonll_type = "fit"
@@ -94,15 +98,23 @@ begin
 end
 
 # ╔═╡ 26e6df1a-c17f-4c2c-8d3f-4d935ad5101f
-begin
-	# Read FONLL spectrum + store in DataFrame
-	function df_fonll(quark, energy, pdf, data)
-		filename = current_path*"/fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".txt"
-		dataᵢ, headerᵢ = readdlm(filename, header=true, skipstart=13)
-		dataⱼ = readdlm(filename, header=false, skipstart=14)
-		df = DataFrame(dataⱼ, vec(headerᵢ)[2:length(headerᵢ)])
-		return df
-	end
+# begin
+# 	# Read FONLL spectrum + store in DataFrame
+# 	function df_fonll(quark, energy, pdf, data)
+# 		filename = current_path*"/fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".txt"
+# 		dataᵢ, headerᵢ = readdlm(filename, header=true, skipstart=13)
+# 		dataⱼ = readdlm(filename, header=false, skipstart=14)
+# 		df = DataFrame(dataⱼ, vec(headerᵢ)[2:length(headerᵢ)])
+# 		return df
+# 	end
+# end
+
+# ╔═╡ 233d63cb-5296-42eb-97b2-5c450f6d8a90
+function df_output(quark, energy, pdf)
+	filename = current_path * "/output_fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".csv"
+	df = CSV.read(filename, DataFrame)
+	
+	return df
 end
 
 # ╔═╡ 4f6bd683-cc2f-4b5d-9b18-bef03ca5cfb3
@@ -123,7 +135,11 @@ begin
 end
 
 # ╔═╡ 4b574705-f023-49b6-8a10-b912fbecb651
-df_pdf = df_fonll(quark, energy, "cteq", data_fonll)
+# df_pdf = df_fonll(quark, energy, "cteq", data_fonll)
+# df_pdf = df_fonll(quark, energy, pdf_type*"_script", data_fonll)
+
+# ╔═╡ cd630200-c94a-45b9-895e-b7b6b339bee2
+df_pdf = df_output(quark, energy, "pdf_lha_"*pdf_type)
 
 # ╔═╡ fc82dc0b-52d4-4382-9ada-9fb0421d10bc
 md"### Glasma weighted KDEs
@@ -147,7 +163,7 @@ function raa_kde_weighted(collect_initial_pTs, collect_pTs, w₀, npoints, bound
 
 	raa_kde = dndpt₁_weight_kde./dndpt₀_weight_kde
 	# return pt₁_weight_kde, raa_kde
-	return raa_kde
+	return dndpt₀_weight_kde, dndpt₁_weight_kde, raa_kde
 end
 
 # ╔═╡ 7925a362-5755-4b6a-93a7-6e3850421a2c
@@ -167,6 +183,8 @@ begin
 		τᵢ = findminindex(τₛ, τ)
 	
 		raas = Array{Float64}[]
+		dndpt₀ = Array{Float64}[]
+		dndpt₁ = Array{Float64}[]
 	
 		npoints_raa = 100
 		boundary_raa = (pTs[1], pTs[length(pTs)])
@@ -201,15 +219,17 @@ begin
 			# Normalize weights
 			w₀ ./ sum(w₀)
 	
-			raa_ev = raa_kde_weighted(initial_pTs, final_pTs, w₀, npoints_raa, boundary_raa)
+			dndpt₀_ev, dndpt₁_ev, raa_ev = raa_kde_weighted(initial_pTs, final_pTs, w₀, npoints_raa, boundary_raa)
 			push!(raas, raa_ev)
+			push!(dndpt₀, dndpt₀_ev)
+			push!(dndpt₁, dndpt₁_ev)
 		end
 
 		pTs_raa = range(start=pTs[1], stop=pTs[length(pTs)], length=100)
 	
 		raa_avg = mean(raas, dims=1)[1]
 		
-		return pTs_raa, raa_avg
+		return pTs_raa, raa_avg, dndpt₀, dndpt₁
 	end
 end
 
@@ -218,81 +238,86 @@ md"---
 ### Read nPDF and contructs spectra"
 
 # ╔═╡ b5ca2999-c69b-4294-a37e-1ffa3e780be3
-function df_script(quark, energy, pdf)
-	filename = current_path * "/output_fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".csv"
-	df = CSV.read(filename, DataFrame)
+# function df_script(quark, energy, pdf)
+# 	filename = current_path * "/output_fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".csv"
+# 	df = CSV.read(filename, DataFrame)
 	
-	return df
-end
+# 	return df
+# end
 
 # ╔═╡ 134a37f3-e4cc-4100-b762-0ccf6a6cf9a7
-function integrate_col1_col3_over_col2(df, col1_values)
-    integrals = DataFrame(pt = Float64[], integral = Float64[])
+# function integrate_col1_col3_over_col2(df, col1_values)
+#     integrals = DataFrame(pt = Float64[], integral = Float64[])
     
-    for col1_value in col1_values
-        # # Filter DataFrame for the current col1 value
-        # subset_df = filter(row -> row.pt == col1_value, df)
+#     for col1_value in col1_values
+#         # # Filter DataFrame for the current col1 value
+#         # subset_df = filter(row -> row.pt == col1_value, df)
         
-        # # Sort the subset DataFrame by col2
-        # sorted_df = sort(subset_df, :y)
+#         # # Sort the subset DataFrame by col2
+#         # sorted_df = sort(subset_df, :y)
         
-        # # Perform numerical integration for the subset
-        # integral_value = trapz(sorted_df.y, sorted_df.pt .* sorted_df.sigma)
+#         # # Perform numerical integration for the subset
+#         # integral_value = trapz(sorted_df.y, sorted_df.pt .* sorted_df.sigma)
         
-        # # Store the integral value for the current col1 value
-        # push!(integrals, (col1_value, integral_value))
+#         # # Store the integral value for the current col1 value
+#         # push!(integrals, (col1_value, integral_value))
 
-		# Filter DataFrame for the current col1 value
-        subset_df = filter(row -> row.pt == col1_value, df)
+# 		# Filter DataFrame for the current col1 value
+#         subset_df = filter(row -> row.pt == col1_value, df)
         
-        # Sort the subset DataFrame by col2
-        sorted_df = sort(subset_df, :y)
+#         # Sort the subset DataFrame by col2
+#         sorted_df = sort(subset_df, :y)
         
-        # Perform interpolation
-        y_values = sorted_df.y
-        product_values = sorted_df.pt .* sorted_df.sigma
+#         # Perform interpolation
+#         y_values = sorted_df.y
+#         product_values = sorted_df.pt .* sorted_df.sigma
         
-        # Create an interpolation function
-        itp = CubicSpline(product_values, y_values)
+#         # Create an interpolation function
+#         itp = CubicSpline(product_values, y_values)
         
-        # Create a finer grid for y
-		num_interp_points = 50
-        y_interp = range(minimum(y_values), stop=maximum(y_values), length=num_interp_points)
+#         # Create a finer grid for y
+# 		num_interp_points = 50
+#         y_interp = range(minimum(y_values), stop=maximum(y_values), length=num_interp_points)
         
-        # Interpolate product values on the finer grid
-        product_interp = itp.(y_interp)
+#         # Interpolate product values on the finer grid
+#         product_interp = itp.(y_interp)
         
-        # Perform numerical integration on the interpolated values
-        integral_value = trapz(y_interp, product_interp)
+#         # Perform numerical integration on the interpolated values
+#         integral_value = trapz(y_interp, product_interp)
         
-        # Store the integral value for the current col1 value
-        push!(integrals, (col1_value, integral_value))
-    end
+#         # Store the integral value for the current col1 value
+#         push!(integrals, (col1_value, integral_value))
+#     end
     
-    return integrals
-end
+#     return integrals
+# end
 
 # ╔═╡ ee951b70-ee63-4dae-8ef5-949ab31211a2
-function df_fonll_interp(quark, energy, pdf)
-	df_npdf = df_script(quark, energy, pdf)
-	df_npdf.sigmapt = df_npdf.pt .* df_npdf.sigma
-	dfnpdf_integrated = sort(combine(groupby(df_npdf, :pt), :sigmapt => sum => :integrated_sigmapt), :pt)
+# function df_fonll_interp(quark, energy, pdf)
+# 	df_npdf = df_script(quark, energy, pdf)
+# 	df_npdf.sigmapt = df_npdf.pt .* df_npdf.sigma
+# 	dfnpdf_integrated = sort(combine(groupby(df_npdf, :pt), :sigmapt => sum => :integrated_sigmapt), :pt)
 
-	pt_values = unique(df_npdf.pt)
-	df_npdf_sort = sort(integrate_col1_col3_over_col2(df_npdf, pt_values), :pt)
+# 	pt_values = unique(df_npdf.pt)
+# 	df_npdf_sort = sort(integrate_col1_col3_over_col2(df_npdf, pt_values), :pt)
 
-	interp_map_npdf = CubicSpline(df_npdf_sort.integral, df_npdf_sort.pt)
+# 	interp_map_npdf = CubicSpline(df_npdf_sort.integral, df_npdf_sort.pt)
 
-	n_interp = 100
-	pt_npdf_interp = range(df_npdf_sort.pt[1], stop=df_npdf_sort.pt[end], length=n_interp)
-	integral_npdf_interp = interp_map_npdf(pt_npdf_interp)
+# 	n_interp = 100
+# 	pt_npdf_interp = range(df_npdf_sort.pt[1], stop=df_npdf_sort.pt[end], length=n_interp)
+# 	integral_npdf_interp = interp_map_npdf(pt_npdf_interp)
 
-	df_npdf_interp = DataFrame(pt=pt_npdf_interp, central=integral_npdf_interp)
-	return df_npdf_interp
-end
+# 	df_npdf_interp = DataFrame(pt=pt_npdf_interp, central=integral_npdf_interp)
+# 	return df_npdf_interp
+# end
 
 # ╔═╡ a1234adb-4644-403a-a613-91913cfcf8eb
-df_npdf_interp = df_fonll_interp(quark, energy, "epps16_pb")
+# # df_npdf_interp = df_fonll_interp(quark, energy, "epps16_pb")
+# # df_npdf_interp = df_fonll_interp(quark, energy, "epps16_p")
+# df_npdf_interp = df_fonll_interp(quark, energy, "epps16_p_ct14nlo")
+
+# ╔═╡ 1fb1605a-e752-4a48-8b67-364bedfea7d7
+df_npdf = df_output(quark, energy, "pdf_lha_"*pdf_type*"_npdf_epps16")
 
 # ╔═╡ 7dec08c7-f922-48cb-b88c-b1131c3c2216
 md"---
@@ -303,20 +328,56 @@ nevents = 50
 
 # ╔═╡ a21d2f55-c1c0-4669-9229-d48305b1b4cf
 begin
-	τₛ_fonll = 0.6
+	τₛ_fonll = 0.3
 	pTs_raa_fonll, raa_avg_fonll = Dict(), Dict()
+	dndpt₀_fonll, dndpt₁_fonll = Dict(), Dict()
 
-	pTs_raa_fonll["pdf"], raa_avg_fonll["pdf"] = compute_raa_events(τₛ_fonll, quark, Qₛ, df_pdf, nevents)
+	pTs_raa_fonll["pdf"], raa_avg_fonll["pdf"], dndpt₀_fonll["pdf"], dndpt₁_fonll["pdf"] = compute_raa_events(τₛ_fonll, quark, Qₛ, df_pdf, nevents)
 
-	pTs_raa_fonll["npdf"], raa_avg_fonll["npdf"] = compute_raa_events(τₛ_fonll, quark, Qₛ, df_npdf_interp, nevents)
+	# pTs_raa_fonll["npdf"], raa_avg_fonll["npdf"], dndpt₀_fonll["npdf"], dndpt₁_fonll["npdf"] = compute_raa_events(τₛ_fonll, quark, Qₛ, df_npdf_interp, nevents)
+	pTs_raa_fonll["npdf"], raa_avg_fonll["npdf"], dndpt₀_fonll["npdf"], dndpt₁_fonll["npdf"] = compute_raa_events(τₛ_fonll, quark, Qₛ, df_npdf, nevents)
 	
 end
+
+# ╔═╡ 28d6c4b9-e377-47c0-aee7-86bc988abca4
+begin
+	collect_raa_npdf = Array{Float64}[]
+	collect_raa_gl_npdf, collect_raa_gl_pdf = Array{Float64}[], Array{Float64}[]
+	
+	for ev in range(1, nevents)
+		ratio_npdf = dndpt₀_fonll["npdf"][ev]./dndpt₀_fonll["pdf"][ev]
+		push!(collect_raa_npdf, ratio_npdf)
+
+		ratio_gl_npdf = dndpt₁_fonll["npdf"][ev]./dndpt₀_fonll["pdf"][ev]
+		push!(collect_raa_gl_npdf, ratio_gl_npdf)
+
+		ratio_gl_pdf = dndpt₁_fonll["pdf"][ev]./dndpt₀_fonll["pdf"][ev]
+		push!(collect_raa_gl_pdf, ratio_gl_pdf)
+	end
+	
+	raa_npdf = mean(collect_raa_npdf, dims=1)[1]
+	raa_gl_npdf = mean(collect_raa_gl_npdf, dims=1)[1]
+	raa_gl_pdf = mean(collect_raa_gl_pdf, dims=1)[1]
+end
+
+# ╔═╡ 7353132c-5b97-4b48-aff9-c0040fe75552
+norm_pdf = trapz(df_pdf[!, "pt"], df_pdf[!, "central"])
+
+# ╔═╡ 4c7e5161-29d3-415c-958f-94bb873e99f0
+norm_npdf = trapz(df_npdf[!, "pt"], df_npdf[!, "central"])
+
+# ╔═╡ c4fd58e4-1d22-48fc-b16f-ccc02f121931
+norm = norm_pdf/norm_npdf
 
 # ╔═╡ c4692357-6de9-47e2-a4d2-76cfae425c60
 begin
 	data_jld = Dict()
 	data_jld["pTs_raa_fonll"] = pTs_raa_fonll
 	data_jld["raa_avg_fonll"] = raa_avg_fonll
+
+	data_jld["raa_npdf"] = raa_npdf
+	data_jld["raa_gl_npdf"] = raa_gl_npdf
+	data_jld["raa_gl_pdf"] = raa_gl_pdf
 
 	# save(current_path * "paper_raa_qs_fonll_pdf_npdf_charm.jld2", "data", data_jld)
 end
@@ -330,39 +391,54 @@ end
 # ╔═╡ bd93d2ec-48d5-437f-8158-6e1ab39bb8cd
 begin
 	set_theme!(fonts = (; regular = "CMU Serif"))
-	fig_raa_fonll = Figure(size = (380, 380), font = "CMU Serif")
+	fig_raa_fonll = Figure(size = (400, 400), font = "CMU Serif")
 
-	ax_raa_fonll = Axis(fig_raa_fonll[1, 1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true,
+	ax_raa_fonll = Axis(fig_raa_fonll[1, 1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 21, ylabelsize = 25, xticklabelsize = 15, yticklabelsize = 15, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true,
 	)
 
-	segmented_cmap_fonll = cgrad(:watermelon, 11, categorical = true, rev=true)
-	custom_colors_fonll = [segmented_cmap_fonll[8], segmented_cmap_fonll[2]]
+	# segmented_cmap_fonll = cgrad(:watermelon, 11, categorical = true, rev=true)
+	# custom_colors_fonll = [segmented_cmap_fonll[8], segmented_cmap_fonll[2], segmented_cmap_fonll[1]]
+	segmented_cmap_fonll = cgrad(:redblue, 8, categorical = true, rev=false)
+	custom_colors_fonll = [segmented_cmap_fonll[7], segmented_cmap_fonll[3], segmented_cmap_fonll[2]]
 
-	labels_fonll = ["pdf", "npdf"]
-	for (il, label) in enumerate(labels_fonll)
-		string_as_varname("line_"*label, lines!(ax_raa_fonll, pTs_raa_fonll[label], raa_avg_fonll[label], color=custom_colors_fonll[il], linewidth=2))
-	end
+	# labels_fonll = ["pdf", "npdf"]
+	# for (il, label) in enumerate(labels_fonll)
+	# 	string_as_varname("line_"*label, lines!(ax_raa_fonll, pTs_raa_fonll[label], raa_avg_fonll[label], color=custom_colors_fonll[il], linewidth=2))
+	# end
 
-	axislegend(ax_raa_fonll, [line_pdf, line_npdf], [L"\mathrm{pp\,CTEQ6.6}", L"\mathrm{PbPb\,EPPS16}"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	# axislegend(ax_raa_fonll, [line_pdf, line_npdf], [L"\mathrm{pp\,CTEQ6.6}", L"\mathrm{PbPb\,EPPS16}"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+
+	line_npdf = lines!(ax_raa_fonll, pTs_raa_fonll["npdf"], raa_npdf/norm, color=custom_colors_fonll[1], linewidth=2)
+
+	line_gl_pdf = lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], raa_gl_pdf, color=custom_colors_fonll[2], linewidth=2)
+
+	line_gl_npdf = lines!(ax_raa_fonll, pTs_raa_fonll["npdf"], raa_gl_npdf/norm, color=custom_colors_fonll[3], linewidth=2)
 
 	lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], ones(length(pTs_raa_fonll["pdf"])), color=(:gray, 0.6), linewidth=1.5)
+
+	# axislegend(ax_raa_fonll, [line_npdf, line_gl_pdf, line_gl_npdf], [L"\scrN_{\mathrm{AA}}(\tau_\mathrm{form})/\scrN_{\mathrm{pp}}(\tau_\mathrm{form})", L"\scrN_{\mathrm{pp}}(\tau\,)/\scrN_{\mathrm{pp}}(\tau_\mathrm{form})", L"\scrN_{\mathrm{AA}}(\tau\,)/\scrN_{\mathrm{pp}}(\tau_\mathrm{form})"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+
+	axislegend(ax_raa_fonll, [line_npdf, line_gl_pdf, line_gl_npdf], [L"\mathrm{nPDF/PDF}", L"\mathrm{(GL+PDF)/PDF}", L"\mathrm{(GL+nPDF)/PDF}"], labelsize=18, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
 	
 	xlims!(ax_raa_fonll, 0, 10)
 	ax_raa_fonll.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
 	
-	ax_raa_fonll.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
-	ylims!(ax_raa_fonll, 0.6, 1.4)
+	ax_raa_fonll.yticks = ([0.4, 0.7, 1, 1.3, 1.6], ["0.4", "0.7", "1", "1.3", "1.6"])
+	# ylims!(ax_raa_fonll, 0.6, 1.4
+	ylims!(ax_raa_fonll, 0.4, 1.6)
 
-	text!(ax_raa_fonll, L"Q_s=2\,\mathrm{GeV}", position = (0.35, 1.31), fontsize=18)
-	text!(ax_raa_fonll, L"\tau=0.3\,\mathrm{fm/c}", position = (0.4, 1.23), fontsize=18)
-	text!(ax_raa_fonll, L"\mathrm{charm\,quarks}", position = (6.2, 1.31), fontsize=18)
+	text!(ax_raa_fonll, L"Q_s=2\,\mathrm{GeV}", position = (0.35, 1.35), fontsize=16)
+	text!(ax_raa_fonll, L"\tau=0.3\,\mathrm{fm/c}", position = (0.4, 1.3), fontsize=16)
+	text!(ax_raa_fonll, L"\mathrm{charm\,quarks}", position = (0.35, 1.48), fontsize=18)
 
-	text!(ax_raa_fonll, L"\sqrt{s}=5.5\,\mathrm{TeV}", position = (0.35, 0.63), fontsize=16)
-	text!(ax_raa_fonll, L"\mathrm{FONLL}", position = (0.35, 0.7), fontsize=16)
+	text!(ax_raa_fonll, L"\mathrm{pp\,CT14NLO}", position = (6.66, 1.48), fontsize=16)
+	text!(ax_raa_fonll, L"\mathrm{PbPb\,EPPS16}", position = (6.45, 1.41), fontsize=16)
+
+	text!(ax_raa_fonll, L"\mathrm{FONLL}\,\sqrt{s}=5.5\,\mathrm{TeV}", position = (4.7,1.3), fontsize=16)
 
 	# text!(ax_raa_fonll_qs[2], L"\mathrm{FONLL\,}\sqrt{s_\mathrm{pp}}=5.5\,\mathrm{TeV}", position = (0.35, 0.63), fontsize=16)
 	
-	# save("plots/clean_raa_tau_0.6_charm_quark_Qs_2.0_fonll_pdf_vs_npdf.png", fig_raa_fonll, px_per_unit = 5.0)
+	save("plots/clean_raa_tau_0.3_charm_quark_Qs_2.0_fonll_pdf_vs_npdf_v3.png", fig_raa_fonll, px_per_unit = 5.0)
 
 	fig_raa_fonll
 end
@@ -2083,9 +2159,11 @@ version = "3.5.0+0"
 # ╠═18672c06-e105-47f9-9474-2c9f4b6e71b7
 # ╠═00d9b329-dc77-41ce-b24a-bc4978a46021
 # ╠═26e6df1a-c17f-4c2c-8d3f-4d935ad5101f
+# ╠═233d63cb-5296-42eb-97b2-5c450f6d8a90
 # ╠═4f6bd683-cc2f-4b5d-9b18-bef03ca5cfb3
 # ╠═79a9bacf-191d-4015-97d7-8c0fd99c58a8
 # ╠═4b574705-f023-49b6-8a10-b912fbecb651
+# ╠═cd630200-c94a-45b9-895e-b7b6b339bee2
 # ╠═fc82dc0b-52d4-4382-9ada-9fb0421d10bc
 # ╠═62e590e0-f4bd-4b8d-85aa-9d7f9670c8ac
 # ╠═da9b4d39-5d95-45ba-b610-7b6e04537465
@@ -2093,9 +2171,14 @@ version = "3.5.0+0"
 # ╠═134a37f3-e4cc-4100-b762-0ccf6a6cf9a7
 # ╠═ee951b70-ee63-4dae-8ef5-949ab31211a2
 # ╠═a1234adb-4644-403a-a613-91913cfcf8eb
+# ╠═1fb1605a-e752-4a48-8b67-364bedfea7d7
 # ╠═7dec08c7-f922-48cb-b88c-b1131c3c2216
 # ╠═bf0bd163-2825-4075-b488-6c81e9b88b6d
 # ╠═a21d2f55-c1c0-4669-9229-d48305b1b4cf
+# ╠═28d6c4b9-e377-47c0-aee7-86bc988abca4
+# ╠═7353132c-5b97-4b48-aff9-c0040fe75552
+# ╠═4c7e5161-29d3-415c-958f-94bb873e99f0
+# ╠═c4fd58e4-1d22-48fc-b16f-ccc02f121931
 # ╠═c4692357-6de9-47e2-a4d2-76cfae425c60
 # ╠═fe86a123-42b9-4f60-95ac-187b1aec496b
 # ╠═bd93d2ec-48d5-437f-8158-6e1ab39bb8cd

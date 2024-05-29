@@ -14,6 +14,11 @@ begin
 	using CSV
 
 	using DataInterpolations
+
+	using PyCall
+	using NPZ
+	using KernelDensity
+	using Statistics
 end
 
 # ╔═╡ 939c358b-0d57-4ac7-88b0-dc3f061afbe8
@@ -24,29 +29,23 @@ md"### Test PDFs from running vs. webform FONLL"
 
 # ╔═╡ f5f91e9b-efbf-442f-ac69-9953b82c523a
 begin
-	quark = "charm"
+	quark = "beauty"
 	energy = 5500
 	pdf = "cteq"
+	# energy = 7000
+	# pdf = "nnpdf"
+	# pdf = "ct14nlo"
 end
 
 # ╔═╡ 80bb9783-7ae3-4f94-ad11-63a43e438b4e
+# ╠═╡ disabled = true
+#=╠═╡
 current_path = pwd()
+  ╠═╡ =#
 
 # ╔═╡ 6a7961de-ee3d-426c-8485-000ee0798d58
 md"---
 ### Read FONLL webform data from files"
-
-# ╔═╡ 552c162c-c1db-4fa6-a4bf-ca677b146371
-function df(quark, energy, pdf)
-	filename = current_path*"/fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".txt"
-	dataᵢ, headerᵢ = readdlm(filename, header=true, skipstart=13)
-	dataⱼ = readdlm(filename, header=false, skipstart=14)
-	df = DataFrame(dataⱼ, vec(headerᵢ)[2:length(headerᵢ)])
-	return df
-end
-
-# ╔═╡ 7b1f5a94-6c26-4202-9f20-887856a3ee21
-df1 = df(quark, energy, pdf)
 
 # ╔═╡ 488264af-9307-401c-8987-f99d4f7c661d
 md"---
@@ -61,23 +60,6 @@ md"---
 # 	y_fonll = results_fonll["y"]
 # 	sigma_fonll = results_fonll["sigma"]
 # end
-
-# ╔═╡ 0e69bd17-7e48-44e2-ac6f-1766afdc4437
-function df_script(quark, energy, pdf)
-	filename = current_path * "/output_fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".csv"
-	df = CSV.read(filename, DataFrame)
-	
-	return df
-end
-
-# ╔═╡ 4d3bf89c-db0f-4302-964f-9d3b62661c5a
-df2 = df_script(quark, energy, pdf)
-
-# ╔═╡ 87b02bbe-86d5-4517-927e-debd4e21dc33
-begin
-	df2.sigmapt = df2.pt .* df2.sigma
-	df2_integrated = sort(combine(groupby(df2, :pt), :sigmapt => sum => :integrated_sigmapt), :pt)
-end
 
 # ╔═╡ e62553d4-35d6-44cb-83e9-13cc50e8fec1
 function integrate_col1_col3_over_col2(df, col1_values)
@@ -126,6 +108,142 @@ function integrate_col1_col3_over_col2(df, col1_values)
     return integrals
 end
 
+# ╔═╡ 744e1561-5ad8-40d3-b7de-d88f5201f0ef
+md"Read the double differential cross section from the FONLL web form and integrate it"
+
+# ╔═╡ 100cec81-d14d-42ef-96c0-c7a07c7ac74c
+function integrate_col3_over_col2(df, col1_values)
+    integrals = DataFrame(pt = Float64[], integral = Float64[])
+    
+    for col1_value in col1_values
+		# Filter DataFrame for the current col1 value
+        subset_df = filter(row -> row.pt == col1_value, df)
+        
+        # Sort the subset DataFrame by col2
+        sorted_df = sort(subset_df, :y)
+        
+        # Perform interpolation
+        y_values = sorted_df.y
+        product_values = sorted_df.central
+        
+        # Create an interpolation function
+        itp = CubicSpline(product_values, y_values)
+        
+        # Create a finer grid for y
+		num_interp_points = 50
+        y_interp = range(minimum(y_values), stop=maximum(y_values), length=num_interp_points)
+        
+        # Interpolate product values on the finer grid
+        product_interp = itp.(y_interp)
+        
+        # Perform numerical integration on the interpolated values
+        integral_value = trapz(y_interp, product_interp)
+        
+        # Store the integral value for the current col1 value
+        push!(integrals, (col1_value, integral_value))
+    end
+    
+    return integrals
+end
+
+# ╔═╡ 78dc842a-2753-489a-9f04-bdf7c3a67639
+md"Script FONLL using old PDF libraries"
+
+# ╔═╡ d909d304-8cb7-4565-9ce6-7eec578c575f
+# begin
+# 	df5 = df_script(quark, energy, "cteq_hvq")
+
+# 	col1_values_df5 = unique(df5.pt)
+# 	df6 = sort(integrate_col1_col3_over_col2(df5, col1_values_df5), :pt)
+
+# 	interp_map_df6 = CubicSpline(df6.integral, df6.pt)
+
+# 	pt_interp_df6 = range(df6.pt[1], stop=df6.pt[end], length=n_interp)
+# 	integral_interp_df6 = interp_map_df6(pt_interp_df6)
+
+# 	df6_interp = DataFrame(pt=pt_interp_df6, integral=integral_interp_df6)
+# end
+
+# ╔═╡ 666f52ef-367c-4bc6-8ae7-85844f46c16c
+# begin
+# 	df7 = df_script(quark, energy, "cteq_lha_1.3.2")
+
+# 	col1_values_df7 = unique(df7.pt)
+# 	df8 = sort(integrate_col1_col3_over_col2(df7, col1_values_df7), :pt)
+
+# 	interp_map_df8 = CubicSpline(df8.integral, df8.pt)
+
+# 	pt_interp_df8 = range(df8.pt[1], stop=df8.pt[end], length=n_interp)
+# 	integral_interp_df8 = interp_map_df8(pt_interp_df8)
+
+# 	df8_interp = DataFrame(pt=pt_interp_df8, integral=integral_interp_df8)
+# end
+
+# ╔═╡ 69d5ee1a-c0e0-4ac1-918f-1a63a718e66a
+md"---
+### Plot the 2 FONLL verisons"
+
+# ╔═╡ 5b5e50c5-55dd-4195-8473-b5964481a482
+md"---
+### FONLL with nPDFs EPPS16"
+
+# ╔═╡ 715001a4-7b97-4767-a0ad-aa5b0fd0475f
+# df_npdf_interp_p = df_fonll_interp(quark, energy, "epps16_p")
+
+# ╔═╡ 4ac0889f-84ab-4447-b222-26f83dacb51f
+md"---
+### Compare script and form FONLL $R_{AA}$"
+
+# ╔═╡ df677559-ea6c-4a14-aa9f-e854c552883c
+begin
+	# Gauge group
+	gauge_group = "su3"
+
+	# Representation
+	representation = "qfund"
+	q₂ = 4/3
+
+	# Saturation momentum
+	Qₛ = 2.0
+
+	binning = "pT"
+	# quark = "charm"
+end
+
+# ╔═╡ b193560f-fd12-4d1e-ba22-eebae201a11c
+current_path = pwd()
+
+# ╔═╡ 552c162c-c1db-4fa6-a4bf-ca677b146371
+function df(quark, energy, pdf)
+	filename = current_path*"/fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".txt"
+	dataᵢ, headerᵢ = readdlm(filename, header=true, skipstart=13)
+	dataⱼ = readdlm(filename, header=false, skipstart=14)
+	df = DataFrame(dataⱼ, vec(headerᵢ)[2:length(headerᵢ)])
+	return df
+end
+
+# ╔═╡ 7b1f5a94-6c26-4202-9f20-887856a3ee21
+df1 = df(quark, energy, pdf)
+
+# ╔═╡ 0e69bd17-7e48-44e2-ac6f-1766afdc4437
+function df_script(quark, energy, pdf)
+	filename = current_path * "/output_fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".csv"
+	# filename = current_path * "/output_fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*"_lha_test.csv"
+	df = CSV.read(filename, DataFrame)
+	
+	return df
+end
+
+# ╔═╡ 4d3bf89c-db0f-4302-964f-9d3b62661c5a
+df2 = df_script(quark, energy, pdf)
+# df2 = df_script(quark, energy, "cteq_lha_test")
+
+# ╔═╡ 87b02bbe-86d5-4517-927e-debd4e21dc33
+begin
+	df2.sigmapt = df2.pt .* df2.sigma
+	df2_integrated = sort(combine(groupby(df2, :pt), :sigmapt => sum => :integrated_sigmapt), :pt)
+end
+
 # ╔═╡ c01d62b6-2386-4a4f-96c0-2053c645cad2
 # Get unique values of col1
 col1_values = unique(df2.pt)
@@ -144,9 +262,24 @@ begin
 	df_interp = DataFrame(pt=pt_interp, integral=integral_interp)
 end
 
-# ╔═╡ 69d5ee1a-c0e0-4ac1-918f-1a63a718e66a
-md"---
-### Plot the 2 FONLL verisons"
+# ╔═╡ b200a0b4-bda7-40ac-8f2d-63c074fbe66c
+begin
+	# Write results to text file
+	# CSV.write("fonll_dsdpt_charm_5500_cteq_script.txt", df_interp, delim=' ')
+	open("fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*"_script.txt", "w") do file
+		# First 13 rows are comments
+		for i in range(1, 13)
+			println(file, "# ")
+		end
+		# Next row has column names
+	    println(file, "# pt central")
+	    
+	    # Write each row of the DataFrame
+	    for row in eachrow(df_interp)
+	        println(file, join(row, " "))
+	    end
+	end
+end
 
 # ╔═╡ 4096de04-76fa-455a-894e-d6e317ccbaae
 begin
@@ -154,27 +287,37 @@ begin
 	fig = Figure(size = (380, 380), font = "CMU Serif")
 
 	ax = Axis(fig[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}\sigma/\mathrm{d}p_T\,\mathrm{[pb/GeV]}",
-    xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true)
-	colors = [:red, :green, :green, :dodgerblue, :purple, :purple, :orange, :orange]
+    xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true,
+	yscale=log10
+	)
+	colors = [:purple, :green, :dodgerblue, :red, :orange]
 	
 	# labels = [L"2.75,\,\mathrm{CTEQ}",L"5.03,\,\mathrm{NNPDF}", L"5.03,\,\mathrm{CTEQ}", L"5.5,\,\mathrm{CTEQ}", L"7,\,\mathrm{NNPDF}", L"7,\,\mathrm{CTEQ}", L"13,\,\mathrm{NNPDF}", L"13,\,\mathrm{CTEQ}"]
 	
-	lines!(df1[!, "pt"], df1[!, "central"]; color = (colors[1], 0.5), label = "Form CTEQ6.6", linewidth=2)
+	# lines!(df1[!, "pt"], df1[!, "central"]; color = (colors[1], 0.5), label = "Form CTEQ6.6", linewidth=2)
+	# log scale
+	lines!(df1[!, "pt"][2:end], df1[!, "central"][2:end]; color = colors[1], label = "Form", linewidth=2)
 	# lines!(df3[!, "pt"], df3[!, "integral"]; color = (colors[2], 0.5), label = "Script", linewidth=2)
-	lines!(df_interp[!, "pt"], df_interp[!, "integral"]; color = (colors[2], 0.5), label = "Script CTEQ6.6", linewidth=2)
+	# lines!(df_interp[!, "pt"], df_interp[!, "integral"]; color = colors[2], label = "Script CTEQ6.6", linewidth=2)
+	lines!(df_interp[!, "pt"], df_interp[!, "integral"]; color = colors[2], label = "Script", linewidth=2)
+
+	# lines!(df4_int[!, "pt"][2:end], df4_int[!, "integral"][2:end]; color = colors[3], label = "Form integrated", linewidth=2, linestyle=:dash)
+
+	# lines!(df6_interp[!, "pt"], df6_interp[!, "integral"]; color = colors[4], label = "Script CTEQ6m", linewidth=2, linestyle=:dash)
+
+	# lines!(df8_interp[!, "pt"], df8_interp[!, "integral"]; color = colors[5], label = "Script v1.3.2", linewidth=2, linestyle=:dash)
 		
-	axislegend(L"\mathrm{FONLL}", position = :rt, labelsize=14, titlesize=18)
+	axislegend(L"\mathrm{FONLL}", position = :lb, labelsize=14, titlesize=18)
 	xlims!(ax, 0, 20)
 	# ylims!(ax, 0, nothing)
 	
-	# save("plots/dsdpt_fonll_form_vs_script.png", fig, px_per_unit = 5.0)
+	# save("plots/dsdpt_fonll_form_vs_script_log_int_final.png", fig, px_per_unit = 5.0)
 	
 	fig
 end
 
-# ╔═╡ 5b5e50c5-55dd-4195-8473-b5964481a482
-md"---
-### FONLL with nPDFs EPPS16"
+# ╔═╡ f8d7f110-934b-4aaa-918f-05c434982e5d
+df1[!, "central"]./df_interp[!, "integral"]
 
 # ╔═╡ 52d50f58-3d2d-49c4-a932-8ff32aa638b6
 function df_fonll_interp(quark, energy, pdf)
@@ -195,10 +338,8 @@ function df_fonll_interp(quark, energy, pdf)
 end
 
 # ╔═╡ 9d5d3d2a-2614-48e2-a9d3-4f12825044a3
-df_npdf_interp = df_fonll_interp(quark, energy, "epps16_pb")
-
-# ╔═╡ 715001a4-7b97-4767-a0ad-aa5b0fd0475f
-# df_npdf_interp_p = df_fonll_interp(quark, energy, "epps16_p")
+# df_npdf_interp = df_fonll_interp(quark, energy, "epps16_pb")
+df_npdf_interp = df_fonll_interp(quark, energy, "epps16_p")
 
 # ╔═╡ b887c313-c7c3-457e-b379-bcc5c72d3f0b
 begin
@@ -206,7 +347,9 @@ begin
 	fig_npdf = Figure(size = (380, 380), font = "CMU Serif")
 
 	ax_npdf = Axis(fig_npdf[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\mathrm{d}\sigma/\mathrm{d}p_T\,\mathrm{[pb/GeV]}",
-    xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true)
+    xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true,
+	yscale=log10
+	)
 	
 	lines!(ax_npdf, df_interp[!, "pt"], df_interp[!, "integral"]; color = (colors[2], 0.5), label = "pp CTEQ6.6", linewidth=2)
 	lines!(ax_npdf, df_npdf_interp[!, "pt"], df_npdf_interp[!, "integral"]; color = (colors[4], 0.5), label = "PbPb EPPS16", linewidth=2)
@@ -216,9 +359,185 @@ begin
 	xlims!(ax_npdf, 0, 20)
 	# ylims!(ax_npdf, 0, nothing)
 	
-	# save("plots/dsdpt_fonll_script_pp_vs_pbpb.png", fig_npdf, px_per_unit = 5.0)
+	# save("plots/dsdpt_fonll_script_pp_vs_pbpb_log.png", fig_npdf, px_per_unit = 5.0)
 	
 	fig_npdf
+end
+
+# ╔═╡ fb38a69b-384b-4785-b089-354ef6c9fbe0
+begin
+	# filename_dsdptdy = current_path * "/fonll_dsdptdy_charm_5500_cteq.txt"
+	filename_dsdptdy = current_path * "/fonll_dsdptdy_"*quark*"_"*string(energy)*"_"*pdf*".txt"
+
+	dataᵢ, headerᵢ = readdlm(filename_dsdptdy, header=true, skipstart=12)
+	dataⱼ = readdlm(filename_dsdptdy, header=false, skipstart=13)
+	df4 = DataFrame(dataⱼ, vec(headerᵢ)[2:length(headerᵢ)])
+end
+
+# ╔═╡ a90f79ed-e729-4a93-bf65-486196f87b8f
+begin
+	col1_values_df4 = unique(df4.pt)
+	df4_int = sort(integrate_col3_over_col2(df4, col1_values_df4), :pt)
+end
+
+# ╔═╡ a74a3ef0-230b-4b3e-9b8b-d8946e43f63a
+function findminindex(value, array)
+	return findmin(element->abs(element-value),array)[2]
+end 
+
+# ╔═╡ 5927773b-f8ea-4de9-a289-b8c668109154
+# begin
+# 	# Read FONLL spectrum + store in DataFrame
+# 	function df_fonll(quark, energy, pdf, data)
+# 		filename = current_path*"/fonll_dsdpt_"*quark*"_"*string(energy)*"_"*pdf*".txt"
+# 		dataᵢ, headerᵢ = readdlm(filename, header=true, skipstart=13)
+# 		dataⱼ = readdlm(filename, header=false, skipstart=14)
+# 		df = DataFrame(dataⱼ, vec(headerᵢ)[2:length(headerᵢ)])
+# 		return df
+# 	end
+# end
+
+# ╔═╡ 71d3fbfb-9ec2-4039-9ecc-f74072fceb81
+begin
+	function fit_fonll(xdata, ydata)
+		@. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
+		p₀_log = [2.5e8, 2.4, 2.3, 0.06]
+			
+		so = pyimport("scipy.optimize")
+		fit = pyeval("""lambda fit: lambda a, b, c, d, e: fit(a, b, c, d, e)""")
+		popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. real(log10(Complex(x₀*pₜ/(1.0+x₃*Complex(pₜ)^x₁)^x₂)))), xdata[2:length(xdata)], log10.(ydata[2:length(ydata)]), p₀_log)
+		
+		return popt
+	end
+end
+
+# ╔═╡ 48d713d5-f7b4-4fce-81cc-320c57bc8f78
+function raa_kde_weighted(collect_initial_pTs, collect_pTs, w₀, npoints, boundary)
+	#KDEs
+	# τ₀
+	weight_kde₀= kde(collect_initial_pTs, weights=w₀, npoints=npoints, boundary=boundary)
+	pt₀_weight_kde, dndpt₀_weight_kde = weight_kde₀.x, weight_kde₀.density
+	# τₛ
+	weight_kde₁= kde(collect_pTs, weights=w₀, npoints=npoints, boundary=boundary)
+	pt₁_weight_kde, dndpt₁_weight_kde = weight_kde₁.x, weight_kde₁.density
+
+	# These KDEs don't have the same x axis 
+	# In order to divide them, we need to interpolate one of them
+	# interp_map_kde₁ = CubicSpline(dndpt₁_weight_kde, pt₁_weACY_GOAL:
+	# raa_kde = interp_map_kde₁(pt₀_weight_kde)./dndpt₀_weight_kde
+
+	raa_kde = dndpt₁_weight_kde./dndpt₀_weight_kde
+	# return pt₁_weight_kde, raa_kde
+	return raa_kde
+end
+
+# ╔═╡ a3c0b965-2569-4f62-b8e8-200b76125824
+begin
+	function compute_raa_events(τₛ, quark, Qₛ, df, nevents)
+		# nevents_temp = 30
+		
+		folder= "clean_RAA_"*quark*"_fonll_Qs_"*string(Qₛ)*"_"*representation*"_"*gauge_group*"_formt_m"
+	
+		filename_param = current_path * "/results/" * folder * "/parameters_" * binning * "_binning.pickle"
+		parameters = Pickle.npyload(filename_param)
+		pTs = parameters["PTS"]
+		npTs = length(parameters["PTS"])
+		# nevents = parameters["NEVENTS"]
+	
+		τ = parameters["TAU"]
+		τᵢ = findminindex(τₛ, τ)
+	
+		raas = Array{Float64}[]
+	
+		npoints_raa = 100
+		boundary_raa = (pTs[1], pTs[length(pTs)])
+
+		# FONLL
+		# df = df_fonll(quark, energy, pdf_type, data_fonll)
+
+		xdata = df[!, "pt"]
+		ydata = df[!, "central"]
+
+		popt = fit_fonll(xdata, ydata)
+		@. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
+	
+		for ev in range(1, nevents)
+		# for ev in range(1, nevents_temp)
+			label_ev = "event_"*string(ev)	
+	
+			final_pTs = zeros(0)
+			initial_pTs = zeros(0)
+			
+			for (pTbin, pT) in enumerate(pTs)
+				
+				label_file = "/" * binning * "_bin_" * string(pTbin) * "_ev_" * string(ev) * ".npz"
+				filename_npz = current_path * "/results/" * folder * label_file
+				output_npz = npzread(filename_npz)
+				pT_spectra_npz = output_npz["pTs"]
+				initial_pTs_npz = output_npz["initial_pTs"]
+
+				append!(final_pTs, pT_spectra_npz[τᵢ,:])
+				append!(initial_pTs, initial_pTs_npz)
+			end
+	
+			w₀ = powlaw(initial_pTs, popt)
+			# Normalize weights
+			w₀ ./ sum(w₀)
+	
+			raa_ev = raa_kde_weighted(initial_pTs, final_pTs, w₀, npoints_raa, boundary_raa)
+			push!(raas, raa_ev)
+		end
+
+		pTs_raa = range(start=pTs[1], stop=pTs[length(pTs)], length=100)
+	
+		raa_avg = mean(raas, dims=1)[1]
+		
+		return pTs_raa, raa_avg
+	end
+end
+
+# ╔═╡ 4219eb11-9cca-45ee-b03f-379e67e45bbe
+begin
+	τₛ_fonll = 0.6
+	nevents_comp = 1
+	
+	pTs_raa_fonll_form, raa_avg_fonll_form = compute_raa_events(τₛ_fonll, quark, Qₛ, df1, nevents_comp)
+	pTs_raa_fonll_script, raa_avg_fonll_script = compute_raa_events(τₛ_fonll, quark, Qₛ, rename(copy(df_interp), [:pt => :pt, :integral => :central]), nevents_comp)
+end
+
+# ╔═╡ 20d920ab-ac76-4620-9d43-2a9b9b033473
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	
+	# Create Figure and Axis
+	fig_glasma = Figure(size = (380, 380))
+	ax_glasma = Axis(fig_glasma[1, 1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true)
+
+	lines!(ax_glasma, pTs_raa_fonll_form, ones(length(pTs_raa_fonll_form)), color=(:gray, 0.7), linewidth=1.5)
+	
+	segmented_cmap = cgrad(:redblue, 8, categorical = true, rev=false)
+	custom_colors = [segmented_cmap[2], segmented_cmap[7], segmented_cmap[8]]
+
+	lines!(ax_glasma, pTs_raa_fonll_form, raa_avg_fonll_form, color=custom_colors[1], linewidth=2, label="Form")
+
+	lines!(ax_glasma, pTs_raa_fonll_script, raa_avg_fonll_script, color=custom_colors[2], linewidth=2, label="Script")
+
+	axislegend(ax_glasma, L"\mathrm{FONLL}", position = :rb, labelsize=14, titlesize=18)
+	
+	# ylims!(ax_glasma, 0, 2)
+	ylims!(ax_glasma, 0.6, 1.4)
+	ax_glasma.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
+
+	xlims!(ax_glasma, 0, 10)
+	ax_glasma.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+
+	text!(ax_glasma, L"\tau=1\,\mathrm{fm/c}", position = (0.35, 1.8), fontsize=18)
+
+	# axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
+
+	# save("plots/raa_charm_qs_2_tau_0.6_fonll_form_vs_script.png", fig_glasma, px_per_unit = 5.0)
+	
+	fig_glasma
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -229,7 +548,11 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+KernelDensity = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
+NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Trapz = "592b5752-818d-11e9-1e9a-2b8ca4a44cd1"
 
 [compat]
@@ -237,7 +560,10 @@ CSV = "~0.10.14"
 CairoMakie = "~0.12.0"
 DataFrames = "~1.6.1"
 DataInterpolations = "~4.6.0"
+KernelDensity = "~0.6.9"
+NPZ = "~0.4.3"
 Pickle = "~0.3.5"
+PyCall = "~1.96.4"
 Trapz = "~2.0.3"
 """
 
@@ -247,7 +573,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "7587d95b70d6e9d16de4fcd0d449ccc600cba09c"
+project_hash = "dc61b7bbe3f1fedac24cba857e7b2251a11e9e90"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -456,6 +782,12 @@ version = "4.15.0"
 deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 version = "0.5.2+0"
+
+[[deps.Conda]]
+deps = ["Downloads", "JSON", "VersionParsing"]
+git-tree-sha1 = "51cab8e982c5b598eea9c8ceaced4b58d9dd37c9"
+uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
+version = "1.10.0"
 
 [[deps.ConstructionBase]]
 deps = ["LinearAlgebra"]
@@ -1108,6 +1440,12 @@ version = "0.3.4"
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2022.2.1"
 
+[[deps.NPZ]]
+deps = ["FileIO", "ZipFile"]
+git-tree-sha1 = "60a8e272fe0c5079363b28b0953831e2dd7b7e6f"
+uuid = "15e1cf62-19b3-5cfa-8e77-841668bca605"
+version = "0.4.3"
+
 [[deps.NVTX]]
 deps = ["Colors", "JuliaNVTXCallbacks_jll", "Libdl", "NVTX_jll"]
 git-tree-sha1 = "53046f0483375e3ed78e49190f1154fa0a4083a1"
@@ -1317,6 +1655,12 @@ version = "1.10.0"
 git-tree-sha1 = "077664975d750757f30e739c870fbbdc01db7913"
 uuid = "43287f4e-b6f4-7ad1-bb20-aadabca52c3d"
 version = "1.1.0"
+
+[[deps.PyCall]]
+deps = ["Conda", "Dates", "Libdl", "LinearAlgebra", "MacroTools", "Serialization", "VersionParsing"]
+git-tree-sha1 = "9816a3826b0ebf49ab4926e2b18842ad8b5c8f04"
+uuid = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+version = "1.96.4"
 
 [[deps.QOI]]
 deps = ["ColorTypes", "FileIO", "FixedPointNumbers"]
@@ -1641,6 +1985,11 @@ git-tree-sha1 = "323e3d0acf5e78a56dfae7bd8928c989b4f3083e"
 uuid = "d80eeb9a-aca5-4d75-85e5-170c8b632249"
 version = "0.1.3"
 
+[[deps.VersionParsing]]
+git-tree-sha1 = "58d6e80b4ee071f5efd07fda82cb9fbe17200868"
+uuid = "81def892-9a0e-5fdd-b105-ffc91e053289"
+version = "1.3.0"
+
 [[deps.WeakRefStrings]]
 deps = ["DataAPI", "InlineStrings", "Parsers"]
 git-tree-sha1 = "b1be2855ed9ed8eac54e5caff2afcdb442d52c23"
@@ -1823,12 +2172,31 @@ version = "3.5.0+0"
 # ╠═c01d62b6-2386-4a4f-96c0-2053c645cad2
 # ╠═370bc923-f38d-4359-a1f8-f67462f144e1
 # ╠═4e89bf2e-8f30-4b4f-a056-491836a01d1e
+# ╠═b200a0b4-bda7-40ac-8f2d-63c074fbe66c
+# ╠═744e1561-5ad8-40d3-b7de-d88f5201f0ef
+# ╠═fb38a69b-384b-4785-b089-354ef6c9fbe0
+# ╠═100cec81-d14d-42ef-96c0-c7a07c7ac74c
+# ╠═a90f79ed-e729-4a93-bf65-486196f87b8f
+# ╠═78dc842a-2753-489a-9f04-bdf7c3a67639
+# ╠═d909d304-8cb7-4565-9ce6-7eec578c575f
+# ╠═666f52ef-367c-4bc6-8ae7-85844f46c16c
 # ╠═69d5ee1a-c0e0-4ac1-918f-1a63a718e66a
 # ╠═4096de04-76fa-455a-894e-d6e317ccbaae
+# ╠═f8d7f110-934b-4aaa-918f-05c434982e5d
 # ╠═5b5e50c5-55dd-4195-8473-b5964481a482
 # ╠═52d50f58-3d2d-49c4-a932-8ff32aa638b6
 # ╠═9d5d3d2a-2614-48e2-a9d3-4f12825044a3
 # ╠═715001a4-7b97-4767-a0ad-aa5b0fd0475f
 # ╠═b887c313-c7c3-457e-b379-bcc5c72d3f0b
+# ╠═4ac0889f-84ab-4447-b222-26f83dacb51f
+# ╠═df677559-ea6c-4a14-aa9f-e854c552883c
+# ╠═b193560f-fd12-4d1e-ba22-eebae201a11c
+# ╠═a74a3ef0-230b-4b3e-9b8b-d8946e43f63a
+# ╠═a3c0b965-2569-4f62-b8e8-200b76125824
+# ╠═5927773b-f8ea-4de9-a289-b8c668109154
+# ╠═71d3fbfb-9ec2-4039-9ecc-f74072fceb81
+# ╠═48d713d5-f7b4-4fce-81cc-320c57bc8f78
+# ╠═4219eb11-9cca-45ee-b03f-379e67e45bbe
+# ╠═20d920ab-ac76-4620-9d43-2a9b9b033473
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

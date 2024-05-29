@@ -78,7 +78,7 @@ begin
 	end
 	axislegend(L"\sqrt{s_\mathrm{NN}}\,&\,\,\mathrm{PDF}", position = :rt, labelsize=14, titlesize=18)
 	xlims!(ax, 0, 20)
-	save("plots/dsdpt_fonll_pdf_energy_dep_final.png", fig, px_per_unit = 5.0)
+	# save("plots/dsdpt_fonll_pdf_energy_dep_final.png", fig, px_per_unit = 5.0)
 	fig
 end
 
@@ -109,7 +109,7 @@ md"Fit either $\mathrm{d}\sigma/\mathrm{d}p_T$ or $\mathrm{d}^2\sigma/\mathrm{d}
 version = "d2sd2pt"
 
 # ╔═╡ 51dfbc86-fa1c-49e0-a99f-455cb3fe92da
-saveplots = true
+saveplots = false
 
 # ╔═╡ d4d7d828-f39b-4c28-b716-99b7ba9f073e
 begin

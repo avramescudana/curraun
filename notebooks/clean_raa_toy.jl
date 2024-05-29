@@ -126,7 +126,8 @@ end
 # ╔═╡ 837f9011-e9ab-4a36-b8e6-f227a34af382
 # function Nτ(p, q, σ, x)
 function Nτ_fixedq(p, q, σ)
-	return sqrt(2*π)/σ * exp(-(p^2+q^2)/(2*σ^2)) * besseli(0,p*q/σ^2)
+	# return sqrt(2*π)/σ * exp(-(p^2+q^2)/(2*σ^2)) * besseli(0,p*q/σ^2)
+	return (2*π)/(σ^2) * exp(-(p^2+q^2)/(2*σ^2)) * besseli(0,p*q/σ^2)
 end
 
 # ╔═╡ 50d0e72a-15c8-442f-9450-d52bf7ed1c7b
@@ -221,7 +222,8 @@ md"---
 
 # ╔═╡ fd6d55b1-a067-4e2f-b68c-c16877c643ed
 begin
-	filename_glasma = current_path * "/gaussian_broadening_charm_Qs_2.0.pickle"
+	# filename_glasma = current_path * "/gaussian_broadening_charm_Qs_2.0.pickle"
+	filename_glasma = current_path * "/final_test2_gaussian_broadening_charm_Qs_2.0.pickle"
 	results_glasma = Pickle.npyload(filename_glasma)
 
 	pTs = results_glasma["pTs"]
@@ -239,6 +241,9 @@ end
 
 # ╔═╡ b8515cf1-dc1b-48ed-8521-2e45edc31a65
 στ_glasma
+
+# ╔═╡ 0e188476-180b-4e8d-84ba-b4e6a2532430
+push!(στ_glasma, 0.7, 0.65)
 
 # ╔═╡ ae65fb21-60cf-4a56-9ae5-b4ff58932548
 begin
@@ -283,8 +288,11 @@ begin
 	segmented_cmap = cgrad(:redblue, 8, categorical = true, rev=false)
 	custom_colors = [segmented_cmap[2], segmented_cmap[7], segmented_cmap[8]]
 
-	for (iσ, σ) in enumerate(στ_glasma[1:2])
-		string_as_varname("line"*string(iσ), lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)], color=custom_colors[iσ+1], linewidth=2, label=string(σ)))
+	factor = 1
+
+	# for (iσ, σ) in enumerate([στ_glasma[1], στ_glasma[24]])
+	for (iσ, σ) in enumerate([στ_glasma[26], στ_glasma[27]])
+		string_as_varname("line"*string(iσ), lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)]*factor, color=custom_colors[iσ+1], linewidth=2, label=string(σ)))
 	end
 
 	lines!(ax_glasma, pTs_raa_script, raa_script, color=custom_colors[1], linewidth=2)
@@ -292,21 +300,26 @@ begin
 
 	line_glasma = [LineElement(color = (custom_colors[1], 1), linestyle = nothing), MarkerElement(color = custom_colors[1], marker = :circle, markersize = 10, strokecolor = custom_colors[1])]
 
-	axislegend(ax_glasma, [line_glasma, line1, line2], [L"\mathrm{Glasma\,simulation}", L"\mathrm{Toy\,model\,}\sigma=0.96\,\mathrm{GeV}", L"\mathrm{Toy\,model\,}\sigma=1.28\,\mathrm{GeV}"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	axislegend(ax_glasma, [line_glasma, line1, line2], [L"\mathrm{Simulation}", L"\mathrm{Toy\,model\,}\sigma_{p_T}=0.9\,\mathrm{GeV}", L"\mathrm{Toy\,model\,}\sigma_{p_T}=0.8\,\mathrm{GeV}"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
 	
-	ylims!(ax_glasma, 0, 2)
+	# ylims!(ax_glasma, 0, 2)
+	ylims!(ax_glasma, 0.5, 1.5)
+	ax_glasma.yticks = ([0.5, 0.75, 1, 1.25, 1.5], ["0.5", "0.75", "1", "1.25", "1.5"])
 
 	xlims!(ax_glasma, 0, 10)
 	ax_glasma.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
 
-	text!(ax_glasma, L"\tau=1\,\mathrm{fm/c}", position = (0.35, 1.8), fontsize=18)
+	text!(ax_glasma, L"\tau=0.3\,\mathrm{fm/c}", position = (0.35, 1.4), fontsize=18)
 
 	# axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
 
-	save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll.png", fig_glasma, px_per_unit = 5.0)
+	# save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll_v2.png", fig_glasma, px_per_unit = 5.0)
 	
 	fig_glasma
 end
+
+# ╔═╡ 601c9436-f37b-48a3-838d-336d77045d89
+raa_script./RAAs_glasma[string(στ_glasma[2])]
 
 # ╔═╡ a88e05d9-fb22-4d2f-935e-cd32fb54c043
 md"---
@@ -320,12 +333,12 @@ end
 # ╔═╡ d1cebd5a-ec22-4ab1-821b-b8125dd12ee9
 begin
 	# τs_values = [0.1, 0.3, 1.0]
-	τs_values = [0.3]
-	τs_indices = findminindex(τs_values[1], tau)
+	τs_value = 0.3
+	τs_index = findminindex(τs_value, tau)
 
 	στs_glasma = Float64[]
 	for pT in pTs
-		append!(στs_glasma, σ_pTs[string(pT)][τs_indices])
+		append!(στs_glasma, σ_pTs[string(pT)][τs_index])
 	end
 end
 
@@ -358,9 +371,10 @@ end
 # ╔═╡ 238fd929-659e-4306-989f-73b8c3eca19f
 begin
 	# RAAs_glasma_interp = Dict()
-	
+	new_pₘₐₓ = 12
 	# for σ in στs_glasma
-		Nτ_p_fonll_fit_interp = Nτ_fonll_fit_interp.(p_range_fit, fit_type, pₘₐₓ)
+		# Nτ_p_fonll_fit_interp = Nτ_fonll_fit_interp.(p_range_fit, fit_type, pₘₐₓ)
+	Nτ_p_fonll_fit_interp = Nτ_fonll_fit_interp.(p_range_fit, fit_type, new_pₘₐₓ)
 		Nτ_p_fonll_fit_norm_interp = Nτ_p_fonll_fit_interp./integrate(p_range_fit, Nτ_p_fonll_fit_interp)
 	
 		N₀_fonll_fit = N₀_fit.(p_range_fit, fit_type)
@@ -385,7 +399,10 @@ begin
 	# 	string_as_varname("line"*string(iσ), lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)], color=custom_colors[iσ+1], linewidth=2, label=string(σ)))
 	# end
 
-	lines!(ax_glasma_interp, p_range_fit, RAA_fonll_fit_interp, color=custom_colors[1], linewidth=2)
+	lines!(ax_glasma_interp, p_range_fit, RAA_fonll_fit_interp, color=custom_colors[2], linewidth=2)
+
+	lines!(ax_glasma_interp, pTs_raa_script, raa_script, color=custom_colors[1], linewidth=2)
+	scatter!(ax_glasma_interp, pTs_sel, raa_script[ind_sel], color=custom_colors[1], marker=:circle, markersize=10)
 
 	# lines!(ax_glasma, pTs_raa_script, raa_script, color=custom_colors[1], linewidth=2)
 	# scatter!(ax_glasma, pTs_sel, raa_script[ind_sel], color=custom_colors[1], marker=:circle, markersize=10)
@@ -400,10 +417,110 @@ begin
 	ax_glasma_interp.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
 
 	text!(ax_glasma_interp, L"\tau=1\,\mathrm{fm/c}", position = (0.35, 1.8), fontsize=18)
+
+	# ylims!(ax_glasma_interp, 0.5, 1.5)
+	ylims!(ax_glasma_interp, 0, 2)
 	
 	# save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll.png", fig_glasma_interp, px_per_unit = 5.0)
 	
 	fig_glasma_interp
+end
+
+# ╔═╡ 75014f80-c3f3-4abe-8216-9f9d1bcc2427
+md"---
+### Plot of $\sigma$ as a function of $p_T$ at a fixed $\tau$"
+
+# ╔═╡ 568a1937-e59e-4bb4-bc3a-f1862498fe93
+begin
+	# τs_values = [0.1, 0.3, 1.0]
+	τs_values = [0.05]
+	τs_indices = findminindex.(τs_values, Ref(tau))
+
+	στs = Dict()
+	στs_interp = Dict()
+	for (iτ, τs) in enumerate(τs_values)
+		στs[string(τs)]= Float64[]
+		for pT in pTs
+			append!(στs[string(τs)], σ_pTs[string(pT)][iτ])
+		end
+
+		στs_interp[string(τs)] = CubicSpline(στs[string(τs)], pTs)
+	end
+
+	# στs_pT_interp = CubicSpline(στs_glasma, pTs)
+end
+
+# ╔═╡ 8215cc60-9a81-4aef-8fa7-041bb4b7c23c
+begin
+	pTs_σ = range(pTs[1], pTs[end], 100)
+
+	στs_interp_values = Dict()
+	for τs in τs_values
+		στs_interp_values[string(τs)] = στs_interp[string(τs)].(pTs_σ)
+	end
+end
+
+# ╔═╡ 7b35f5d6-8473-49e5-8bb9-447ea1b2b61d
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	
+	# Create Figure and Axis
+	fig_σ = Figure(size = (380, 380))
+	ax_σ = Axis(fig_σ[1, 1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"\sigma_{p_T}\,\mathrm{[GeV]}", xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true)
+
+	for (iτ, τs) in enumerate(τs_values)
+		lines!(ax_σ, pTs_σ, στs_interp_values[string(τs)], color=custom_colors[iτ], linewidth=1.5)
+	end
+	# lines!(ax_σ, pTs_σ, στs_pT_interp.(pTs_σ), color=custom_colors[1], linewidth=1.5)
+
+	xlims!(ax_σ, 0, 10)
+	ax_σ.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+
+	text!(ax_σ, L"\tau=1\,\mathrm{fm/c}", position = (0.35, 1.8), fontsize=18)
+	
+	# save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll.png", fig_σ, px_per_unit = 5.0)
+	
+	fig_σ
+end
+
+# ╔═╡ 61442865-fd78-4deb-8ef9-80b212df7893
+tau
+
+# ╔═╡ 36d1babd-eaad-45a8-8334-270d7bee3fbf
+σ_pTs[string(pTs[1])]
+
+# ╔═╡ 48aca144-dc86-4dc5-8e50-9df5b759907f
+σ_pTs
+
+# ╔═╡ 5ded09be-e567-480b-817d-bb296821757d
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	
+	# Create Figure and Axis
+	fig_στ = Figure(size = (380, 380))
+	ax_στ = Axis(fig_στ[1, 1], xlabel=L"\tau\,\mathrm{[fm/c]}", ylabel=L"\sigma_{p_T}\,\mathrm{[GeV]}", xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true)
+
+	segmented_cmap_σ = cgrad(:dense, 12, categorical = true, rev=false)
+	custom_colors_σ = [segmented_cmap_σ[3], segmented_cmap_σ[5], segmented_cmap_σ[7], segmented_cmap_σ[9], segmented_cmap_σ[11]]
+
+	pT_values = ["0.0", "0.5", "1.0", "5.0", "10.0"]
+	for (ipT, pT_value) in enumerate(pT_values)
+		string_as_varname("linepT"*string(ipT), lines!(ax_στ, tau, σ_pTs[pT_value], color=custom_colors_σ[ipT], linewidth=2))
+	end
+
+	axislegend(ax_στ, [linepT1, linepT2, linepT3, linepT4, linepT5], [L"0", L"0.5", L"1", L"1.5", L"10"], L"p_T\,\mathrm{[GeV]}", labelsize=16, titlesize=18, position = :lt, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	
+	# lines!(ax_σ, pTs_σ, στs_pT_interp.(pTs_σ), color=custom_colors[1], linewidth=1.5)
+
+	xlims!(ax_στ, 0, 0.3)
+	ylims!(ax_στ, 0, 1.5)
+	ax_στ.xticks = ([0, 0.1, 0.2, 0.3], ["0", "0.1", "0.2", "0.3"])
+
+	text!(ax_στ, L"\tau=1\,\mathrm{fm/c}", position = (0.35, 1.8), fontsize=18)
+	
+	# save("plots/analytical_raa_glasma_sigmapT_tau_dep.png", fig_στ, px_per_unit = 5.0)
+	
+	fig_στ
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2154,10 +2271,12 @@ version = "3.5.0+0"
 # ╠═fd6d55b1-a067-4e2f-b68c-c16877c643ed
 # ╠═91239df5-d147-4d56-95f9-0827eef1f46f
 # ╠═b8515cf1-dc1b-48ed-8521-2e45edc31a65
+# ╠═0e188476-180b-4e8d-84ba-b4e6a2532430
 # ╠═ae65fb21-60cf-4a56-9ae5-b4ff58932548
 # ╠═3e1f3283-894f-4fd4-84a0-2169b8bf6a36
 # ╠═4ef35d3b-d2f0-4e5a-8ec6-acbb04db36e7
 # ╠═36f5d644-a066-44d7-814a-4749183c55c4
+# ╠═601c9436-f37b-48a3-838d-336d77045d89
 # ╠═a88e05d9-fb22-4d2f-935e-cd32fb54c043
 # ╠═b8a8ab8b-c88b-4758-aa45-52c19105ff30
 # ╠═d1cebd5a-ec22-4ab1-821b-b8125dd12ee9
@@ -2168,5 +2287,13 @@ version = "3.5.0+0"
 # ╠═e0c0faba-bd15-4a8f-bc96-a54a15c6dd41
 # ╠═238fd929-659e-4306-989f-73b8c3eca19f
 # ╠═4da1eb8e-f23c-4d43-9590-f2a1f7036698
+# ╠═75014f80-c3f3-4abe-8216-9f9d1bcc2427
+# ╠═568a1937-e59e-4bb4-bc3a-f1862498fe93
+# ╠═8215cc60-9a81-4aef-8fa7-041bb4b7c23c
+# ╠═7b35f5d6-8473-49e5-8bb9-447ea1b2b61d
+# ╠═61442865-fd78-4deb-8ef9-80b212df7893
+# ╠═36d1babd-eaad-45a8-8334-270d7bee3fbf
+# ╠═48aca144-dc86-4dc5-8e50-9df5b759907f
+# ╠═5ded09be-e567-480b-817d-bb296821757d
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

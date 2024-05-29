@@ -214,7 +214,7 @@ md"---
 ### $\sqrt{s}$ initial FONLL dependence of $R_{AA}$ for fixed $Q_s$ and $\tau$"
 
 # ╔═╡ e17dbbf1-8f19-47a7-a7f5-a094721a908c
-nevents = 50
+nevents = 1
 
 # ╔═╡ 54d1e46e-527e-49fd-8786-114eef7c3000
 begin
@@ -461,6 +461,68 @@ begin
 	s_values = [2750, 5030, 5500, 7000, 13000]
 
 	mapping.(A, Q₀, x₀, λ, s_values, c)
+end
+
+# ╔═╡ 3c344667-e81c-42db-9faf-c4d8cfd07c0b
+md"---
+### Correct $Q_s$ and $\sqrt{s}$ FONLL dependence of $R_{AA}$"
+
+# ╔═╡ 469ceccd-abef-4019-a943-363f46418d14
+begin
+	nevents_sdep = 50
+	# Qₛ_values_sdep = [1.87, 2.0, 2.03, 2.09, 2.25]
+	# energies_sdep = [2750, 5030, 5500, 7000, 13000]
+	Qₛ_values_sdep = [1.87, 2.03, 2.09, 2.25]
+	energies_sdep = [2750, 5500, 7000, 13000]
+	
+	dumb_pTs_raa_sdep, raa_avg_sdep = Dict(), Dict()
+	
+	for (iQₛ, current_Qₛ) in enumerate(Qₛ_values_sdep)
+		label = string(current_Qₛ)
+		current_τₛ = τₛQₛ/current_Qₛ
+		dumb_pTs_raa_sdep[label], raa_avg_sdep[label] = compute_raa_events(current_τₛ, quark, current_Qₛ, energies_sdep[iQₛ], pdf_type, nevents_sdep)
+	end
+	pTs_raa_sdep = dumb_pTs_raa_sdep[string(Qₛ_values_sdep[1])]
+end
+
+# ╔═╡ ac99a26e-dc77-41cb-bd94-1c49a4c7621e
+begin
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	
+	# Create Figure and Axis
+	fig_glasma = Figure(size = (380, 380))
+	ax_glasma = Axis(fig_glasma[1, 1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, xminorgridvisible=true, yminorgridvisible=true)
+
+	lines!(ax_glasma, pTs_raa_sdep, ones(length(pTs_raa_sdep)), color=(:gray, 0.7), linewidth=1.5)
+
+	segmented_cmap = cgrad(:candy, 11, categorical = true, rev=true)
+	custom_colors = [segmented_cmap[2], segmented_cmap[4], segmented_cmap[6], segmented_cmap[8], segmented_cmap[10]]
+
+	for (iQₛ, current_Qₛ) in enumerate(Qₛ_values_sdep)
+		label = string(current_Qₛ)
+		string_as_varname("linesdep"*string(iQₛ), lines!(ax_glasma, pTs_raa_sdep, raa_avg_sdep[label], color=custom_colors[iQₛ], linewidth=2))
+	end
+
+	# axislegend(ax_glasma, [linesdep1, linesdep2, linesdep3, linesdep4, linesdep5], [L"(2.75, \,1.87)", L"(5.03, \,2.00)", L"(5.50, \,2.03)", L"(7.00, \,2.09)", L"(13.0,\, 2.25)"], L"(\sqrt{s_\mathrm{pp}},Q_s)\,\mathrm{[GeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	axislegend(ax_glasma, [linesdep1, linesdep2, linesdep3, linesdep4], [L"(2.75, \,1.87)", L"(5.50, \,2.03)", L"(7.00, \,2.09)", L"(13.0,\, 2.25)"], L"(\sqrt{s_\mathrm{pp}},Q_s)\,\mathrm{[GeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	
+	ax_glasma.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
+	ylims!(ax_glasma, 0.6, 1.4)
+
+	xlims!(ax_glasma, 0, 10)
+	ax_glasma.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
+
+	text!(ax_glasma, L"Q_s\tau=3", position = (0.35, 1.31), fontsize=18)
+	text!(ax_glasma, L"\mathrm{charm\,quarks}", position = (6.2, 1.31), fontsize=18)
+
+	text!(ax_glasma, L"\mathrm{FONLL\,}\sqrt{s_\mathrm{pp}}", position = (0.35, 0.53), fontsize=16)
+	text!(ax_glasma, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.63), fontsize=16)
+
+	# axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
+
+	save("plots/clean_raa_tau_dep_charm_quark_Qs_fonll_energy_dep_qsenergymap_v2.png", fig_glasma, px_per_unit = 5.0)
+	
+	fig_glasma
 end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
@@ -2140,5 +2202,8 @@ version = "3.5.0+0"
 # ╠═c07ee1e6-da77-4a21-8fc8-73764b2712a8
 # ╠═cc5f7d88-54b6-473b-819f-e595c92db655
 # ╠═c3df682a-8969-4a34-b7bf-adeeec27cf18
+# ╠═3c344667-e81c-42db-9faf-c4d8cfd07c0b
+# ╠═469ceccd-abef-4019-a943-363f46418d14
+# ╠═ac99a26e-dc77-41cb-bd94-1c49a4c7621e
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
