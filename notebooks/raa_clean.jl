@@ -93,16 +93,16 @@ begin
 	τₛ = 0.3
 	
 	# Gauge group
-	gauge_group = "su2"
-	# gauge_group = "su3"
+	# gauge_group = "su2"
+	gauge_group = "su3"
 	
 	# Representation of the gauge group
 	# It dictates how much momentum kicks particles get
 	# qfund < fund < adj
 	
-	# representation = "qfund"
+	representation = "qfund"
 	# representation = "fund"
-	representation = "adj"
+	# representation = "adj"
 	# representation = "test"
 end
 
@@ -539,7 +539,7 @@ begin
 		text!(ax_raa_fonll, 0.2, 1.65, text = L"\mathrm{SU(2)\,with\,}q_2=%$q₂", fontsize=16)
 	# end
 
-	save("plots/clean_raa_fonll_comp_"*gauge_group*"_"*representation*"_kdes.png", fig_raa_fonll, px_per_unit = 5.0)
+	# save("plots/clean_raa_fonll_comp_"*gauge_group*"_"*representation*"_kdes.png", fig_raa_fonll, px_per_unit = 5.0)
 
 	fig_raa_fonll
 end

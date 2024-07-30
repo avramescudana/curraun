@@ -27,6 +27,9 @@ begin
 	using HDF5
 
 	using Pickle
+	using NPZ
+	using KernelDensity
+	using Statistics
 end
 
 # ╔═╡ 6b6e75b8-1385-11ef-3f15-ab729c3433cc
@@ -52,6 +55,90 @@ end
 md"##### Read FONLL data from files"
 
 # ╔═╡ 2e24c52a-caa9-42c8-b576-e5370cbc159c
+# ╠═╡ disabled = true
+#=╠═╡
+current_path = pwd()
+  ╠═╡ =#
+
+# ╔═╡ e9290389-5ce3-4edd-94ff-da50635a8f0c
+md"##### Fit FONLL spectra"
+
+# ╔═╡ 2a0e3715-d3ab-4459-8ecc-50d81c380f88
+begin
+	nbins_hist = 100
+	ptmax = 10
+	pt_bins = range(0, ptmax, nbins_hist)
+end
+
+# ╔═╡ 424869c8-5460-4732-b995-a834d14da4a4
+md"---
+### Analytical functions"
+
+# ╔═╡ 837f9011-e9ab-4a36-b8e6-f227a34af382
+# function Nτ(p, q, σ, x)
+function Nτ_fixedq(p, q, σ)
+	# return sqrt(2*π)/σ * exp(-(p^2+q^2)/(2*σ^2)) * besseli(0,p*q/σ^2)
+	return (2*π)/(σ^2) * exp(-(p^2+q^2)/(2*σ^2)) * besseli(0,p*q/σ^2)
+end
+
+# ╔═╡ 50d0e72a-15c8-442f-9450-d52bf7ed1c7b
+function Nτ_fixedq_qdq(p, q, σ)
+	return Nτ_fixedq(p, q, σ) * q
+end
+
+# ╔═╡ d1abb4e7-7f73-4eec-8692-871500b98bc5
+md"---
+### Results"
+
+# ╔═╡ 3191d93c-51a5-40af-a546-4d69fed9cdd9
+begin
+	pₘᵢₙ = 0.000001
+	pₘₐₓ = 10
+end
+
+# ╔═╡ 5ac79f9d-911c-49e6-be0d-e83e8e4e8d59
+md"---
+### Read $R_{AA}$ from weighting script"
+
+# ╔═╡ 283ffebd-112b-4a4e-b3bc-6d81f0662e2f
+md"---
+### Extract $R_{AA}$ using the weighting script"
+
+# ╔═╡ 1f1bc026-8c7e-4ea6-b427-4ed8ca2cb018
+function raa_kde_weighted(collect_initial_pTs, collect_pTs, w₀, npoints, boundary)
+	#KDEs
+	# τ₀
+	weight_kde₀= kde(collect_initial_pTs, weights=w₀, npoints=npoints, boundary=boundary)
+	pt₀_weight_kde, dndpt₀_weight_kde = weight_kde₀.x, weight_kde₀.density
+	# τₛ
+	weight_kde₁= kde(collect_pTs, weights=w₀, npoints=npoints, boundary=boundary)
+	pt₁_weight_kde, dndpt₁_weight_kde = weight_kde₁.x, weight_kde₁.density
+
+	# These KDEs don't have the same x axis 
+	# In order to divide them, we need to interpolate one of them
+	# interp_map_kde₁ = CubicSpline(dndpt₁_weight_kde, pt₁_weACY_GOAL:
+	# raa_kde = interp_map_kde₁(pt₀_weight_kde)./dndpt₀_weight_kde
+
+	raa_kde = dndpt₁_weight_kde./dndpt₀_weight_kde
+	# return pt₁_weight_kde, raa_kde
+	return dndpt₀_weight_kde, dndpt₁_weight_kde, raa_kde
+end
+
+# ╔═╡ a9bc3aca-6152-4d4f-b7ad-074c2059fecc
+begin
+	function fit_fonll(xdata, ydata)
+		@. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
+		p₀_log = [2.5e8, 2.4, 2.3, 0.06]
+			
+		so = pyimport("scipy.optimize")
+		fit = pyeval("""lambda fit: lambda a, b, c, d, e: fit(a, b, c, d, e)""")
+		popt, pcov = so.curve_fit(fit((pₜ, x₀, x₁, x₂, x₃)->@. real(log10(Complex(x₀*pₜ/(1.0+x₃*Complex(pₜ)^x₁)^x₂)))), xdata[2:length(xdata)], log10.(ydata[2:length(ydata)]), p₀_log)
+		
+		return popt
+	end
+end
+
+# ╔═╡ 77fc5414-e77a-4268-89e4-eff3562bb3fc
 current_path = pwd()
 
 # ╔═╡ 53d01256-c55a-4157-bb1a-5aae95195eae
@@ -71,9 +158,6 @@ begin
 	xdata = dfe[!, "pt"]
 	ydata = dfe[!, "central"]
 end
-
-# ╔═╡ e9290389-5ce3-4edd-94ff-da50635a8f0c
-md"##### Fit FONLL spectra"
 
 # ╔═╡ bcf73b8e-3bb7-4ed8-92dd-8d4ce9b0ea99
 begin
@@ -100,54 +184,24 @@ begin
 	end
 end
 
-# ╔═╡ 2a0e3715-d3ab-4459-8ecc-50d81c380f88
-begin
-	nbins_hist = 100
-	ptmax = 10
-	pt_bins = range(0, ptmax, nbins_hist)
-end
-
 # ╔═╡ cbaddd88-58d5-4c61-85d0-6c82cc2803eb
 begin
 	fit = powlaw(pt_bins, popt[fit_type])
 	fonll_fit = fit./integrate(pt_bins, fit)
 end
 
-# ╔═╡ 424869c8-5460-4732-b995-a834d14da4a4
-md"---
-### Analytical functions"
-
 # ╔═╡ 1e6a23a6-9a1d-4930-a747-5cbb80dff439
 function N₀_fit(p, fit_type)
 	return powlaw(p, popt[fit_type])/p
+	# return powlaw(p, popt[fit_type])
+	# return powlaw(p, popt[fit_type])
 	# return powlaw(p, [x₀, x₁, x₂, x₃])
-end
-
-# ╔═╡ 837f9011-e9ab-4a36-b8e6-f227a34af382
-# function Nτ(p, q, σ, x)
-function Nτ_fixedq(p, q, σ)
-	# return sqrt(2*π)/σ * exp(-(p^2+q^2)/(2*σ^2)) * besseli(0,p*q/σ^2)
-	return (2*π)/(σ^2) * exp(-(p^2+q^2)/(2*σ^2)) * besseli(0,p*q/σ^2)
-end
-
-# ╔═╡ 50d0e72a-15c8-442f-9450-d52bf7ed1c7b
-function Nτ_fixedq_qdq(p, q, σ)
-	return Nτ_fixedq(p, q, σ) * q
 end
 
 # ╔═╡ 3eca8724-5035-42c9-bf1f-dfda4220a3e7
 function Nτ_fixedq_qdq_fonll_fit(p, q, σ, fit_type)
 	return Nτ_fixedq(p, q, σ) * q * N₀_fit(q, fit_type)
-end
-
-# ╔═╡ d1abb4e7-7f73-4eec-8692-871500b98bc5
-md"---
-### Results"
-
-# ╔═╡ 3191d93c-51a5-40af-a546-4d69fed9cdd9
-begin
-	pₘᵢₙ = 0.000001
-	pₘₐₓ = 10
+	# return Nτ_fixedq(p, q, σ) * N₀_fit(q, fit_type)
 end
 
 # ╔═╡ 37336b5d-22b1-4529-957d-f111562439fc
@@ -179,6 +233,9 @@ begin
 	end
 end
 
+# ╔═╡ 0c1771fe-6c3f-4364-a802-e6c7f3a45cd2
+RAAs_fit[string(σs[1])]
+
 # ╔═╡ fb6ef3e9-088e-4451-86f4-eb8d0ff649cb
 begin
 	set_theme!(fonts = (; regular = "CMU Serif"))
@@ -197,6 +254,7 @@ begin
 
 	lines!(ax, p_range_fit, ones(length(p_range_fit)), color=(:gray, 0.7), linewidth=1.5)
 	xlims!(ax, 0, 10)
+	# ylims!(ax, -0.5, 0.5)
 
 	axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
 
@@ -205,16 +263,38 @@ begin
 	fig
 end
 
-# ╔═╡ 5ac79f9d-911c-49e6-be0d-e83e8e4e8d59
-md"---
-### Read $R_{AA}$ from weighting script"
-
 # ╔═╡ e06b28a9-c35d-4cd8-8ca0-b7f403d20ce4
 begin
 	data_script = JLD2.load(current_path * "paper_raa_tau_dep_charm_beauty.jld2")["data"]
 	pTs_raa_script = data_script["pTs_raa"]
-	raa_script = data_script["raa_avg"]["charm"]["1.0"]
+	raa_script = data_script["raa_avg"]["charm"]["0.3"]
 end
+
+# ╔═╡ 25d43e01-22e7-4500-88b0-eaf995e4759a
+begin
+	# Simulation time
+	τₛ = 0.3
+	
+	# Gauge group
+	gauge_group = "su3"
+
+	# Representation
+	representation = "qfund"
+	q₂ = 4/3
+
+	# Saturation momentum
+	Qₛ = 2.0
+
+	binning = "pT"
+	# quark = "charm"
+end
+
+# ╔═╡ 4e847c01-983a-4148-849a-482a1cfc2578
+# begin
+# 	τₛ_fonll = 0.3
+# 	nevents=1
+# 	pTs_raa_script, raa_script, dndpt₀_fonll, dndpt₁_fonll = compute_raa_events(τₛ_fonll, quark, Qₛ, dfe, nevents)
+# end
 
 # ╔═╡ de2b5b1d-bb00-49cb-bde4-6ddb0be50b04
 md"---
@@ -248,15 +328,26 @@ push!(στ_glasma, 0.7, 0.65)
 # ╔═╡ ae65fb21-60cf-4a56-9ae5-b4ff58932548
 begin
 	RAAs_glasma = Dict()
+	# N₀_fonll_glasma = Dict()
+	# Nτ_p_fonll_glasma = Dict()
 	
 	for σ in στ_glasma
 		Nτ_p_fonll_fit = Nτ_fonll_fit.(p_range_fit, σ, fit_type, pₘₐₓ)
-		Nτ_p_fonll_fit_norm = Nτ_p_fonll_fit./integrate(p_range_fit, Nτ_p_fonll_fit)
+		# Nτ_p_fonll_fit_norm = Nτ_p_fonll_fit./integrate(p_range_fit, Nτ_p_fonll_fit)
+		Nτ_dp_p_fonll_fit = Nτ_p_fonll_fit.*p_range_fit
+		Nτ_dp_p_fonll_fit_norm = Nτ_dp_p_fonll_fit./integrate(p_range_fit, Nτ_dp_p_fonll_fit)
+
+		# Nτ_p_fonll_glasma[string(σ)] = Nτ_p_fonll_fit_norm
 	
 		N₀_fonll_fit = N₀_fit.(p_range_fit, fit_type)
-		N₀_fonll_fit_norm = N₀_fonll_fit./integrate(p_range_fit, N₀_fonll_fit)
+		# N₀_fonll_fit_norm = N₀_fonll_fit./integrate(p_range_fit, N₀_fonll_fit)
+		N₀_dp_fonll_fit = N₀_fonll_fit.*p_range_fit
+		N₀_dp_fonll_fit_norm = N₀_dp_fonll_fit./integrate(p_range_fit, N₀_dp_fonll_fit)
+
+		# N₀_fonll_glasma[string(σ)] = N₀_fonll_fit_norm 
 	
-		RAA_fonll_fit = Nτ_p_fonll_fit_norm./N₀_fonll_fit_norm
+		# RAA_fonll_fit = Nτ_p_fonll_fit_norm./N₀_fonll_fit_norm
+		RAA_fonll_fit = Nτ_dp_p_fonll_fit_norm./N₀_dp_fonll_fit_norm
 		RAAs_glasma[string(σ)] = RAA_fonll_fit
 	end
 end
@@ -267,6 +358,9 @@ begin
 	
 	pTs_sel = LinRange(pTs_raa_script[1],pTs_raa_script[end],lens)
 	ind_sel = floor.(Int, LinRange(1,length(pTs_raa_script),lens))
+
+	p_range_fit_toy = LinRange(p_range_fit[1],p_range_fit[end],lens)
+	ind_sel_toy = floor.(Int, LinRange(1,length(p_range_fit),lens))
 end
 
 # ╔═╡ 4ef35d3b-d2f0-4e5a-8ec6-acbb04db36e7
@@ -286,34 +380,44 @@ begin
 	lines!(ax_glasma, p_range_fit, ones(length(p_range_fit)), color=(:gray, 0.7), linewidth=1.5)
 
 	segmented_cmap = cgrad(:redblue, 8, categorical = true, rev=false)
-	custom_colors = [segmented_cmap[2], segmented_cmap[7], segmented_cmap[8]]
+	custom_colors = [segmented_cmap[2], segmented_cmap[7], segmented_cmap[8], segmented_cmap[3]]
 
-	factor = 1
+	linestyles = [:dash, :dot]
 
-	# for (iσ, σ) in enumerate([στ_glasma[1], στ_glasma[24]])
-	for (iσ, σ) in enumerate([στ_glasma[26], στ_glasma[27]])
-		string_as_varname("line"*string(iσ), lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)]*factor, color=custom_colors[iσ+1], linewidth=2, label=string(σ)))
+	for (iσ, σ) in enumerate([στ_glasma[1], στ_glasma[24]])
+		string_as_varname("line"*string(iσ), lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)], color=custom_colors[iσ+1], linewidth=2, label=string(σ), linestyle=linestyles[iσ]))
+		lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)], color=(custom_colors[iσ+1], 0.2), linewidth=2)
 	end
 
 	lines!(ax_glasma, pTs_raa_script, raa_script, color=custom_colors[1], linewidth=2)
-	scatter!(ax_glasma, pTs_sel, raa_script[ind_sel], color=custom_colors[1], marker=:circle, markersize=10)
+	scatter!(ax_glasma, pTs_sel, raa_script[ind_sel], color=custom_colors[1], marker=:circle, markersize=8)
 
-	line_glasma = [LineElement(color = (custom_colors[1], 1), linestyle = nothing), MarkerElement(color = custom_colors[1], marker = :circle, markersize = 10, strokecolor = custom_colors[1])]
+	# lines!(ax_glasma, p_range_fit, RAA_fonll_fit_interp, color=custom_colors[4], linewidth=2)
+	# scatter!(ax_glasma, p_range_fit_toy, RAA_fonll_fit_interp[ind_sel_toy], color=custom_colors[4], marker=:circle, markersize=10)
 
-	axislegend(ax_glasma, [line_glasma, line1, line2], [L"\mathrm{Simulation}", L"\mathrm{Toy\,model\,}\sigma_{p_T}=0.9\,\mathrm{GeV}", L"\mathrm{Toy\,model\,}\sigma_{p_T}=0.8\,\mathrm{GeV}"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	line_glasma = [LineElement(color = (custom_colors[1], 1), linestyle = nothing), MarkerElement(color = custom_colors[1], marker = :circle, markersize = 8, strokecolor = custom_colors[1])]
+	# line_toy = [LineElement(color = (custom_colors[4], 1), linestyle = nothing), MarkerElement(color = custom_colors[4], marker = :circle, markersize = 10, strokecolor = custom_colors[4])]
+
+	# axislegend(ax_glasma, [line_glasma, line_toy, line1, line2], [L"\mathrm{Glasma\,simulation}", L"\mathrm{Toy\,model\,}\sigma(p_T)", L"\mathrm{Toy\,model\,}\sigma(p_T=0\,\mathrm{GeV})", L"\mathrm{Toy\,model\,}\sigma(p_T=10\,\mathrm{GeV})"], labelsize=15, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+
+	axislegend(ax_glasma, [line_glasma, [line1, LineElement(color = (custom_colors[2], 0.2), linewidth=2)], [line2, LineElement(color = (custom_colors[3], 0.2), linewidth=2)]], [L"\mathrm{Glasma\,simulation}", L"\mathrm{Toy\,model\,}\sigma_{p_T}\,\,\mathrm{for}\,p_T=0\,\mathrm{GeV}", L"\mathrm{Toy\,model\,}\sigma_{p_T}\,\,\mathrm{for}\,p_T=10\,\mathrm{GeV}"], labelsize=15, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
 	
 	# ylims!(ax_glasma, 0, 2)
-	ylims!(ax_glasma, 0.5, 1.5)
-	ax_glasma.yticks = ([0.5, 0.75, 1, 1.25, 1.5], ["0.5", "0.75", "1", "1.25", "1.5"])
+	ylims!(ax_glasma, 0.6, 1.4)
+	ax_glasma.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
 
 	xlims!(ax_glasma, 0, 10)
 	ax_glasma.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
 
-	text!(ax_glasma, L"\tau=0.3\,\mathrm{fm/c}", position = (0.35, 1.4), fontsize=18)
+	# text!(ax_glasma, L"\tau=0.3\,\mathrm{fm/c}", position = (0.35, 1.4), fontsize=18)
+	text!(ax_glasma, L"Q_s=2\,\mathrm{GeV}", position = (0.35, 1.31), fontsize=16)
+	text!(ax_glasma, L"\tau=0.3\,\mathrm{fm/c}", position = (0.4, 1.25), fontsize=16)
+
+	text!(ax_glasma, L"\mathrm{charm\,quarks}", position = (6.4, 1.32), fontsize=16)
 
 	# axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
 
-	# save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll_v2.png", fig_glasma, px_per_unit = 5.0)
+	save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll_v4.png", fig_glasma, px_per_unit = 5.0)
 	
 	fig_glasma
 end
@@ -329,6 +433,73 @@ md"---
 function findminindex(value, array)
 	return findmin(element->abs(element-value),array)[2]
 end 
+
+# ╔═╡ 1e02a8d1-a85d-4ba9-a56c-2fc4ca95574a
+begin
+	function compute_raa_events(τₛ, quark, Qₛ, df, nevents)
+		# nevents_temp = 30
+		
+		folder= "clean_RAA_"*quark*"_fonll_Qs_"*string(Qₛ)*"_"*representation*"_"*gauge_group*"_formt_m"
+	
+		filename_param = current_path * "/results/" * folder * "/parameters_" * binning * "_binning.pickle"
+		parameters = Pickle.npyload(filename_param)
+		pTs = parameters["PTS"]
+		npTs = length(parameters["PTS"])
+		# nevents = parameters["NEVENTS"]
+	
+		τ = parameters["TAU"]
+		τᵢ = findminindex(τₛ, τ)
+	
+		raas = Array{Float64}[]
+		dndpt₀ = Array{Float64}[]
+		dndpt₁ = Array{Float64}[]
+	
+		npoints_raa = 100
+		boundary_raa = (pTs[1], pTs[length(pTs)])
+
+		# FONLL
+		xdata = df[!, "pt"]
+		ydata = df[!, "central"]
+
+		popt = fit_fonll(xdata, ydata)
+		@. powlaw(x,p) = p[1]*x/(1+p[4]*x^p[2])^p[3]
+	
+		for ev in range(1, nevents)
+		# for ev in range(1, nevents_temp)
+			label_ev = "event_"*string(ev)	
+	
+			final_pTs = zeros(0)
+			initial_pTs = zeros(0)
+			
+			for (pTbin, pT) in enumerate(pTs)
+				
+				label_file = "/" * binning * "_bin_" * string(pTbin) * "_ev_" * string(ev) * ".npz"
+				filename_npz = current_path * "/results/" * folder * label_file
+				output_npz = npzread(filename_npz)
+				pT_spectra_npz = output_npz["pTs"]
+				initial_pTs_npz = output_npz["initial_pTs"]
+
+				append!(final_pTs, pT_spectra_npz[τᵢ,:])
+				append!(initial_pTs, initial_pTs_npz)
+			end
+	
+			w₀ = powlaw(initial_pTs, popt)
+			# Normalize weights
+			w₀ ./ sum(w₀)
+	
+			dndpt₀_ev, dndpt₁_ev, raa_ev = raa_kde_weighted(initial_pTs, final_pTs, w₀, npoints_raa, boundary_raa)
+			push!(raas, raa_ev)
+			push!(dndpt₀, dndpt₀_ev)
+			push!(dndpt₁, dndpt₁_ev)
+		end
+
+		pTs_raa = range(start=pTs[1], stop=pTs[length(pTs)], length=100)
+	
+		raa_avg = mean(raas, dims=1)[1]
+		
+		return pTs_raa, raa_avg, dndpt₀, dndpt₁
+	end
+end
 
 # ╔═╡ d1cebd5a-ec22-4ab1-821b-b8125dd12ee9
 begin
@@ -370,19 +541,17 @@ end
 
 # ╔═╡ 238fd929-659e-4306-989f-73b8c3eca19f
 begin
-	# RAAs_glasma_interp = Dict()
 	new_pₘₐₓ = 12
-	# for σ in στs_glasma
-		# Nτ_p_fonll_fit_interp = Nτ_fonll_fit_interp.(p_range_fit, fit_type, pₘₐₓ)
+
 	Nτ_p_fonll_fit_interp = Nτ_fonll_fit_interp.(p_range_fit, fit_type, new_pₘₐₓ)
-		Nτ_p_fonll_fit_norm_interp = Nτ_p_fonll_fit_interp./integrate(p_range_fit, Nτ_p_fonll_fit_interp)
-	
-		N₀_fonll_fit = N₀_fit.(p_range_fit, fit_type)
-		N₀_fonll_fit_norm = N₀_fonll_fit./integrate(p_range_fit, N₀_fonll_fit)
-	
-		RAA_fonll_fit_interp = Nτ_p_fonll_fit_norm_interp./N₀_fonll_fit_norm
-		# RAAs_glasma[string(σ)] = RAA_fonll_fit
-	# end
+	Nτ_dp_p_fonll_fit_interp = Nτ_p_fonll_fit_interp.*p_range_fit
+	Nτ_dp_p_fonll_fit_norm_interp = Nτ_dp_p_fonll_fit_interp./integrate(p_range_fit, Nτ_dp_p_fonll_fit_interp)
+
+	N₀_fonll_fit_interp = N₀_fit.(p_range_fit, fit_type)
+	N₀_dp_fonll_fit_interp = N₀_fonll_fit_interp.*p_range_fit
+	N₀_dp_fonll_fit_norm_interp = N₀_dp_fonll_fit_interp./integrate(p_range_fit, N₀_dp_fonll_fit_interp)
+
+	RAA_fonll_fit_interp = Nτ_dp_p_fonll_fit_norm_interp./N₀_dp_fonll_fit_norm_interp
 end
 
 # ╔═╡ 4da1eb8e-f23c-4d43-9590-f2a1f7036698
@@ -532,11 +701,14 @@ DataInterpolations = "82cc6244-b520-54b8-b5a6-8a565e85f1d0"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 HDF5 = "f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
+KernelDensity = "5ab0869b-81aa-558d-bb23-cbf5423bbe9b"
 LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
+NPZ = "15e1cf62-19b3-5cfa-8e77-841668bca605"
 NumericalIntegration = "e7bfaba1-d571-5449-8927-abc22e82249b"
 Pickle = "fbb45041-c46e-462f-888f-7c521cafbc2c"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [compat]
 CairoMakie = "~0.12.0"
@@ -544,7 +716,9 @@ DataFrames = "~1.6.1"
 DataInterpolations = "~4.6.0"
 HDF5 = "~0.17.2"
 JLD2 = "~0.4.47"
+KernelDensity = "~0.6.9"
 LsqFit = "~0.15.0"
+NPZ = "~0.4.3"
 NumericalIntegration = "~0.3.3"
 Pickle = "~0.3.5"
 PyCall = "~1.96.4"
@@ -557,7 +731,7 @@ PLUTO_MANIFEST_TOML_CONTENTS = """
 
 julia_version = "1.8.3"
 manifest_format = "2.0"
-project_hash = "98a627535836136a2832dd3c7f97169dd2c97dc9"
+project_hash = "f38296d7a5b3fa6eef14688284869a49cadb9f9a"
 
 [[deps.AbstractFFTs]]
 deps = ["ChainRulesCore", "LinearAlgebra", "Test"]
@@ -1508,6 +1682,12 @@ git-tree-sha1 = "a0b464d183da839699f4c79e7606d9d186ec172c"
 uuid = "d41bc354-129a-5804-8e4c-c37616107c6c"
 version = "7.8.3"
 
+[[deps.NPZ]]
+deps = ["FileIO", "ZipFile"]
+git-tree-sha1 = "60a8e272fe0c5079363b28b0953831e2dd7b7e6f"
+uuid = "15e1cf62-19b3-5cfa-8e77-841668bca605"
+version = "0.4.3"
+
 [[deps.NVTX]]
 deps = ["Colors", "JuliaNVTXCallbacks_jll", "Libdl", "NVTX_jll"]
 git-tree-sha1 = "53046f0483375e3ed78e49190f1154fa0a4083a1"
@@ -2264,9 +2444,17 @@ version = "3.5.0+0"
 # ╠═37336b5d-22b1-4529-957d-f111562439fc
 # ╠═dd06dadc-32ca-42fd-a036-1b95eba736c2
 # ╠═9c0c4693-c2e2-4b9d-8906-cdef026a27ed
+# ╠═0c1771fe-6c3f-4364-a802-e6c7f3a45cd2
 # ╠═fb6ef3e9-088e-4451-86f4-eb8d0ff649cb
 # ╠═5ac79f9d-911c-49e6-be0d-e83e8e4e8d59
 # ╠═e06b28a9-c35d-4cd8-8ca0-b7f403d20ce4
+# ╠═283ffebd-112b-4a4e-b3bc-6d81f0662e2f
+# ╠═1f1bc026-8c7e-4ea6-b427-4ed8ca2cb018
+# ╠═a9bc3aca-6152-4d4f-b7ad-074c2059fecc
+# ╠═77fc5414-e77a-4268-89e4-eff3562bb3fc
+# ╠═25d43e01-22e7-4500-88b0-eaf995e4759a
+# ╠═1e02a8d1-a85d-4ba9-a56c-2fc4ca95574a
+# ╠═4e847c01-983a-4148-849a-482a1cfc2578
 # ╠═de2b5b1d-bb00-49cb-bde4-6ddb0be50b04
 # ╠═fd6d55b1-a067-4e2f-b68c-c16877c643ed
 # ╠═91239df5-d147-4d56-95f9-0827eef1f46f

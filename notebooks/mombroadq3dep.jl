@@ -13,8 +13,8 @@ end
 
 # ╔═╡ b361316d-f9f2-42d6-a123-3fdbb65b75bd
 begin
-	# choice_q2 = "4/3"
-	choice_q2 = "4"
+	choice_q2 = "4/3"
+	# choice_q2 = "4"
 	# quark = "jet"
 	# quark = "infmass"
 	quark = "charm"
@@ -86,7 +86,7 @@ begin
 	
 	fig = Figure(resolution = (380, 380), font = "CMU Serif")
 	axes = Axis(fig[1, 1], 
-		xlabel=L"\Delta\tau\,\mathrm{[fm/c]}", ylabel=ylabel, xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, 
+		xlabel=L"\Delta\tau\,\mathrm{[fm/c]}", ylabel=ylabel, xlabelsize = 20, ylabelsize= 20, xticklabelsize=16, yticklabelsize=16, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, 
 		aspect = 1
 	) 
 	
@@ -102,12 +102,18 @@ begin
 		)
 	end
 		
-	axislegend(axes, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = :rt, orientation = :vertical, framecolor=:grey)
+	axislegend(axes, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=16, titlesize=20, position = :rt, orientation = :vertical, 
+		bgcolor = (:white, 0.4), 
+		framecolor=(:grey80, 0)
+	)
+		# framecolor=:grey)
 
 	xlims!(axes, 0, 1.5)
 	axes.xticks = ([0, 0.5, 1, 1.5], ["0", "0.5", "1", "1.5"])
 
-	text!(axes, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.7, 0.1), fontsize=18)
+	# text!(axes, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.7, 0.1), fontsize=18)
+	text!(axes, L"\mathrm{charm\,quarks}", position = (0.97, 0.65), fontsize=16)
+	text!(axes, L"p_T\,(\tau_\mathrm{form})=2\,\mathrm{GeV}", position = (0.85, 0.15), fontsize=16)
 
 	if choice_q2=="4/3"
 		text!(axes, L"\langle\delta p_T^2\,\rangle", position = (0.3, 0.4), fontsize=18)
@@ -151,18 +157,21 @@ begin
 		ax_zoomin.yticks = ([-0.8, -0.4, 0, 0.4, 0.8], ["-0.8", "-0.4", "0", "0.4", "0.8"])
 		text!(ax_zoomin, L"q_2=4/3", position = (6, 0.4), fontsize=18)
 		# save("plots/mom_broad_brute_force_q2_1.33_KDE_q3_dep.png", fig, px_per_unit = 5.0)
-		save("plots/mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_1.33_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		save("plots/final_mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_1.33_KDE_q3_dep.png", fig, px_per_unit = 5.0)
 	else
 		ylims!(ax_zoomin, -4.2, 4.2)
 		xlims!(ax_zoomin, 0, 2.6)
 		ax_zoomin.yticks = ([-4, -2, 0, 2, 4], ["-4", "-2", "0", "2", "4"])
 		text!(ax_zoomin, L"q_2=4", position = (1.5, 2), fontsize=18)
 		# save("plots/mom_broad_brute_force_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
-		save("plots/mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		save("plots/final_mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
 	end
 	
 	fig
 end
+
+# ╔═╡ 61949100-87ff-4520-aa26-639c349c1d43
+
 
 # ╔═╡ f63ea92f-77cb-4057-93b2-ffcb6a86cbed
 begin
@@ -355,9 +364,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
+git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+0"
+version = "1.0.8+1"
 
 [[deps.CEnum]]
 git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
@@ -1550,9 +1559,9 @@ version = "2.0.2+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
+git-tree-sha1 = "f7c281e9c61905521993a987d38b5ab1d4b53bef"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.38+0"
+version = "1.6.38+1"
 
 [[deps.libsixel_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]
@@ -1597,6 +1606,7 @@ version = "3.5.0+0"
 # ╠═922896f4-1be4-4046-945c-51d3f39f30dd
 # ╠═68eecdf3-4c25-465f-acc3-fa313dfac5d5
 # ╠═31005ba1-029d-4173-9af3-1a863b64ebd7
+# ╠═61949100-87ff-4520-aa26-639c349c1d43
 # ╠═f63ea92f-77cb-4057-93b2-ffcb6a86cbed
 # ╠═27ad3673-7376-4db1-8a04-296d6e01c7ca
 # ╠═928b1a01-8462-41da-9057-31403ae499f9

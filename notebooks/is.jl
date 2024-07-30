@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.25
+# v0.19.42
 
 using Markdown
 using InteractiveUtils
@@ -15,7 +15,7 @@ end
 # ╔═╡ e442fd47-306a-4122-b89b-206bad4042f3
 begin
 	current_path = pwd()
-	data_fields = Pickle.npyload(current_path*"/energy_density_su2.pickle")
+	data_fields = Pickle.npyload(current_path*"/results/energy_density_su2.pickle")
 	ed, N, L = data_fields["ed"], data_fields["N"], data_fields["L"]
 	max_index = data_fields["max_index"]
 end
@@ -28,39 +28,58 @@ end
 
 # ╔═╡ 1983e732-93fe-4bdf-bc62-66a502ce508f
 begin
-	fig = Figure(resolution = (430, 400), font = "CMU Serif", backgroundcolor=:transparent)
-	axes =Axis(fig[1, 1], aspect=1, xlabelsize = 0, ylabelsize= 0, xtickalign = 0, xticksize=0, ytickalign=0, yticksize=0, xticklabelsize = 0, yticklabelsize = 0, xlabelpadding = 0, backgroundcolor=:transparent)
+	set_theme!(fonts = (; regular = "CMU Serif"))
+	fig = Figure(resolution = (450, 400), font = "CMU Serif", 
+	# backgroundcolor=:transparent
+	)
+	axes =Axis(fig[1, 1], aspect=1, 
+		# xlabelsize = 0, ylabelsize= 0, 
+		xtickalign = 0, xticksize=0, ytickalign=0, yticksize=0, 
+		# xticklabelsize = 0, yticklabelsize = 0, xlabelpadding = 0, backgroundcolor=:transparent
+		xlabel=L"x\,\mathrm{[fm]}", ylabel=L"y\,\mathrm{[fm]}",
+		xlabelsize = 20, ylabelsize = 20, xticklabelsize = 14, yticklabelsize = 14
+	)
 	
 	δs = 120
 	step = 1/8
 	a = L/N
 	x, y = a*(1:N), a*(1:N)
 	
-	# i=1
-	i=3
+	i=1
+	# i=3
 	interp = interpolate(ed[i], BSpline(Quadratic(Reflect(OnCell()))))
 	ed_interp = interp(1:step:N, 1:step:N)
 
 	hmap = heatmap!(axes, x, y, ed_interp, colormap = :seaborn_rocket_gradient)
-	cbar = Colorbar(fig, hmap, 
-		# label = L"\epsilon\,(\tau_\mathrm{form})", 
+	cbar = Colorbar(fig, 
+		# hmap, 
+		limits=(0,findmax(ed_interp)[1]),
+		colormap = :seaborn_rocket_gradient,
+		label = L"\varepsilon_\mathrm{glasma}\,(\tau_\mathrm{form})\,\mathrm{[a.u.]}", 
+		# label = L"\varepsilon_\mathrm{glasma}\,(\tau_\mathrm{form}+\Delta\tau)\,\mathrm{[a.u.]}", 
 		# label = L"\epsilon\,(\tau)", 
-		labelsize = 0, width = 15, flipaxis = true,
-	ticksize=0, tickalign = 0, ticklabelsize = 0, height = Relative(1))
+		# labelsize = 0, width = 15, 
+		flipaxis = true, ticksize=0, tickalign = 0, labelsize=24, ticklabelsize = 12,
+		# ticklabelsize = 0, height = Relative(1)
+		width = 12, 
+		height = Relative(0.92)
+		# height = Relative(0.94)
+	)
 	fig[1, 2] = cbar
-	colgap!(fig.layout, 7)
+	cbar.ticks = ([0, 100, 200, 300, 400],  ["0", "100", "200", "300", "400"])
+	# cbar.ticks = ([0, 10, 20, 30, 40],  ["0", "10", "20", "30", "40"])
+	colgap!(fig.layout, 10)
 
 	xlims!(axes, (max_index[1]-δs)*a, (max_index[1]+δs)*a)
 	ylims!(axes, (max_index[2]-δs)*a, (max_index[2]+δs)*a)
+	axes.xticks = ([1, 1.2, 1.4, 1.6, 1.8], ["1", "1.2", "1.4", "1.6", "1.8"])
+	axes.yticks = ([1, 1.2, 1.4, 1.6, 1.8], ["1", "1.2", "1.4", "1.6", "1.8"])
 
-	# save("plots/ed_tau_form.png", fig, px_per_unit = 10.0) 
-	save("plots/ed_tau.png", fig, px_per_unit = 10.0) 
+	# save("plots/final_ed_tau_form.png", fig, px_per_unit = 10.0)
+	# save("plots/final_ed_tau.png", fig, px_per_unit = 10.0) 
 
 	fig
 end
-
-# ╔═╡ e9075460-7bca-424e-85de-18f3e0472d1c
-
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -138,9 +157,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
+git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+0"
+version = "1.0.8+1"
 
 [[deps.CEnum]]
 git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
@@ -1327,9 +1346,9 @@ version = "2.0.2+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
+git-tree-sha1 = "f7c281e9c61905521993a987d38b5ab1d4b53bef"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.38+0"
+version = "1.6.38+1"
 
 [[deps.libsixel_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]
@@ -1371,6 +1390,5 @@ version = "3.5.0+0"
 # ╠═e442fd47-306a-4122-b89b-206bad4042f3
 # ╠═46ab7641-7f9d-4dc4-af99-62b00472ad49
 # ╠═1983e732-93fe-4bdf-bc62-66a502ce508f
-# ╠═e9075460-7bca-424e-85de-18f3e0472d1c
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -214,7 +214,8 @@ md"---
 ### $\sqrt{s}$ initial FONLL dependence of $R_{AA}$ for fixed $Q_s$ and $\tau$"
 
 # ╔═╡ e17dbbf1-8f19-47a7-a7f5-a094721a908c
-nevents = 1
+nevents = 50
+# nevents = 1
 
 # ╔═╡ 54d1e46e-527e-49fd-8786-114eef7c3000
 begin
@@ -239,111 +240,6 @@ function string_as_varname(s::AbstractString,v::Any)
     return @eval (($s) = ($v))
 end
 
-# ╔═╡ fe3b3802-2ef8-4295-9734-f7375838b790
-# begin
-# 	set_theme!(fonts = (; regular = "CMU Serif"))
-# 	fig_raa_cteq_edep = Figure(size = (380, 380), font = "CMU Serif")
-# 	ax_raa_cteq_edep = Axis(fig_raa_cteq_edep[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, aspect = 1)
-
-# 	segmented_cmap_cteq = cgrad(:dense, 14, categorical = true)
-# 	custom_colors_cteq = [segmented_cmap_cteq[3], segmented_cmap_cteq[5], segmented_cmap_cteq[7], segmented_cmap_cteq[9], segmented_cmap_cteq[11]]
-
-# 	# segmented_cmap = cgrad(:tempo, 9, categorical = true)
-# 	# custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7]]
-
-# 	lines!(ax_raa_cteq_edep, pTs_raa_fonll, ones(length(pTs_raa_fonll)), color=(:gray, 0.6), linewidth=1.5)
-
-# 	energies_cteq = ["2750", "5030", "7000", "13000"]
-# 	labels_cteq = energies_cteq .* "_cteq"
-# 	for (il, label) in enumerate(labels_cteq)
-# 		# label = string(energies[ie]) * "_" * pdf_types[ie]
-# 		string_as_varname("linecteq"*string(il), lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_cteq[il]], color=custom_colors_cteq[il], linewidth=1.5))
-		
-# 		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=custom_colors[il], linewidth=2, linestyle=:dash)
-# 		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=(custom_colors[il], 0.5), linewidth=2)
-# 	end
-
-# 	# band!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_cteq[1]], raa_avg_fonll[labels_cteq[length(labels_cteq)]]; color = range(pTs_raa_fonll[1], pTs_raa_fonll[end], 200), colormap = :dense, alpha=0.2, transparency=true)
-# 	band!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_cteq[1]], raa_avg_fonll[labels_cteq[length(labels_cteq)]]; color = (custom_colors_cteq[2], 0.2))
-
-# 	labels_energies_cteq = [2.75, 5.03, 7, 13]
-# 	e_labels = [L"%$eᵢ" for eᵢ in labels_energies_cteq]
-# 	axislegend(ax_raa_cteq_edep, [linecteq1, linecteq2, linecteq3, linecteq4], e_labels, L"\sqrt{s}\,\mathrm{[TeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, framecolor=:grey)
-
-# 	xlims!(ax_raa_cteq_edep, 0, 10)
-# 	ax_raa_cteq_edep.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
-	
-# 	# ax_raa_fonll.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
-# 	ylims!(ax_raa_cteq_edep, 0.6, 1.4)
-
-# 	text!(ax_raa_cteq_edep, L"\mathrm{charm}\,@\,Q_s=2\,\mathrm{GeV}", position = (0.35, 1.33), fontsize=18)
-# 	text!(ax_raa_cteq_edep, L"\tau=0.6\,\mathrm{fm/c}", position = (0.35, 1.26), fontsize=18)
-
-# 	text!(ax_raa_cteq_edep, L"\mathrm{FONLL\,pp}", position = (0.35, 0.7), fontsize=16)
-# 	text!(ax_raa_cteq_edep, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.63), fontsize=16)
-
-# 	# save("plots/clean_raa_tau_"*string(τₛ_fonll)*"_quark_"*quark*"_Qs_"*string(Qₛ)*"_fonll_energy_dep_pdf_"*pdf_type*".png", fig_raa_cteq_edep, px_per_unit = 5.0)
-
-# 	fig_raa_cteq_edep
-# end
-
-# ╔═╡ cf061896-649d-4e39-b510-30e50b320fe8
-# begin
-# 	set_theme!(fonts = (; regular = "CMU Serif"))
-# 	fig_raa_cteq_nnpdf = Figure(size = (380, 380), font = "CMU Serif")
-# 	ax_raa_cteq_nnpdf = Axis(fig_raa_cteq_nnpdf[1,1], xlabel=L"p_T\,\mathrm{[GeV]}", ylabel=L"R_{AA}", xlabelsize = 20, ylabelsize= 20, xticklabelsize=14, yticklabelsize=14, xtickalign = 1, xticksize=4, ytickalign=1, yticksize=4, xminorgridvisible=true, yminorgridvisible=true, aspect = 1)
-
-# 	segmented_cmap_pdf = cgrad(:gist_earth, 14, categorical = true)
-# 	custom_colors_pdf = [segmented_cmap_pdf[3], segmented_cmap_pdf[5], segmented_cmap_pdf[7], segmented_cmap_pdf[9], segmented_cmap_pdf[11]]
-
-# 	# segmented_cmap = cgrad(:tempo, 9, categorical = true)
-# 	# custom_colors = [segmented_cmap[3], segmented_cmap[5], segmented_cmap[7]]
-
-# 	lines!(ax_raa_cteq_nnpdf, pTs_raa_fonll, ones(length(pTs_raa_fonll)), color=(:gray, 0.6), linewidth=1.5)
-
-# 	# energies_cteq_nnpdf = ["5030", "7000", "13000"]
-# 	energies_cteq_nnpdf = ["5030", "13000"]
-# 	for (ie, labele) in enumerate(energies_cteq_nnpdf)
-# 		# label = string(energies[ie]) * "_" * pdf_types[ie]
-# 		label_cteq, label_nnpdf = labele * "_" * "cteq", labele * "_" * "nnpdf"
-# 		string_as_varname("linepdfcteq"*string(ie), lines!(ax_raa_cteq_nnpdf, pTs_raa_fonll, raa_avg_fonll[label_cteq], color=custom_colors_pdf[ie], linewidth=1.5))
-
-# 		lines!(ax_raa_cteq_nnpdf, pTs_raa_fonll, raa_avg_fonll[label_nnpdf], color=custom_colors_pdf[ie], linewidth=1.5, linestyle=:dash)
-# 		lines!(ax_raa_cteq_nnpdf, pTs_raa_fonll, raa_avg_fonll[label_nnpdf], color=(custom_colors_pdf[ie], 0.4), linewidth=1.5)
-		
-# 		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=custom_colors[il], linewidth=2, linestyle=:dash)
-# 		# lines!(ax_raa_cteq_edep, pTs_raa_fonll, raa_avg_fonll[labels_nnpdf[il]], color=(custom_colors[il], 0.5), linewidth=2)
-# 	end
-
-# 	# band!(ax_raa_cteq_nnpdf, pTs_raa_fonll, raa_avg_fonll[labels_cteq[1]], raa_avg_fonll[labels_cteq[length(labels_cteq)]]; color = range(pTs_raa_fonll[1], pTs_raa_fonll[end], 200), colormap = :dense, alpha=0.2, transparency=true)
-	
-
-# 	# labels_energies_pdf = [5.03, 7, 13]
-# 	labels_energies_pdf = [5.03, 13]
-# 	e_labels_pdf = [L"%$eᵢ" for eᵢ in labels_energies_pdf]
-# 	# axislegend(ax_raa_cteq_nnpdf, [linepdfcteq1, linepdfcteq2, linepdfcteq3], e_labels_pdf, L"\sqrt{s}\,\mathrm{[TeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, framecolor=:grey)
-# 	axislegend(ax_raa_cteq_nnpdf, [linepdfcteq1, linepdfcteq2], e_labels_pdf, L"\sqrt{s}\,\mathrm{[TeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, framecolor=:grey)
-
-# 	linepdfnnpdf = [LineElement(color = (custom_colors_pdf[2], 0.4), linestyle = nothing), LineElement(color = custom_colors_pdf[2], 1linestyle = :dash)]
-# 	axislegend(ax_raa_cteq_nnpdf, [linepdfcteq2, linepdfnnpdf], [L"\mathrm{CTEQ6.6}", L"\mathrm{NPDF30NLO}"], labelsize=14, titlesize=18, position = :lb, orientation = :vertical, framecolor=:grey)
-
-# 	xlims!(ax_raa_cteq_nnpdf, 0, 10)
-# 	ax_raa_cteq_nnpdf.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
-	
-# 	# ax_raa_fonll.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
-# 	ylims!(ax_raa_cteq_nnpdf, 0.6, 1.4)
-
-# 	text!(ax_raa_cteq_nnpdf, L"\mathrm{charm}\,@\,Q_s=2\,\mathrm{GeV}", position = (0.35, 1.33), fontsize=18)
-# 	text!(ax_raa_cteq_nnpdf, L"\tau=0.6\,\mathrm{fm/c}", position = (0.35, 1.26), fontsize=18)
-
-# 	# text!(ax_raa_cteq_nnpdf, L"\mathrm{FONLL\,pp}", position = (0.35, 0.63), fontsize=16)
-# 	# text!(ax_raa_cteq_nnpdf, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.63), fontsize=16)
-
-# 	# save("plots/clean_raa_tau_"*string(τₛ_fonll)*"_quark_"*quark*"_Qs_"*string(Qₛ)*"_fonll_energy_dep_pdf_dep.png", fig_raa_cteq_nnpdf, px_per_unit = 5.0)
-
-# 	fig_raa_cteq_nnpdf
-# end
-
 # ╔═╡ 70bc2cd6-2d8a-459f-aeb3-e4e1aab4c6be
 begin
 	τₛQₛ = 0.6
@@ -360,6 +256,9 @@ begin
 	pTs_raa_qs = dumb_pTs_raa_qs[string(Qₛ_values[1])]
 end
 
+# ╔═╡ c62ae708-c0c0-4f0d-84cd-4e88010dc160
+linestyles = [:dot, :dashdot, :dash, nothing]
+
 # ╔═╡ 8fb4cece-d2e1-40ec-a0be-0413403a4a96
 begin
 	set_theme!(fonts = (; regular = "CMU Serif"))
@@ -371,25 +270,31 @@ begin
 	segmented_cmap_qs = cgrad(:lapaz, 14, categorical = true)
 	custom_colors_qs = reverse([segmented_cmap_qs[3], segmented_cmap_qs[5], segmented_cmap_qs[7], segmented_cmap_qs[9], segmented_cmap_qs[11]])
 
+	# segmented_cmap_fonll = cgrad(:candy, 11, categorical = true, rev=true)
+	# custom_colors_fonll = [segmented_cmap_fonll[2], segmented_cmap_fonll[4], segmented_cmap_fonll[6], segmented_cmap_fonll[7]]
 	segmented_cmap_fonll = cgrad(:candy, 12, categorical = true, rev=true)
-	custom_colors_fonll = [segmented_cmap_fonll[2], segmented_cmap_fonll[4], segmented_cmap_fonll[6], segmented_cmap_fonll[7]]
+	custom_colors_fonll = [segmented_cmap_fonll[2], segmented_cmap_fonll[4], segmented_cmap_fonll[6], segmented_cmap_fonll[8], segmented_cmap_fonll[10]]
 
 	labels_fonll = ["2750", "5500", "7000", "13000"] .* "_cteq"
 	for (il, label) in enumerate(labels_fonll)
-		string_as_varname("linefonll"*string(il), lines!(ax_raa_fonll_qs[1], pTs_raa_fonll, raa_avg_fonll[label], color=custom_colors_fonll[il], linewidth=2))
+		linef2 = lines!(ax_raa_fonll_qs[1], pTs_raa_fonll, raa_avg_fonll[label], color=(custom_colors_fonll[il], 0.2), linewidth=2)
+		linef1 = lines!(ax_raa_fonll_qs[1], pTs_raa_fonll, raa_avg_fonll[label], color=custom_colors_fonll[il], linewidth=2, linestyle=linestyles[il])
+		string_as_varname("linefonll"*string(il), [linef1, linef2])
 	end
 
-	axislegend(ax_raa_fonll_qs[1], [linefonll1, linefonll2, linefonll3, linefonll4], [L"2.75", L"5.5", L"7", L"13"], L"\sqrt{s_\mathrm{pp}}\,\mathrm{[TeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	axislegend(ax_raa_fonll_qs[1], [linefonll1, linefonll2, linefonll3, linefonll4], [L"2.75", L"5.5", L"7", L"13"], L"\sqrt{s_\mathrm{pp}}\,\mathrm{[TeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.4), framecolor=(:grey80, 0))
 
 	lines!(ax_raa_fonll_qs[1], pTs_raa_fonll, ones(length(pTs_raa_fonll)), color=(:gray, 0.6), linewidth=1.5)
 	lines!(ax_raa_fonll_qs[2], pTs_raa_qs, ones(length(pTs_raa_qs)), color=(:gray, 0.6), linewidth=1.5)
 	
 	for (iQₛ, current_Qₛ) in enumerate(Qₛ_values)
 		label = string(current_Qₛ)
-		string_as_varname("lineqs"*string(iQₛ), lines!(ax_raa_fonll_qs[2], pTs_raa_qs, raa_avg_qs[label], color=custom_colors_qs[iQₛ], linewidth=2))
+		lineq2 = lines!(ax_raa_fonll_qs[2], pTs_raa_qs, raa_avg_qs[label], color=(custom_colors_qs[iQₛ], 0.2), linewidth=2)
+		lineq1 = lines!(ax_raa_fonll_qs[2], pTs_raa_qs, raa_avg_qs[label], color=custom_colors_qs[iQₛ], linewidth=2, linestyle=linestyles[iQₛ])
+		string_as_varname("lineqs"*string(iQₛ), [lineq1, lineq2])
 	end
 
-	axislegend(ax_raa_fonll_qs[2], [lineqs1, lineqs2, lineqs3, lineqs4], [L"1", L"1.5", L"2", L"2.5"], L"Q_s\,\mathrm{[GeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	axislegend(ax_raa_fonll_qs[2], [lineqs1, lineqs2, lineqs3, lineqs4], [L"1", L"1.5", L"2", L"2.5"], L"Q_s\,\mathrm{[GeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.4), framecolor=(:grey80, 0))
 
 	# axislegend(ax_raa_fonll_qs[1], [line1, line2, line3], [L"0.1", L"0.3", L"1.0"], L"\tau\,\mathrm{[fm/c]}", labelsize=18, titlesize=20, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
 
@@ -401,10 +306,10 @@ begin
 		ylims!(ax_raa_fonll_qs[i], 0.6, 1.4)
 	end
 
-	hideydecorations!(ax_raa_fonll_qs[2], ticklabels = false, grid = false, minorgrid = false)
+	# hideydecorations!(ax_raa_fonll_qs[2], ticklabels = false, grid = false, minorgrid = false)
 
 	text!(ax_raa_fonll_qs[1], L"Q_s=2\,\mathrm{GeV}", position = (0.35, 1.31), fontsize=18)
-	text!(ax_raa_fonll_qs[1], L"\tau=0.3\,\mathrm{fm/c}", position = (0.4, 1.23), fontsize=18)
+	text!(ax_raa_fonll_qs[1], L"\tau=0.3\,\mathrm{fm/c}", position = (0.4, 1.25), fontsize=18)
 	# text!(ax_raa_fonll_qs[2], L"Q_s\tau=0.6\,\mathrm{GeV}\cdot\mathrm{fm/c}", position = (0.35, 1.31), fontsize=18)
 	text!(ax_raa_fonll_qs[2], L"Q_s\tau=3", position = (0.35, 1.31), fontsize=18)
 
@@ -425,7 +330,7 @@ begin
 
 	colgap!(fig_raa_fonll_qs.layout, 0)
 
-	# save("plots/clean_raa_tau_dep_charm_quark_Qs_fonll_energy_dep.png", fig_raa_fonll_qs, px_per_unit = 5.0)
+	# save("plots/clean_raa_tau_dep_charm_quark_Qs_fonll_energy_dep_v3.png", fig_raa_fonll_qs, px_per_unit = 5.0)
 
 	fig_raa_fonll_qs
 end
@@ -469,7 +374,8 @@ md"---
 
 # ╔═╡ 469ceccd-abef-4019-a943-363f46418d14
 begin
-	nevents_sdep = 50
+	# nevents_sdep = 50
+	nevents_sdep = 1
 	# Qₛ_values_sdep = [1.87, 2.0, 2.03, 2.09, 2.25]
 	# energies_sdep = [2750, 5030, 5500, 7000, 13000]
 	Qₛ_values_sdep = [1.87, 2.03, 2.09, 2.25]
@@ -495,16 +401,18 @@ begin
 
 	lines!(ax_glasma, pTs_raa_sdep, ones(length(pTs_raa_sdep)), color=(:gray, 0.7), linewidth=1.5)
 
-	segmented_cmap = cgrad(:candy, 11, categorical = true, rev=true)
+	segmented_cmap = cgrad(:candy, 12, categorical = true, rev=true)
 	custom_colors = [segmented_cmap[2], segmented_cmap[4], segmented_cmap[6], segmented_cmap[8], segmented_cmap[10]]
 
 	for (iQₛ, current_Qₛ) in enumerate(Qₛ_values_sdep)
 		label = string(current_Qₛ)
-		string_as_varname("linesdep"*string(iQₛ), lines!(ax_glasma, pTs_raa_sdep, raa_avg_sdep[label], color=custom_colors[iQₛ], linewidth=2))
+		lineqs1 = lines!(ax_glasma, pTs_raa_sdep, raa_avg_sdep[label], color=(custom_colors[iQₛ], 0.2), linewidth=2)
+		lineqs2 = lines!(ax_glasma, pTs_raa_sdep, raa_avg_sdep[label], color=custom_colors[iQₛ], linewidth=2, linestyle=linestyles[iQₛ])
+		string_as_varname("linesdep"*string(iQₛ), [lineqs1, lineqs2])
 	end
 
 	# axislegend(ax_glasma, [linesdep1, linesdep2, linesdep3, linesdep4, linesdep5], [L"(2.75, \,1.87)", L"(5.03, \,2.00)", L"(5.50, \,2.03)", L"(7.00, \,2.09)", L"(13.0,\, 2.25)"], L"(\sqrt{s_\mathrm{pp}},Q_s)\,\mathrm{[GeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
-	axislegend(ax_glasma, [linesdep1, linesdep2, linesdep3, linesdep4], [L"(2.75, \,1.87)", L"(5.50, \,2.03)", L"(7.00, \,2.09)", L"(13.0,\, 2.25)"], L"(\sqrt{s_\mathrm{pp}},Q_s)\,\mathrm{[GeV]}", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	axislegend(ax_glasma, [linesdep1, linesdep2, linesdep3, linesdep4], [L"(2.75, \,1.87)", L"(5.50, \,2.03)", L"(7.00, \,2.09)", L"(13.0,\, 2.25)"], L"(\sqrt{s_\mathrm{pp}},Q_s)", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.4), framecolor=(:grey80, 0))
 	
 	ax_glasma.yticks = ([0.6, 0.8, 1, 1.2, 1.4], ["0.6", "0.8", "1", "1.2", "1.4"])
 	ylims!(ax_glasma, 0.6, 1.4)
@@ -513,14 +421,14 @@ begin
 	ax_glasma.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
 
 	text!(ax_glasma, L"Q_s\tau=3", position = (0.35, 1.31), fontsize=18)
-	text!(ax_glasma, L"\mathrm{charm\,quarks}", position = (6.2, 1.31), fontsize=18)
+	text!(ax_glasma, L"\mathrm{charm\,quarks}", position = (6.18, 1.31), fontsize=18)
 
-	text!(ax_glasma, L"\mathrm{FONLL\,}\sqrt{s_\mathrm{pp}}", position = (0.35, 0.53), fontsize=16)
-	text!(ax_glasma, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.63), fontsize=16)
-
+	text!(ax_glasma, L"\mathrm{FONLL\,}\sqrt{s_\mathrm{pp}}", position = (0.35, 0.63), fontsize=16)
+	text!(ax_glasma, L"\mathrm{PDF\,CTEQ}6.6", position = (0.35, 0.7), fontsize=16)
+	
 	# axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
 
-	save("plots/clean_raa_tau_dep_charm_quark_Qs_fonll_energy_dep_qsenergymap_v2.png", fig_glasma, px_per_unit = 5.0)
+	# save("plots/clean_raa_tau_dep_charm_quark_Qs_fonll_energy_dep_qsenergymap_v3.png", fig_glasma, px_per_unit = 5.0)
 	
 	fig_glasma
 end
@@ -2194,9 +2102,8 @@ version = "3.5.0+0"
 # ╠═e17dbbf1-8f19-47a7-a7f5-a094721a908c
 # ╠═54d1e46e-527e-49fd-8786-114eef7c3000
 # ╠═9a60873a-b9c0-48a6-8d8e-4c1562a2d3b1
-# ╠═fe3b3802-2ef8-4295-9734-f7375838b790
-# ╠═cf061896-649d-4e39-b510-30e50b320fe8
 # ╠═70bc2cd6-2d8a-459f-aeb3-e4e1aab4c6be
+# ╠═c62ae708-c0c0-4f0d-84cd-4e88010dc160
 # ╠═8fb4cece-d2e1-40ec-a0be-0413403a4a96
 # ╠═187b0b5a-5115-4747-962c-64bad7cfde6f
 # ╠═c07ee1e6-da77-4a21-8fc8-73764b2712a8

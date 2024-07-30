@@ -369,6 +369,9 @@ norm_npdf = trapz(df_npdf[!, "pt"], df_npdf[!, "central"])
 # ╔═╡ c4fd58e4-1d22-48fc-b16f-ccc02f121931
 norm = norm_pdf/norm_npdf
 
+# ╔═╡ 692838a2-1b2d-4798-9d8b-ba6cde757b89
+df_npdf[!, "central"]./df_pdf[!, "central"]
+
 # ╔═╡ c4692357-6de9-47e2-a4d2-76cfae425c60
 begin
 	data_jld = Dict()
@@ -408,17 +411,21 @@ begin
 
 	# axislegend(ax_raa_fonll, [line_pdf, line_npdf], [L"\mathrm{pp\,CTEQ6.6}", L"\mathrm{PbPb\,EPPS16}"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
 
-	line_npdf = lines!(ax_raa_fonll, pTs_raa_fonll["npdf"], raa_npdf/norm, color=custom_colors_fonll[1], linewidth=2)
+	line_npdf = lines!(ax_raa_fonll, pTs_raa_fonll["npdf"], raa_npdf/norm, color=custom_colors_fonll[1], linewidth=2, linestyle=:dot)
+	lines!(ax_raa_fonll, pTs_raa_fonll["npdf"], raa_npdf/norm, color=(custom_colors_fonll[1], 0.2), linewidth=2)
 
-	line_gl_pdf = lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], raa_gl_pdf, color=custom_colors_fonll[2], linewidth=2)
+	line_gl_pdf = lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], raa_gl_pdf, color=custom_colors_fonll[2], linewidth=2, linestyle=:dash)
+	lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], raa_gl_pdf, color=(custom_colors_fonll[2], 0.2), linewidth=2)
 
 	line_gl_npdf = lines!(ax_raa_fonll, pTs_raa_fonll["npdf"], raa_gl_npdf/norm, color=custom_colors_fonll[3], linewidth=2)
 
-	lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], ones(length(pTs_raa_fonll["pdf"])), color=(:gray, 0.6), linewidth=1.5)
+	lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], ones(length(pTs_raa_fonll["pdf"])), color=(:gray, 0.6), linewidth=2)
+
+	# lines!(ax_raa_fonll, pTs_raa_fonll["pdf"], df_npdf[!, "central"]./df_pdf[!, "central"], color=(:gray, 0.6), linewidth=1.5)
 
 	# axislegend(ax_raa_fonll, [line_npdf, line_gl_pdf, line_gl_npdf], [L"\scrN_{\mathrm{AA}}(\tau_\mathrm{form})/\scrN_{\mathrm{pp}}(\tau_\mathrm{form})", L"\scrN_{\mathrm{pp}}(\tau\,)/\scrN_{\mathrm{pp}}(\tau_\mathrm{form})", L"\scrN_{\mathrm{AA}}(\tau\,)/\scrN_{\mathrm{pp}}(\tau_\mathrm{form})"], labelsize=16, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
 
-	axislegend(ax_raa_fonll, [line_npdf, line_gl_pdf, line_gl_npdf], [L"\mathrm{nPDF/PDF}", L"\mathrm{(GL+PDF)/PDF}", L"\mathrm{(GL+nPDF)/PDF}"], labelsize=18, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.8), framecolor=(:grey80, 0))
+	axislegend(ax_raa_fonll, [[line_npdf, LineElement(color=(custom_colors_fonll[1], 0.2), linewidth=2)], [line_gl_pdf, LineElement(color=(custom_colors_fonll[2], 0.2), linewidth=2)], line_gl_npdf], [L"\mathrm{nPDF}", L"\mathrm{glasma}", L"\mathrm{nPDF+glasma}"], labelsize=18, titlesize=18, position = :rb, orientation = :vertical, backgroundcolor = (:white, 0.4), framecolor=(:grey80, 0))
 	
 	xlims!(ax_raa_fonll, 0, 10)
 	ax_raa_fonll.xticks = ([0, 2.5, 5, 7.5, 10], ["0", "2.5", "5", "7.5", "10"])
@@ -427,18 +434,19 @@ begin
 	# ylims!(ax_raa_fonll, 0.6, 1.4
 	ylims!(ax_raa_fonll, 0.4, 1.6)
 
-	text!(ax_raa_fonll, L"Q_s=2\,\mathrm{GeV}", position = (0.35, 1.35), fontsize=16)
-	text!(ax_raa_fonll, L"\tau=0.3\,\mathrm{fm/c}", position = (0.4, 1.3), fontsize=16)
+	text!(ax_raa_fonll, L"Q_s=2\,\mathrm{GeV}", position = (0.35, 1.355), fontsize=16)
+	text!(ax_raa_fonll, L"\tau=0.3\,\mathrm{fm/c}", position = (0.4, 1.29), fontsize=16)
+	# text!(ax_raa_fonll, L"\tau=0.6\,\mathrm{fm/c}", position = (0.4, 1.29), fontsize=16)
 	text!(ax_raa_fonll, L"\mathrm{charm\,quarks}", position = (0.35, 1.48), fontsize=18)
 
 	text!(ax_raa_fonll, L"\mathrm{pp\,CT14NLO}", position = (6.66, 1.48), fontsize=16)
 	text!(ax_raa_fonll, L"\mathrm{PbPb\,EPPS16}", position = (6.45, 1.41), fontsize=16)
 
-	text!(ax_raa_fonll, L"\mathrm{FONLL}\,\sqrt{s}=5.5\,\mathrm{TeV}", position = (4.7,1.3), fontsize=16)
+	text!(ax_raa_fonll, L"\mathrm{FONLL}\,\sqrt{s}=5.5\,\mathrm{TeV}", position = (4.7,1.29), fontsize=16)
 
 	# text!(ax_raa_fonll_qs[2], L"\mathrm{FONLL\,}\sqrt{s_\mathrm{pp}}=5.5\,\mathrm{TeV}", position = (0.35, 0.63), fontsize=16)
 	
-	save("plots/clean_raa_tau_0.3_charm_quark_Qs_2.0_fonll_pdf_vs_npdf_v3.png", fig_raa_fonll, px_per_unit = 5.0)
+	# save("plots/clean_raa_tau_0.3_charm_quark_Qs_2.0_fonll_pdf_vs_npdf_v3.png", fig_raa_fonll, px_per_unit = 5.0)
 
 	fig_raa_fonll
 end
@@ -2179,6 +2187,7 @@ version = "3.5.0+0"
 # ╠═7353132c-5b97-4b48-aff9-c0040fe75552
 # ╠═4c7e5161-29d3-415c-958f-94bb873e99f0
 # ╠═c4fd58e4-1d22-48fc-b16f-ccc02f121931
+# ╠═692838a2-1b2d-4798-9d8b-ba6cde757b89
 # ╠═c4692357-6de9-47e2-a4d2-76cfae425c60
 # ╠═fe86a123-42b9-4f60-95ac-187b1aec496b
 # ╠═bd93d2ec-48d5-437f-8158-6e1ab39bb8cd

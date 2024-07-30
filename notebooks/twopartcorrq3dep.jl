@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.42
 
 using Markdown
 using InteractiveUtils
@@ -20,8 +20,8 @@ begin
 	# go through all events in a given folder
 	allevents = false
 	# folder with events, labeled by initialization type, pT and quark
-	# folder = "corr_toy_pT_2_charm_q2_4.0"
-	folder = "corr_toy_pT_2_charm_q2_1.33"
+	folder = "corr_toy_pT_2_charm_q2_4.0"
+	# folder = "corr_toy_pT_2_charm_q2_1.33"
 end
 
 # ╔═╡ eda45304-03ec-468f-892c-37410ebecb0f
@@ -110,7 +110,7 @@ end
 begin
 	set_theme!(fonts = (; regular ="CMU Serif"))
 	fig_σ = Figure(resolution = (380, 380), font = "CMU Serif")
-	ax_σ = Axis(fig_σ[1, 1], xlabel=L"\Delta \tau\,\mathrm{[fm/}c\,\mathrm{]}", ylabel=L"\sigma_{\Delta\eta,\,\Delta\phi}", xlabelsize = 18, ylabelsize = 24, xticklabelsize = 14, yticklabelsize = 14, xtickalign=1, ytickalign=1, aspect=1, 
+	ax_σ = Axis(fig_σ[1, 1], xlabel=L"\Delta \tau\,\mathrm{[fm/}c\,\mathrm{]}", ylabel=L"\sigma_{\Delta\eta,\,\Delta\phi}", xlabelsize = 20, ylabelsize = 24, xticklabelsize = 16, yticklabelsize = 16, xtickalign=1, ytickalign=1, aspect=1, 
 	xminorgridvisible=true, yminorgridvisible=true,
 	)
 
@@ -141,16 +141,21 @@ begin
 		text!(ax_σ, L"q_2=4", position = (1.2, 1.6), fontsize=20)
 		text!(ax_σ, L"\Delta\phi", position = (0.5, 0.9), fontsize=18)
 		text!(ax_σ, L"\Delta\eta", position = (0.5, 1.4), fontsize=18)
-		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.1, 0.08), fontsize=18)
+		# text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.1, 0.08), fontsize=18)
+		text!(ax_σ, L"\mathrm{charm\,quarks}", position = (0.1, 0.22), fontsize=16)
+		text!(ax_σ, L"p_T\,(\tau_\mathrm{form})=2\,\mathrm{GeV}", position = (0.1, 0.08), fontsize=16)
 
 		ylims!(0, 1.8)
 		square_grid(ax_σ, 3)
 		# ax_σ.yticks = ([2/3, 4/3, 2], ["2/3", "4/3", "2"])
 
-		axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = :rb, orientation = :vertical, framecolor=:grey)
+		axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=16, titlesize=20, position = :rb, orientation = :vertical, 
+			bgcolor = (:white, 0.4), framecolor=(:grey80, 0)
+			# framecolor=:grey
+		)
 
 		if saveplots
-			save("plots/sigma_dphideta_tau_charm_pT_2_q2_4.0_q3_dep.png", fig_σ, px_per_unit = 5)
+			save("plots/final_sigma_dphideta_tau_charm_pT_2_q2_4.0_q3_dep.png", fig_σ, px_per_unit = 5)
 		end
 		
 	elseif q2==1.33
@@ -158,16 +163,21 @@ begin
 		text!(ax_σ, L"q_2=4/3", position = (0.05, 1.78), fontsize=18)
 		text!(ax_σ, L"\Delta\phi", position = (0.5, 0.42), fontsize=18)
 		text!(ax_σ, L"\Delta\eta", position = (0.5, 0.88), fontsize=18)
-		text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.65, 0.08), fontsize=18)
+		# text!(ax_σ, L"\mathrm{charm}\,@\,p_T=2\,\mathrm{GeV}", position = (0.65, 0.08), fontsize=18)
+		text!(ax_σ, L"\mathrm{charm\,quarks}", position = (0.96, 0.24), fontsize=16)
+		text!(ax_σ, L"p_T\,(\tau_\mathrm{form})=2\,\mathrm{GeV}", position = (0.83, 0.08), fontsize=16)
 
 		ylims!(0, 2)
 		square_grid(ax_σ, 3)
 		ax_σ.yticks = ([2/3, 4/3, 2], ["2/3", "4/3", "2"])
 
-		axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=14, titlesize=18, position = :rt, orientation = :vertical, framecolor=:grey)
+		axislegend(ax_σ, [line1, line2, line3, line4, line5], q₃_labels, L"q_3", labelsize=16, titlesize=20, position = :rt, orientation = :vertical, 
+			bgcolor = (:white, 0.4), framecolor=(:grey80, 0)
+			# framecolor=:grey
+		)
 
 		if saveplots
-			save("plots/sigma_dphideta_tau_charm_pT_2_q2_1.33_q3_dep.png", fig_σ, px_per_unit = 5)
+			save("plots/final_sigma_dphideta_tau_charm_pT_2_q2_1.33_q3_dep.png", fig_σ, px_per_unit = 5)
 		end
 	end
 	
@@ -252,9 +262,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
+git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+0"
+version = "1.0.8+1"
 
 [[deps.CEnum]]
 git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
@@ -1492,9 +1502,9 @@ version = "2.0.2+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
+git-tree-sha1 = "f7c281e9c61905521993a987d38b5ab1d4b53bef"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.38+0"
+version = "1.6.38+1"
 
 [[deps.libsixel_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]

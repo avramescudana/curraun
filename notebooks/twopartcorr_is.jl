@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.42
 
 using Markdown
 using InteractiveUtils
@@ -133,28 +133,31 @@ end
 begin
 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
 	
-	fig = Figure(
-	backgroundcolor=:transparent
+	fig = Figure(size=(600,500)
+	# backgroundcolor=:transparent
 		)
 	ax = Axis3(fig[1,2], elevation=0.15π, azimuth=1.3π,
 	# limits = ((π-0.7*π, π+0.7*π), (nothing, nothing), (nothing, nothing)),
 	limits = ((π-0.7*π, π+0.7*π), (-4, 4), (nothing, nothing)),
 	ylabel=L"\Delta\eta", xlabel=L"\Delta\phi", zlabel="",
-	xlabelsize = 24, ylabelsize = 24, zlabelsize = 0, 
-	xticklabelsize = 0, yticklabelsize = 0, zticklabelsize = 0,	
-	xlabeloffset = 10, ylabeloffset = 10, 
-	xticksvisible=false, yticksvisible=false, zticksvisible=false,
-	backgroundcolor=:transparent,
-		zspinesvisible=false
+	xticklabelpad = 0, xlabelsize = 22, xlabeloffset = 30,
+	yticklabelpad = 0, ylabelsize = 22, ylabeloffset = 30,
+	zticklabelsize = 0,	zlabelsize = 0, 
+	xticksvisible=false, yticksvisible=false, zticksvisible=false, 
+	xgridvisible=false, ygridvisible=false, zgridvisible=false, 
+	zspinesvisible=false
+	# backgroundcolor=:transparent,
 	)
 	surface!(ax, Δϕᵢ_interp, Δηᵢ_interp, densᵢ_interp, colormap=Reverse(cmap_transp), shading=false)
 	# hidezdecorations!(ax)
 
-	cbar = Colorbar(fig[1, 1], colormap=Reverse(cmap_transp), size = 25, labelsize = 26, width = 12, flipaxis = false,ticksize=0, tickalign = 0, ticklabelsize = 0, height = Relative(0.8), label=L"\mathcal{C}(\Delta\phi,\Delta\eta)")
+	ax.xticks = ([π/2, π, 3*π/2], ["π/2", "π", "3π/2"])
+
+	cbar = Colorbar(fig[1, 1], colormap=Reverse(cmap_transp), size = 25, labelsize = 24, width = 12, flipaxis = false,ticksize=0, tickalign = 0, ticklabelsize = 0, height = Relative(0.8), label=L"\mathcal{C}(\Delta\phi,\Delta\eta)", labelrotation = pi/2)
 	# cbar.ticks = ([1.5, 2.5, 3.5, 4.5, 5.5],  string.(reverse(pTs)))
 
-	save("plots/twopartcorr3d_tau_1fm_is.png", fig, px_per_unit = 10.0)
-	save("plots/twopartcorr3d_tau_1fm_is.svg", fig) 
+	save("plots/twopartcorr3d_tau_1fm_is_v2.png", fig, px_per_unit = 10.0)
+	# save("plots/twopartcorr3d_tau_1fm_is.svg", fig) 
 	# save("plots/twopartcorr3d_tau_0.01fm_is.png", fig, px_per_unit = 10.0) 
 	# save("plots/twopartcorr3d_tau_0.01fm_is.svg", fig) 
 	
@@ -320,9 +323,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
+git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+0"
+version = "1.0.8+1"
 
 [[deps.CEnum]]
 git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"

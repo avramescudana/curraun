@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.42
 
 using Markdown
 using InteractiveUtils
@@ -137,8 +137,8 @@ md"Read the file and construct the weights"
 gauge_group = "su2"
 
 # ╔═╡ fe76c875-c6fe-419a-b97c-cc26e0cfbb4f
-representation = "qfund"
-# representation = "fund"
+# representation = "qfund"
+representation = "fund"
 # representation = "adj"
 
 # ╔═╡ 3d70c0d8-8784-48d7-b5ee-19c43b4b4048
@@ -382,7 +382,7 @@ begin
 	ylims!(ax[1], 0, nothing)
 	# ylims!(ax[2], nothing, 1.6)
 
-	save("plots/dNdpT_RAA_tau_dep_fast_pT_bins_pyqt_fonll_fit_vs_interp_fund_test_correct.png", fig, px_per_unit = 5.0)
+	# save("plots/dNdpT_RAA_tau_dep_fast_pT_bins_pyqt_fonll_fit_vs_interp_fund_test_correct.png", fig, px_per_unit = 5.0)
 
 	fig
 end
