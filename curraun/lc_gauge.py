@@ -29,8 +29,6 @@ class LCGaugeTransf:
 
         # We create the LC gauge transformation operator at tau_{n+1}
         self.vlc1 = np.zeros((self.n**2 * nplus, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        
-        self.initialize_vlc()
 
         # We create the pointers to the GPU
         self.d_up_temp = self.up_temp
@@ -71,8 +69,8 @@ class LCGaugeTransf:
         if not self.initialized:
             self.init()
             
-        compute_uplus_temp(self.d_up_temp, self.dts, self.s.n, self.s.d_u1, self.s.d_aeta1)
-        compute_vlc(self.d_vlc0, self.d_vlc1, self.dts, self.s.n, self.nplus, self.s.d_u1, self.s.d_aeta1)
+        init_uplus_temp(self.d_up_temp, self.dts, self.s.n, self.s.d_u1, self.s.d_aeta1)
+        init_vlc(self.d_vlc1, self.dts, self.s.n, self.nplus, self.s.d_u1, self.s.d_aeta1)
         update_vlc(self.d_vlc0, self.d_vlc1, self.s.n, self.nplus)
         
 
@@ -98,12 +96,60 @@ class LCGaugeTransf:
 
 
 """
-    Initialize the LC gauge transformation as unity.
+    Initialize the plus links with the value at the first time step.
 """
+
+def init_uplus_temp(up_temp, t, n, u1, aeta1):
+    my_parallel_loop(init_uplus_temp_kernel, n*n, t, n, u1, aeta1, up_temp)  
+
 @myjit
-def init_vlc_kernel(yi, vlc0, vlc1):
-    su.store(vlc0[yi], su.unit())
-    su.store(vlc1[yi], su.unit())
+def init_uplus_temp_kernel(yi, t, n, u1, aeta1, up_temp):
+    
+    yz = l.get_point(yi, n)
+    y, z = yz[0], yz[1]
+    
+    ty_latt = l.get_index_nm(0, y, n)
+
+    ux_latt = u1[ty_latt, 0, :]
+    ux_dag = su.dagger(ux_latt)
+    
+    aeta_latt = aeta1[ty_latt, :]
+    aeta_fact = su.mul_s(aeta_latt, (z-n//2)/t**2)
+    ueta = su.mexp(aeta_fact)
+    
+    res = su.mul(ueta, ux_dag)
+    
+    
+    su.store(up_temp[yi], res)
+    
+    
+"""
+    Initialize the gauge transformation operator the value at the first time step.
+"""
+
+def init_vlc(vlc1, t, n, nplus, u1, aeta1):
+    my_parallel_loop(init_vlc_kernel, n*n*nplus, n, t, u1, aeta1, vlc1)  
+
+@myjit
+def init_vlc_kernel(yi, n, t, u1, aeta1, vlc1):
+
+    indices = l.get_point_n2xm(yi, n)
+    xp_slice, y, z = indices[0], indices[1], indices[2]
+
+    if xp_slice!=0:
+
+        xy_latt = l.get_index_nm(xp_slice+xp_slice, y, n)
+        
+        ux_latt = u1[xy_latt, 0, :]
+
+        aeta_latt = aeta1[xy_latt, :]
+        aeta_fact = su.mul_s(aeta_latt, (z-n//2)/t**2)
+        ueta = su.mexp(aeta_fact)
+
+        umin = su.mul(ueta, ux_latt)
+        umin_dag = su.dagger(umin)
+
+        su.store(vlc1[yi], umin_dag)
 
 
 """
