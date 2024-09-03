@@ -10,15 +10,19 @@ import curraun.su as su
 
 # Constructs the plus links in temporal gauge over the x^+ axis
 def get_plus_links(ux, ae, z, N, t):
-    r = su.mul(su.mexp(su.mul_s(ae, (z-N//2)/t**2)), ux)
+    if (z-N//2) > t or (z-N//2) < -t:
+        r = su.unit()
+    else:
+        r = su.mul(su.mexp(su.mul_s(ae, (z-N//2)/t**2)), ux)
     return r
 
 # Defines the gauge operator for a given step given its value at the previous one
 def gauge_transformation_operator(ux, ae, v, z, N, t):
-# def gauge_transformation_operator(ux, ae, v, z, N):
-    umin = su.mul(su.mexp(su.mul_s(ae, (z-N//2)/t**2)), ux)
-    # umin = su.mul(su.mexp(su.mul_s(ae, z-N//2)), su.dagger(ux))
-    r = su.mul(su.dagger(umin), v)
+    if (z-N//2) > t or (z-N//2) < -t:
+        r = su.unit()
+    else:
+        umin = su.mul(su.mexp(su.mul_s(ae, (z-N//2)/t**2)), ux)
+        r = su.mul(su.dagger(umin), v)
     return r
 
 # Defines the gauge operator for a given step given its value at the previous one
