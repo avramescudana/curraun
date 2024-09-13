@@ -13,8 +13,8 @@ end
 
 # ╔═╡ b361316d-f9f2-42d6-a123-3fdbb65b75bd
 begin
-	choice_q2 = "4/3"
-	# choice_q2 = "4"
+	# choice_q2 = "4/3"
+	choice_q2 = "4"
 	# quark = "jet"
 	# quark = "infmass"
 	quark = "charm"
@@ -158,13 +158,15 @@ begin
 		text!(ax_zoomin, L"q_2=4/3", position = (6, 0.4), fontsize=18)
 		# save("plots/mom_broad_brute_force_q2_1.33_KDE_q3_dep.png", fig, px_per_unit = 5.0)
 		save("plots/final_mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_1.33_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		save("plots/paper/mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_1.33_KDE_q3_dep.pdf", fig)
 	else
 		ylims!(ax_zoomin, -4.2, 4.2)
 		xlims!(ax_zoomin, 0, 2.6)
 		ax_zoomin.yticks = ([-4, -2, 0, 2, 4], ["-4", "-2", "0", "2", "4"])
 		text!(ax_zoomin, L"q_2=4", position = (1.5, 2), fontsize=18)
 		# save("plots/mom_broad_brute_force_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
-		save("plots/final_mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		# save("plots/final_mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_4_KDE_q3_dep.png", fig, px_per_unit = 5.0)
+		save("plots/paper/mom_broad_brute_force_quark_"*quark*"_pT_"*string(pT)*"_q2_4_KDE_q3_dep.pdf", fig)
 	end
 	
 	fig
@@ -1571,9 +1573,9 @@ version = "1.10.3+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
-git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+git-tree-sha1 = "490376214c4721cdaca654041f635213c6165cb3"
 uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
-version = "1.3.7+1"
+version = "1.3.7+2"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]

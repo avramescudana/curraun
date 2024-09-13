@@ -48,8 +48,8 @@ function dfslice(output, τₛ)
 end
 
 # ╔═╡ 2539a0f4-1905-4a23-bc1c-155a9c20716d
-dependence = "pT"
-# dependence = "Qs"
+# dependence = "pT"
+dependence = "Qs"
 
 # ╔═╡ be0db94c-32a7-4e39-8dbe-1d740616419f
 begin
@@ -223,7 +223,8 @@ begin
 
 		if saveplots
 			# save("plots/sigma_dphideta_tau_"*quark*"_pT_dep.png", fig_σ, px_per_unit = 5)
-			save("plots/sigma_dphideta_tau_charm_beauty_pT_dep_final.png", fig_σ, px_per_unit = 5)
+			# save("plots/sigma_dphideta_tau_charm_beauty_pT_dep_final.png", fig_σ, px_per_unit = 5)
+			save("plots/paper/sigma_dphideta_tau_charm_beauty_pT_dep.pdf", fig_σ)
 		end
 
 	end
@@ -395,7 +396,8 @@ begin
 		text!(ax_σ_Qsτ[2], L"p_T\,(\tau_\mathrm{form})=2\,\mathrm{GeV}", position = (10.2, 0.07), fontsize=18)
 	
 		if saveplots
-			save("plots/sigma_dphideta_tau_charm_beauty_Qs_dep_scaled_final.png", fig_σ_Qsτ, px_per_unit = 5)
+			# save("plots/sigma_dphideta_tau_charm_beauty_Qs_dep_scaled_final.png", fig_σ_Qsτ, px_per_unit = 5)
+			save("plots/paper/sigma_dphideta_tau_charm_beauty_Qs_dep_scaled.pdf", fig_σ_Qsτ)
 		end
 	
 		fig_σ_Qsτ
@@ -1790,9 +1792,9 @@ version = "1.10.3+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
-git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+git-tree-sha1 = "490376214c4721cdaca654041f635213c6165cb3"
 uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
-version = "1.3.7+1"
+version = "1.3.7+2"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]

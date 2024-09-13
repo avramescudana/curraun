@@ -331,6 +331,7 @@ begin
 	colgap!(fig_raa_fonll_qs.layout, 0)
 
 	# save("plots/clean_raa_tau_dep_charm_quark_Qs_fonll_energy_dep_v3.png", fig_raa_fonll_qs, px_per_unit = 5.0)
+	save("plots/paper/raa_tau_dep_charm_quark_Qs_fonll_energy_dep.pdf", fig_raa_fonll_qs)
 
 	fig_raa_fonll_qs
 end
@@ -374,8 +375,8 @@ md"---
 
 # ╔═╡ 469ceccd-abef-4019-a943-363f46418d14
 begin
-	# nevents_sdep = 50
-	nevents_sdep = 1
+	nevents_sdep = 50
+	# nevents_sdep = 1
 	# Qₛ_values_sdep = [1.87, 2.0, 2.03, 2.09, 2.25]
 	# energies_sdep = [2750, 5030, 5500, 7000, 13000]
 	Qₛ_values_sdep = [1.87, 2.03, 2.09, 2.25]
@@ -429,6 +430,7 @@ begin
 	# axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
 
 	# save("plots/clean_raa_tau_dep_charm_quark_Qs_fonll_energy_dep_qsenergymap_v3.png", fig_glasma, px_per_unit = 5.0)
+	save("plots/paper/raa_tau_dep_charm_quark_Qs_fonll_energy_dep_qsenergymap.pdf", fig_glasma)
 	
 	fig_glasma
 end
@@ -2049,9 +2051,9 @@ version = "1.10.3+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
-git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+git-tree-sha1 = "490376214c4721cdaca654041f635213c6165cb3"
 uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
-version = "1.3.7+1"
+version = "1.3.7+2"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]

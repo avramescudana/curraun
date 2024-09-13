@@ -35,6 +35,12 @@ end
 # ╔═╡ 6b6e75b8-1385-11ef-3f15-ab729c3433cc
 md"### Import packages"
 
+# ╔═╡ c03f9eaf-a4d2-4b4c-8d5e-e064e9733cc8
+# begin
+# 	using Conda
+# 	Conda.add("scipy")
+# end
+
 # ╔═╡ c2354cc3-a0d6-4864-9fcc-c014315507a9
 md"### FONLL parameters"
 
@@ -53,12 +59,6 @@ end
 
 # ╔═╡ 34ce5315-fc05-47fc-a77f-6f2f360a0366
 md"##### Read FONLL data from files"
-
-# ╔═╡ 2e24c52a-caa9-42c8-b576-e5370cbc159c
-# ╠═╡ disabled = true
-#=╠═╡
-current_path = pwd()
-  ╠═╡ =#
 
 # ╔═╡ e9290389-5ce3-4edd-94ff-da50635a8f0c
 md"##### Fit FONLL spectra"
@@ -137,9 +137,6 @@ begin
 		return popt
 	end
 end
-
-# ╔═╡ 77fc5414-e77a-4268-89e4-eff3562bb3fc
-current_path = pwd()
 
 # ╔═╡ 53d01256-c55a-4157-bb1a-5aae95195eae
 begin
@@ -319,11 +316,11 @@ begin
 	end
 end
 
-# ╔═╡ b8515cf1-dc1b-48ed-8521-2e45edc31a65
-στ_glasma
-
 # ╔═╡ 0e188476-180b-4e8d-84ba-b4e6a2532430
 push!(στ_glasma, 0.7, 0.65)
+
+# ╔═╡ 3b3cbce8-4a10-4580-86e5-6b98e83e8232
+στ_glasma_paper = [0.64, 0.57]
 
 # ╔═╡ ae65fb21-60cf-4a56-9ae5-b4ff58932548
 begin
@@ -331,7 +328,8 @@ begin
 	# N₀_fonll_glasma = Dict()
 	# Nτ_p_fonll_glasma = Dict()
 	
-	for σ in στ_glasma
+	# for σ in στ_glasma
+	for σ in στ_glasma_paper
 		Nτ_p_fonll_fit = Nτ_fonll_fit.(p_range_fit, σ, fit_type, pₘₐₓ)
 		# Nτ_p_fonll_fit_norm = Nτ_p_fonll_fit./integrate(p_range_fit, Nτ_p_fonll_fit)
 		Nτ_dp_p_fonll_fit = Nτ_p_fonll_fit.*p_range_fit
@@ -384,7 +382,8 @@ begin
 
 	linestyles = [:dash, :dot]
 
-	for (iσ, σ) in enumerate([στ_glasma[1], στ_glasma[24]])
+	# for (iσ, σ) in enumerate([στ_glasma[1], στ_glasma[24]])
+	for (iσ, σ) in enumerate([στ_glasma_paper[1], στ_glasma_paper[2]])
 		string_as_varname("line"*string(iσ), lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)], color=custom_colors[iσ+1], linewidth=2, label=string(σ), linestyle=linestyles[iσ]))
 		lines!(ax_glasma, p_range_fit, RAAs_glasma[string(σ)], color=(custom_colors[iσ+1], 0.2), linewidth=2)
 	end
@@ -417,7 +416,8 @@ begin
 
 	# axislegend(L"\sigma\,\mathrm{[GeV]}", position = :lt, titlesize = 16, labelsize=14)
 
-	save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll_v4.png", fig_glasma, px_per_unit = 5.0)
+	# save("plots/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll_v4.png", fig_glasma, px_per_unit = 5.0)
+	save("plots/paper/analytical_raa_vs_glasma_fixed_sigma_" * fonll_type * "_fonll.pdf", fig_glasma)
 	
 	fig_glasma
 end
@@ -692,6 +692,15 @@ begin
 	fig_στ
 end
 
+# ╔═╡ 2e24c52a-caa9-42c8-b576-e5370cbc159c
+current_path = pwd()
+
+# ╔═╡ 77fc5414-e77a-4268-89e4-eff3562bb3fc
+# ╠═╡ disabled = true
+#=╠═╡
+current_path = pwd()
+  ╠═╡ =#
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
@@ -943,9 +952,9 @@ version = "0.5.2+0"
 
 [[deps.Conda]]
 deps = ["Downloads", "JSON", "VersionParsing"]
-git-tree-sha1 = "51cab8e982c5b598eea9c8ceaced4b58d9dd37c9"
+git-tree-sha1 = "b19db3927f0db4151cb86d073689f2428e524576"
 uuid = "8f4d0f93-b110-5947-807f-2305c1781a2d"
-version = "1.10.0"
+version = "1.10.2"
 
 [[deps.ConstructionBase]]
 deps = ["LinearAlgebra"]
@@ -2383,9 +2392,9 @@ version = "1.10.3+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
-git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+git-tree-sha1 = "490376214c4721cdaca654041f635213c6165cb3"
 uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
-version = "1.3.7+1"
+version = "1.3.7+2"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -2424,6 +2433,7 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╠═6b6e75b8-1385-11ef-3f15-ab729c3433cc
+# ╠═c03f9eaf-a4d2-4b4c-8d5e-e064e9733cc8
 # ╠═245c286d-8b63-45cc-aa7e-b99a68833009
 # ╠═c2354cc3-a0d6-4864-9fcc-c014315507a9
 # ╠═378c732e-cfa1-4cba-b716-70e4743ce0dd
@@ -2458,8 +2468,8 @@ version = "3.5.0+0"
 # ╠═de2b5b1d-bb00-49cb-bde4-6ddb0be50b04
 # ╠═fd6d55b1-a067-4e2f-b68c-c16877c643ed
 # ╠═91239df5-d147-4d56-95f9-0827eef1f46f
-# ╠═b8515cf1-dc1b-48ed-8521-2e45edc31a65
 # ╠═0e188476-180b-4e8d-84ba-b4e6a2532430
+# ╠═3b3cbce8-4a10-4580-86e5-6b98e83e8232
 # ╠═ae65fb21-60cf-4a56-9ae5-b4ff58932548
 # ╠═3e1f3283-894f-4fd4-84a0-2169b8bf6a36
 # ╠═4ef35d3b-d2f0-4e5a-8ec6-acbb04db36e7

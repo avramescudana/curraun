@@ -44,6 +44,14 @@ end
 # ╔═╡ ae376b30-16b3-11ef-06c7-47961f6f9def
 md"### Import packages"
 
+# ╔═╡ 419c89b6-5376-4947-a9b9-db3905198696
+# begin
+# 	using Pkg 
+# 	ENV["PYTHON"] = "/n/work00/davrames/python27/bin/python"
+# 	Pkg.build("PyCall")
+# 	# using PyCall
+# end
+
 # ╔═╡ c82b7bc6-5a45-4e59-9724-616020c44456
 md"### Glasma
 ---
@@ -517,7 +525,8 @@ begin
 
 	# text!(ax_raa_fonll, L"\mathrm{FONLL}\,\sqrt{s}=5.5\,\mathrm{TeV}", position = (4.7,1.29), fontsize=16)
 	
-	save("plots/final_sketch_raa_gl_fonll_v4.png", fig_raa_fonll_v2, px_per_unit = 10.0)
+	# save("plots/final_sketch_raa_gl_fonll_v4.png", fig_raa_fonll_v2, px_per_unit = 10.0)
+	save("plots/paper/sketch_raa_gl_fonll.pdf", fig_raa_fonll_v2)
 
 	fig_raa_fonll_v2
 end
@@ -1821,9 +1830,9 @@ version = "0.7.1"
 
 [[deps.Rmath_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "d483cd324ce5cf5d61b77930f0bbd6cb61927d21"
+git-tree-sha1 = "a71402f81ce1a1c07d96e48360d6ae32d7586a4f"
 uuid = "f50d1b31-88e8-58de-be2c-1cc44531875f"
-version = "0.4.2+0"
+version = "0.4.2+1"
 
 [[deps.RoundingEmulator]]
 git-tree-sha1 = "40b9edad2e5287e05bd413a38f61a8ff55b9557b"
@@ -2223,9 +2232,9 @@ version = "1.10.3+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
-git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+git-tree-sha1 = "490376214c4721cdaca654041f635213c6165cb3"
 uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
-version = "1.3.7+1"
+version = "1.3.7+2"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -2258,6 +2267,7 @@ version = "3.5.0+0"
 
 # ╔═╡ Cell order:
 # ╠═ae376b30-16b3-11ef-06c7-47961f6f9def
+# ╠═419c89b6-5376-4947-a9b9-db3905198696
 # ╠═70029646-89b1-455a-ae4d-d713b83d7314
 # ╠═c82b7bc6-5a45-4e59-9724-616020c44456
 # ╠═98fe0b35-c9d8-49d2-8290-001d63125184

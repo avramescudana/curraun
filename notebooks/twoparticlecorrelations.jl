@@ -139,7 +139,7 @@ Index of time slice from τₛ input array
 """
 
 # ╔═╡ 130464b5-6b4d-44ea-b055-d34ef5777f72
-i = 3
+i = 1
 
 # ╔═╡ d28b01fe-cb91-42a3-9879-825b22ae30ec
 np = 1024
@@ -199,9 +199,9 @@ Surface plot of dNdΔηdΔϕ as a function of Δη and Δϕ at a given Δτᵢ
 # ╔═╡ adc33def-c60a-4883-91a0-5e65cf1ddff1
 begin
 	# \tau=0.01
-	# bandwidth_τ = (0.1, 0.1)
-	# limits_τ = ((0, 2*π), (-1.2, 1.2), (nothing, 4.5))
-	# yticks_τ = ([-1, 0, 1], ["-1", "0", "1"])
+	bandwidth_τ = (0.1, 0.1)
+	limits_τ = ((0, 2*π), (-1.2, 1.2), (nothing, 4.5))
+	yticks_τ = ([-1, 0, 1], ["-1", "0", "1"])
 
 	# \tau=0.1
 	# bandwidth_τ = (0.2, 0.2)
@@ -209,9 +209,9 @@ begin
 	# yticks_τ = ([-4, 0, 4], ["-4", "0", "4"])
 
 	# \tau=0.3
-	bandwidth_τ = (0.25, 0.25)
-	limits_τ = ((0, 2*π), (-5.1, 5.1), (nothing, 0.15))
-	yticks_τ = ([-4, 0, 4], ["-4", "0", "4"])
+	# bandwidth_τ = (0.25, 0.25)
+	# limits_τ = ((0, 2*π), (-5.1, 5.1), (nothing, 0.15))
+	# yticks_τ = ([-4, 0, 4], ["-4", "0", "4"])
 	
 	dNdΔηdΔϕ3D = data(dfᵢ) * mapping(:Δϕᵢ, :Δηᵢ) *
 		    AlgebraOfGraphics.density(npoints=np; bandwidth=bandwidth_τ) * visual(Surface, shading=false, colormap = reverse(cgrad(cmap_transp)))
@@ -234,6 +234,7 @@ begin
 	fig3D = draw(dNdΔηdΔϕ3D; axis = axis3D, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=12, ticksize=0, labelsize=20, flipaxis=true, labelpadding=10, width = 10, height = Relative(0.85), tickcolor=(:gray,0)))
 	# if saveplots
 	# save("plots/paper_Cdetadphi_3D_toy_charm_pT_1_tau_$(τₛ[i]).png", fig3D, px_per_unit = 10)
+	save("plots/paper/Cdetadphi_3D_toy_charm_pT_1_tau_$(τₛ[i]).pdf", fig3D)
 	# end
 
 	# text!(1, 1, 1, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
@@ -659,9 +660,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
+git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+0"
+version = "1.0.8+1"
 
 [[deps.CEnum]]
 git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
@@ -1951,9 +1952,9 @@ version = "1.10.3+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
-git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+git-tree-sha1 = "490376214c4721cdaca654041f635213c6165cb3"
 uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
-version = "1.3.7+1"
+version = "1.3.7+2"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]

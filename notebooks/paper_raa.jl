@@ -226,8 +226,8 @@ end
 
 # ╔═╡ 47a21094-514f-4863-a4a5-d5d7bd091ec5
 begin
-	# nevents = 50
-	nevents = 1
+	nevents = 50
+	# nevents = 1
 	τₛ_values = [0.1, 0.3, 1.0]
 	# τₛ_values = [0.2]
 	dumb_pTs_raa, raa_avg = Dict(), Dict()
@@ -411,6 +411,7 @@ begin
 	colgap!(fig_raa_τ_cb.layout, 0)
 
 	# save("plots/clean_raa_tau_dep_quarks_charm_beauty_Qs_"*string(Qₛ)*"_fonll_energy_"*string(energy)*"_pdf_"*pdf_type*"_v4.png", fig_raa_τ_cb, px_per_unit = 5.0)
+	save("plots/paper/raa_tau_dep_quarks_charm_beauty_Qs_"*string(Qₛ)*"_fonll_energy_"*string(energy)*"_pdf_"*pdf_type*".pdf", fig_raa_τ_cb)
 
 	fig_raa_τ_cb
 end
@@ -1661,9 +1662,9 @@ version = "0.7.1"
 
 [[deps.Rmath_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "d483cd324ce5cf5d61b77930f0bbd6cb61927d21"
+git-tree-sha1 = "a71402f81ce1a1c07d96e48360d6ae32d7586a4f"
 uuid = "f50d1b31-88e8-58de-be2c-1cc44531875f"
-version = "0.4.2+0"
+version = "0.4.2+1"
 
 [[deps.RoundingEmulator]]
 git-tree-sha1 = "40b9edad2e5287e05bd413a38f61a8ff55b9557b"
@@ -2036,9 +2037,9 @@ version = "1.10.3+0"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
-git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+git-tree-sha1 = "490376214c4721cdaca654041f635213c6165cb3"
 uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
-version = "1.3.7+1"
+version = "1.3.7+2"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
