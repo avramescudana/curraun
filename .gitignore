@@ -111,3 +111,14 @@ venv.bak/
 
 # Simulation data
 *.dat
+*.csv
+*.pickle
+*.txt
+*.zip
+*.jld
+*.jld2
+*.npy
+*.npz
+*.png
+*.pdf
+*.svg
