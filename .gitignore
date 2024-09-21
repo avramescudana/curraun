@@ -109,5 +109,39 @@ venv.bak/
 *.html
 .idea/
 
-# Simulation data
+# Simulation data files
 *.dat
+*.pickle
+*.npz
+*.txt
+*.npy
+*.zip
+*.csv
+
+# Julia files
+*.jld
+*.jld2
+
+# VSCode files
+.vscode/
+
+# Results
+results/
+
+# Debug folder for testing
+debug/
+
+# Plots
+*.png
+plots/
+*.pdf
+
+# Trial notebooks
+Trial*.ipynb
+# Julia files
+# *.jl
+
+# Singularity
+# *.def
+*.sif
+*.json

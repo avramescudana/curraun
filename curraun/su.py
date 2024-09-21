@@ -9,6 +9,10 @@ if su_group == 'su2':
     print("Using SU(2)")
     from curraun.su2 import *
     NC = 2
+elif su_group == 'su2_complex':
+    print("Using SU(2) complex")
+    from curraun.su2_complex import *
+    NC = 2
 elif su_group == 'su3':
     print("Using SU(3)")
     from curraun.su3 import *

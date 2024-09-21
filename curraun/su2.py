@@ -15,6 +15,7 @@ import numpy as np
 N_C = 2
 ALGEBRA_ELEMENTS = 3
 GROUP_ELEMENTS = 4
+CASIMIRS = 1
 
 su_precision = os.environ.get('PRECISION', 'double')
 
@@ -168,3 +169,35 @@ def normalize(u):
     norm = math.sqrt(norm)
     for i in range(4):
         u[i] = u[i] / norm
+
+@myjit
+def casimir_fundamental(Q):
+    # Dynkin index and dimension of fundamental representation
+    T_R = 1./2.
+    D_R = N_C
+
+    """
+    Computes the quadratic Casimir C_2. 
+    Notice that Tr{Q^2}=T(R)C_2 with T(R)=1/2 for R=F.
+    """
+
+    # C = tr(mul(Q, dagger(Q))) / (T_R * D_R)
+    C = tr(mul(Q, dagger(Q))) / T_R
+    
+    return C
+
+@myjit
+def casimir_adjoint(Q):
+    # Dynkin index and dimension of adjoint representation
+    T_R = N_C
+    D_R = N_C ** 2 - 1
+
+    """
+    Computes the quadratic Casimir C_2. 
+    Notice that Tr{Q^2}=T(R)C_2 with T(R)=1/2 for R=F.
+    """
+
+    # C = tr(mul(Q, dagger(Q))) / (T_R * D_R)
+    C = tr(mul(Q, dagger(Q))) / T_R
+
+    return C
