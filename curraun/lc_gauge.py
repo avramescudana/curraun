@@ -23,18 +23,26 @@ class LCGaugeTransf:
         # We create U_+ after the gauge transformation
         self.up_lc = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         
+        self.set_to_one_links()
+        
         # We create the LC gauge transformation operator at tau_n
         self.vlc0 = np.zeros((self.n**2 * nplus, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         # my_parallel_loop(init_vlc_kernel, self.n ** 2, self.vlc0)
 
         # We create the LC gauge transformation operator at tau_{n+1}
         self.vlc1 = np.zeros((self.n**2 * nplus, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        
+        self.set_to_one_vlc()
+        
+        # We create an auxiliar object to reorder the fields
+        self.up_lc_reorder = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # We create the pointers to the GPU
         self.d_up_temp = self.up_temp
         self.d_up_lc = self.up_lc
         self.d_vlc0 = self.vlc0
         self.d_vlc1 = self.vlc1
+        self.d_up_lc_reorder = self.up_lc_reorder
 
         
         self.initialized = False
@@ -45,16 +53,23 @@ class LCGaugeTransf:
         self.d_up_lc = cuda.to_device(self.up_lc)
         self.d_vlc0 = cuda.to_device(self.vlc0)
         self.d_vlc1 = cuda.to_device(self.vlc1)
+        self.d_up_lc_reorder = cuda.to_device(self.up_lc_reorder)
 
     # Copies back the transformed field to the CPU
     def copy_to_host(self):
+        self.d_up_lc_reorder.copy_to_host(self.up_lc_reorder)
         self.d_up_lc.copy_to_host(self.up_lc)
-
-    # We initialize the gauge transformation operator as unity
-    def initialize_vlc(self):
+    
+        # Set the gauge transformation operator to one
+    def set_to_one_links(self):
+        n = self.s.n
+        my_parallel_loop(set_to_one_kernel, n**2, self.up_temp, self.up_lc)
+    
+    # Set the gauge links to one
+    def set_to_one_vlc(self):
         n = self.s.n
         nplus = self.nplus
-        my_parallel_loop(init_vlc_kernel, n**2 * nplus, self.vlc0, self.vlc1)
+        my_parallel_loop(set_to_one_kernel, n**2*nplus, self.vlc0, self.vlc1)
 
     # We copy the fields to the GPU
     def init(self):
@@ -69,30 +84,39 @@ class LCGaugeTransf:
         if not self.initialized:
             self.init()
             
-        init_uplus_temp(self.d_up_temp, self.dts, self.s.n, self.s.d_u1, self.s.d_aeta1)
-        init_vlc(self.d_vlc1, self.dts, self.s.n, self.nplus, self.s.d_u1, self.s.d_aeta1)
+        # We initialize the fields with the values at the first point we have access
+        init_uplus_temp(self.d_up_temp, self.s.dt, self.s.n, self.s.d_u1, self.s.d_aeta1)
+        init_vlc(self.d_vlc1, self.s.dt, self.s.n, self.nplus, self.s.d_u1, self.s.d_aeta1)
         update_vlc(self.d_vlc0, self.d_vlc1, self.s.n, self.nplus)
         
 
     # We evolve the gauge transformation
     def evolve_lc(self, xplus):
 
-        # We restrict to the points where the two lattices are the same
-        if self.s.t % self.s.dt == 0:
-
-            # At each time step we compute the gauge transformation operator
-            compute_vlc(self.d_vlc0, self.d_vlc1, xplus, self.s.n, self.nplus, self.s.d_u1, self.s.d_aeta1)
+        # At each time step we compute the gauge transformation operator
+        compute_vlc(self.d_vlc0, self.d_vlc1, xplus, self.s.n, self.nplus, self.s.d_u1, self.s.d_aeta1)
             
-            # We construct the U_+ in temporal gauge and transform them
-            # TODO: Merge the two kernels into one
-            act_vlc_uplus(self.s.n, xplus, self.d_up_lc, self.d_up_temp, self.d_vlc1)
-            compute_uplus_temp(self.d_up_temp, xplus, self.s.n, self.s.d_u1, self.s.d_aeta1)
+        # We construct the U_+ in temporal gauge and transform them
+        act_vlc_uplus(self.s.n, xplus, self.d_up_lc, self.d_up_temp, self.d_vlc1)
+        compute_uplus_temp(self.d_up_temp, xplus, self.s.n, self.s.d_u1, self.s.d_aeta1)
             
-            # We save vlc1 into vlc0
-            update_vlc(self.d_vlc0, self.d_vlc1, self.s.n, self.nplus)
+        # We save vlc1 into vlc0
+        update_vlc(self.d_vlc0, self.d_vlc1, self.s.n, self.nplus)
+            
+        # We reorder the fields in the correct way for inputting in Meijian's code
+        reorder(self.d_up_lc_reorder, self.d_up_lc, self.s.n)
 
         if use_cuda:
             self.copy_to_host()
+
+
+"""
+    Initialize the objects as unity.
+"""
+@myjit
+def set_to_one_kernel(yi, a, b):
+    su.store(a[yi], su.unit())
+    su.store(b[yi], su.unit())
 
 
 """
@@ -166,7 +190,7 @@ def compute_vlc_kernel(yi, n, t, u1, aeta1, vlc0, vlc1):
     xp_slice, y, z = indices[0], indices[1], indices[2]
 
     if xp_slice > t and xp_slice!=0:
-
+        
         xy_latt = l.get_index_nm(xp_slice+xp_slice-t, y, n)
         
         ux_latt = u1[xy_latt, 0, :]
@@ -241,3 +265,26 @@ def update_vlc(vlc0, vlc1, n, nplus):
 @myjit
 def update_vlc_kernel(yi, vlc0, vlc1):
     su.store(vlc0[yi], vlc1[yi])
+
+
+"""
+    We reorder the fields in the correct way for Meijian
+"""
+
+def reorder(up_lc_reorder, up_lc, n):
+    my_parallel_loop(reorder_kernel, n**2, n, up_lc, up_lc_reorder)  
+
+@myjit
+def reorder_kernel(yi, n, up_lc, up_lc_reorder):
+    yz = l.get_point(yi, n)
+    y, z = yz[0], yz[1]
+    
+    if z < n/2:
+        ind = l.get_index(y, z+n//2, n)
+        aux = up_lc[ind]
+                
+    if z >= n//2:
+        ind = l.get_index(y, z-n//2, n)
+        aux = up_lc[ind]
+    
+    su.store(up_lc_reorder[yi], aux)
