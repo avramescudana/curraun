@@ -58,7 +58,7 @@ class LCGaugeTransf:
     # Copies back the transformed field to the CPU
     def copy_to_host(self):
         self.d_up_lc_reorder.copy_to_host(self.up_lc_reorder)
-        self.d_up_lc.copy_to_host(self.up_lc)
+        # self.d_up_lc.copy_to_host(self.up_lc)
     
         # Set the gauge transformation operator to one
     def set_to_one_links(self):
