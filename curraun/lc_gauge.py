@@ -36,6 +36,9 @@ class LCGaugeTransf:
         
         # We create an auxiliar object to reorder the fields
         self.up_lc_reorder = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        
+        # Just to debug
+        self.up_temp_reorder = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # We create the pointers to the GPU
         self.d_up_temp = self.up_temp
@@ -43,6 +46,7 @@ class LCGaugeTransf:
         self.d_vlc0 = self.vlc0
         self.d_vlc1 = self.vlc1
         self.d_up_lc_reorder = self.up_lc_reorder
+        self.d_up_temp_reorder = self.up_temp_reorder
 
         
         self.initialized = False
@@ -54,11 +58,13 @@ class LCGaugeTransf:
         self.d_vlc0 = cuda.to_device(self.vlc0)
         self.d_vlc1 = cuda.to_device(self.vlc1)
         self.d_up_lc_reorder = cuda.to_device(self.up_lc_reorder)
+        self.d_up_temp_reorder = cuda.to_device(self.up_temp_reorder)
 
     # Copies back the transformed field to the CPU
     def copy_to_host(self):
         self.d_up_lc_reorder.copy_to_host(self.up_lc_reorder)
         # self.d_up_lc.copy_to_host(self.up_lc)
+        self.d_up_temp_reorder.copy_to_host(self.up_temp_reorder)
     
         # Set the gauge transformation operator to one
     def set_to_one_links(self):
@@ -92,6 +98,9 @@ class LCGaugeTransf:
 
     # We evolve the gauge transformation
     def evolve_lc(self, xplus):
+        
+        # # Just to debug
+        reorder(self.d_up_temp_reorder, self.d_up_temp, self.s.n)
 
         # At each time step we compute the gauge transformation operator
         compute_vlc(self.d_vlc0, self.d_vlc1, xplus, self.s.n, self.nplus, self.s.d_u1, self.s.d_aeta1)
