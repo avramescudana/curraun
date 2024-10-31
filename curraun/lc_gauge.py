@@ -66,12 +66,12 @@ class LCGaugeTransf:
         # self.d_up_lc.copy_to_host(self.up_lc)
         self.d_up_temp_reorder.copy_to_host(self.up_temp_reorder)
     
-        # Set the gauge transformation operator to one
+        # Set the gauge links to one
     def set_to_one_links(self):
         n = self.s.n
         my_parallel_loop(set_to_one_kernel, n**2, self.up_temp, self.up_lc)
     
-    # Set the gauge links to one
+    # Set the gauge transformation operator to one
     def set_to_one_vlc(self):
         n = self.s.n
         nplus = self.nplus
