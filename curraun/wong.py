@@ -22,6 +22,7 @@ CASIMIRS = False        # compute Casimir invariants
 BOUNDARY = 'periodic'           # 'periodic' or 'frozen'
 NUM_CHECK = False            # checks the p^\tau constaint
 CUB_MOM = False             # compute p^3
+SWITCH = False          # switch glasma + wong to langevin
 
 class WongSolver:
     def __init__(self, s, n_particles):
@@ -67,6 +68,11 @@ class WongSolver:
         # p^\tau constaint
         if NUM_CHECK:
             self.ptau_constraint = np.zeros(n_particles, dtype=su.GROUP_TYPE_REAL)
+
+        # (x,y,z) and (px,py,pz) for each test particle
+        if SWITCH:
+            self.xs = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE_REAL)
+            self.ps = np.zeros((n_particles, 3), dtype=su.GROUP_TYPE_REAL)
 
         # px^2, py^2 and pz^2 for each particle
         self.p_sq_x = np.zeros(n_particles, dtype=np.double)
@@ -126,6 +132,10 @@ class WongSolver:
         if NUM_CHECK:
             self.d_ptau_constraint = self.ptau_constraint
 
+        if SWITCH:
+            self.d_xs = self.xs
+            self.d_ps = self.ps
+
         # move data to GPU
         if use_cuda:
             self.copy_to_device()
@@ -150,6 +160,10 @@ class WongSolver:
 
         if NUM_CHECK:
             self.d_ptau_constraint = cuda.to_device(self.ptau_constraint)
+
+        if SWITCH:  
+            self.d_xs = cuda.to_device(self.xs)
+            self.d_ps = cuda.to_device(self.ps)
 
         self.d_p_sq_x = cuda.to_device(self.p_sq_x)
         self.d_p_sq_y = cuda.to_device(self.p_sq_y)
@@ -196,6 +210,10 @@ class WongSolver:
 
         if NUM_CHECK:
             self.d_ptau_constraint.copy_to_host(self.ptau_constraint)
+
+        if SWITCH:
+            self.d_xs.copy_to_host(self.xs)
+            self.d_ps.copy_to_host(self.ps)
 
     def copy_mom_broad_to_device(self, stream=None):
         self.d_p_sq_mean = cuda.to_device(self.p_sq_mean, stream)
@@ -281,6 +299,12 @@ class WongSolver:
                          self.d_x1, self.d_p, self.d_q, self.s.t, 
                          self.s.dt, self.s.d_u0, self.s.d_pt0, self.s.d_pt1,
                          self.s.d_peta0, self.s.d_peta1, self.s.n, self.d_active)
+        if use_cuda:
+            self.copy_to_host()
+    
+    def compute_xp_switch(self):
+        my_parallel_loop(compute_xp_switch_kernel, self.n_particles, self.d_xs,  self.d_ps,
+                         self.d_x1, self.d_p, self.s.t)
         if use_cuda:
             self.copy_to_host()
 
@@ -768,3 +792,13 @@ def init_charge_darboux():
     q0 = np.array([Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q8])
 
     return q0
+
+@myjit
+def compute_xp_switch_kernel(index, xs, ps, x1, p, tau):
+    xs[index, 0] = x1[index, 0] # x
+    xs[index, 1] = x1[index, 1] # y
+    xs[index, 2] = tau * math.sinh(x1[index, 2]) # z = tau * sinh(eta)
+    
+    ps[index, 0] = p[index, 1] # px
+    ps[index, 1] = p[index, 2] # py
+    ps[index, 2] = p[index, 4] # pz
