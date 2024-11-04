@@ -117,6 +117,7 @@ venv.bak/
 *.npy
 *.zip
 *.csv
+*.tar.gz
 
 # Julia files
 *.jld
