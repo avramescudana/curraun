@@ -40,16 +40,17 @@ nevents = 1
 quark = 'charm'     
 mass = 1.275     
 form_type = 'fixed'
-#TODO: formation time 1/2mT
+#TODO: more formation time options
 tau_form = 1/(2*mass)*hbarc   
 pT = 0.5    
 ntp = 10**5  
 representation = 'quantum fundamental'      
 boundary = 'periodic'
-initialization = 'toy'      
+# initialization = 'toy'      
 xT_distrib = 'random'
-pT_distrib = 'toy'
-#TODO: FONLL pT distribution
+# pT_distrib = 'toy'
+pT_distrib = 'fonll'
+x_fonll = [20.2837, 1.95061, 3.13695, 0.0751663]
 
 outfile = 'output'
 
@@ -76,10 +77,11 @@ p = {
     'tform':     tau_form,        # formation time [fm/c]       
     'ntp' :      ntp,             # number of test particles
     'bound':     boundary,        # boundary conditions
-    'init':      initialization,  # initialization method
+    # 'init':      initialization,  # initialization method
     'pt':        pT,              # particle transverse momentum [GeV]
     'xtdistrib': xT_distrib,      # transverse position distribution
     'ptdistrib': pT_distrib,      # transverse momentum distribution
+    'xfonll':    x_fonll          # FONLL fit parameters
     }
 
 ########################################
@@ -107,10 +109,11 @@ parser.add_argument('-formtype',  type=str,   help="Formation time type")
 parser.add_argument('-tform',     type=float, help="Formation time [fm/c]")
 parser.add_argument('-ntp',       type=int,   help="Number of test particles")
 parser.add_argument('-bound',     type=str,   help="Boundary conditions")
-parser.add_argument('-init',      type=str,   help="Initialization method")
+# parser.add_argument('-init',      type=str,   help="Initialization method")
 parser.add_argument('-pt',        type=float, help="Particle transverse momentum [GeV]")
 parser.add_argument('-xtdistrib', type=str,   help="Transverse position distribution")
 parser.add_argument('-ptdistrib', type=str,   help="Transverse momentum distribution")
+parser.add_argument('-xfonll',    type=float, nargs='+', help="FONLL fit parameters")
 
 # Parse arguments and update parameters dictionary
 args = parser.parse_args()
@@ -120,19 +123,25 @@ for d in data:
         p[d] = data[d]
 
 # Derived parameters
-if p['GRUN']:
+if p['grun']:
     g = np.pi * np.sqrt(1 / np.log(Qs / 0.2))   
 g2mu = Qs / factor 
 mu = g2mu / g**2          	
 ir = 0.1 * g**2 * mu
 if p['central']:
     p['bound'] = 'periodic'
-    p['init'] = 'toy'
+    # p['init'] = 'toy'
+    p['pt_distrib'] = 'toy'
+if p['formtype'] == 'fixed':
+    p['tform'] = 1/(2*p['mass'])*hbarc   
 #TODO: particle initialization for off-central collisions
 
 ####################################################
 ############ set environment variables #############
 ####################################################
+
+# Run on specific GPU, comment this at the end #TODO: remove this
+os.environ["CUDA_VISIBLE_DEVICES"]="4"
 
 os.environ["MY_NUMBA_TARGET"] = "cuda"
 os.environ["PRECISION"] = "double"
@@ -160,7 +169,7 @@ from curraun import wong
 wong.BOUNDARY = boundary
 # Important parameter, used to compute (x,y,z) and (px,py,pz) for each test particle
 wong.SWITCH =  True
-from curraun.wong import init_pos, init_charge, init_mom_toy
+from curraun.wong import init_pos, init_charge, init_mom_toy, init_mom_fonll
 
 ####################################################
 ######### glasma + wong simulation routine #########
@@ -168,8 +177,7 @@ from curraun.wong import init_pos, init_charge, init_mom_toy
 
 # Simulate glasma event ev with parameters p and ntp heavy quarks
 def simulate(p, ev): 
-    mass = p['MASS']
-    pT = p['PT']
+    mass = p['mass']
     tau_form = p['tform']
     L = p['L']
     N = p['N']
@@ -199,12 +207,22 @@ def simulate(p, ev):
     x0s, p0s, q0s = np.zeros((ntp, 3)), np.zeros((ntp, 5)), np.zeros((ntp, su.ALGEBRA_ELEMENTS))
     masses = mass / E0 * np.ones(ntp)
 
-    if p['init'] == 'toy':
+    # if p['init'] == 'toy':
+    if p['pt_distrib'] == 'toy':
         # Initialize test particles with toy model
         for i in range(ntp):
             x0, p0, q0 = init_pos(s.n), init_mom_toy('pT', pT / E0), init_charge(representation)
             x0s[i, :], p0s[i, :], q0s[i, :] = x0, p0, q0
     #TODO: FONLL pT distribution
+    if p['pt_distrib'] == 'fonll':
+        x_fonll = p['xfonll']
+        # Initialize test particles with toy model
+        for i in range(ntp):
+            p0s, ntp_fonll = init_mom_fonll(p, x_fonll)
+            # Number of test particle slightly changes when sampling the FONLL pT distribution
+            ntp = ntp_fonll
+            x0, q0 = init_pos(ntp), init_charge(representation)
+            x0s[i, :], q0s[i, :] = x0, q0
 
     wong_solver.initialize(x0s, p0s, q0s, masses)
 
@@ -235,7 +253,7 @@ def simulate(p, ev):
 ########## run for multiple glasma events ##########
 ####################################################
 
-collect_xs, collect_ps = []
+collect_xs, collect_ps = [], []
 for ev in range(nevents):
     xs_ev, ps_ev = simulate(p, ev)
     collect_xs.append(xs_ev)

@@ -646,7 +646,7 @@ def init_mom_toy(type_init, p):
 
     return p0
 
-def fonll(p, pt):
+def fonll_v0(p, pt):
     quark = p['QUARK']
     # values taken from https://arxiv.org/pdf/1911.02480.pdf
     if quark=='charm':
@@ -657,11 +657,19 @@ def fonll(p, pt):
     fonll = 2*np.pi*pt*x0/(1+x3*pt**x1)**x2
     return fonll
 
-def init_mom_fonll(p):
-    ntp = p['NTP']
+def fonll(p, pt, x):
+    quark = p['QUARK']
+    x0, x1, x2, x3 = x[0], x[1], x[2], x[3]
+    fonll = 2*np.pi*pt*x0/(1+x3*pt**x1)**x2
+    return fonll
+
+def init_mom_fonll(p, x):
+    # ntp = p['NTP']
+    ntp = p['ntp']
     ptbins, ptmax = 200, 20
     pt = np.linspace(0, ptmax, ptbins)
-    fonll_pt = fonll(p, pt)
+    # fonll_pt = fonll_v0(p, pt)
+    fonll_pt = fonll(p, pt, x)
     prob_pt = fonll_pt/sum(fonll_pt)
     N = []
     for prob in prob_pt:
