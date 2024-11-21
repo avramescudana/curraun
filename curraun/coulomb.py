@@ -11,7 +11,7 @@ from numpy.fft import rfft2, irfft2
     A module for performing the Coulomb gauge transformation on the lattice.
     This is done at a fixed \tau time step and at a certain iteration.
     The only external parameter is the \alpha convergence parameter.
-    #TODO: perform the guage transformation iterations of GPU
+    #TODO: perform the guage transformation iterations on GPU
 """
 
 # Use cupy only if cuda is available
@@ -34,7 +34,6 @@ class CoulombGaugeTransf:
 
         # gauge transformation at previous iteration
         self.g0 = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        #TODO: initialize with identity matrix
 
         # gauge transformation at current iteration
         self.g1 = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
@@ -55,6 +54,7 @@ class CoulombGaugeTransf:
         self.c = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # convergence criterion
+        self.thetax = np.zeros(nn, dtype=su.GROUP_TYPE)
         self.theta = 0.0
 
         # Memory on the CUDA device:
@@ -66,6 +66,7 @@ class CoulombGaugeTransf:
         self.d_delta1 = self.delta1
         self.d_theta = self.theta
         self.d_c = self.c
+        self.d_thetax = self.thetax
 
     def copy_to_device(self):
         self.d_g0 = cuda.to_device(self.g0)
@@ -76,6 +77,7 @@ class CoulombGaugeTransf:
         self.d_delta1 = cuda.to_device(self.delta1)
         self.d_theta = cuda.to_device(self.theta)
         self.d_c = cuda.to_device(self.c)
+        self.d_theta = cuda.to_device(self.thetax)
 
     def copy_to_host(self):
         self.d_g0.copy_to_host(self.g0)
@@ -86,6 +88,7 @@ class CoulombGaugeTransf:
         self.d_delta1.copy_to_host(self.delta1)
         self.d_theta.copy_to_host(self.theta)
         self.d_c.copy_to_host(self.c)
+        self.d_theta.copy_to_host(self.thetax)
 
     def copy_theta_to_device(self, stream=None):
         self.d_theta = cuda.to_device(self.p_theta, stream)
@@ -101,17 +104,60 @@ def gauge_transform(self, alpha):
         # compute delta with previous iteration
         compute_delta(self.s, self.d_g0, self.d_ug0, self.d_delta0)
 
-        # apply fourier acceleration to delta
+        compute_thetax(self.s, self.d_delta0, self.d_thetax)
+        # self.d_theta = cupy.mean(cupy.array(self.d_thetax))
+        self.theta = np.mean(self.d_thetax)
+
+        # apply fourier acceleration
         fourier_acceleration(self.s, self.d_delta0, alpha, self.d_c)
+
+        # update the gauge transformation
+        update_gauge_transf(self.s, self.d_g0, self.d_c, self.d_g1)
+
+        # apply the gauge transformation to the gauge links
+        gauge_tranf_links(self.s, self.d_g1, self.d_ug0, self.d_ug1)
+
+        #TODO: apply gauge transformation to aeta, peta and pi
+
+        #TODO: swap 0 to 1 components for the next iteration
+
+def gauge_tranf_links(s, g1, ug0, ug1):
+    n = s.n
+    nn = n ** 2
+
+    my_parallel_loop(gauge_tranf_links_kernel, nn, n, g1, ug0, ug1)
+
+@myjit
+def gauge_tranf_links_kernel(xi, n, g1, ug0, ug1):
+    xiplus = l.shift(xi, 0, 1, n)
+    for d in range(2):
+        ug1[xi, d] = l.dact(g1[xi], g1[xiplus], ug0[xi, d])
+
+def update_gauge_transf(s, g0, c, g1):
+    n = s.n
+    nn = n ** 2
+
+    my_parallel_loop(update_gauge_transf_kernel, nn, g0, c, g1)
+
+@myjit
+def update_gauge_transf_kernel(xi, g0, c, g1):
+    buf = su.mexp(c[xi])
+    g1[xi] = su.mul(buf, g0[xi])
+
+def compute_thetax(s, delta0, thetax):
+    n = s.n
+    nn = n ** 2 
+
+    my_parallel_loop(compute_thetax_kernel, nn, delta0, thetax)
+
+@myjit
+def compute_thetax_kernel(xi, delta0, thetax):
+    thetax[xi] = su.tr(su.mul(delta0[xi], su.dagger(delta0[xi])))
 
 def init_transf(s, g0):
     n = s.n
     
-    my_parallel_loop(init_transf_kernel, n * n, n, g0)
-
-@myjit
-def init_transf_kernel(xi, n, g0):
-    g0[xi] = su.unit()
+    my_parallel_loop(init_transf_kernel, n * n, g0)
 
 def compute_delta(s, g0, ug0, delta0):
     u0 = s.d_u0
@@ -120,28 +166,6 @@ def compute_delta(s, g0, ug0, delta0):
     n = s.n
 
     my_parallel_loop(compute_delta_kernel, n * n, n, u0, ug0, g0, delta0)
-
-@myjit
-def compute_delta_kernel(xi, n, u0, ug0, g0, delta0):
-    # Delta = \sum_i [(U_x-i,i - U_x,i) - hc - trace] with i=x,y 
-
-    buf = su.zero()
-
-    for d in range(2):
-        xiplus = l.shift(xi, d, +1, n)
-        ug0[xi, d] = l.dact(g0[xi], g0[xiplus], u0[xi, d])
-
-        ximinus = l.shift(xi, d, -1, n)
-        temp1 = l.add_mul(ug0[ximinus, d], ug0[xi, d], -1)
-        temp2 = su.dagger(temp1)
-        temp3 = l.add_mul(temp1, temp2, -1)
-        temp4 = su.mul_s(su.unit(), su.tr(temp3)/su.NC)
-
-        temp5 = l.add_mul(temp3, temp4, -1)
-        buf = su.add(buf, temp5)
-
-    su.store(delta0[xi], buf)
-
 
 def fourier_acceleration(s, delta0, alpha, c):
     n = s.n
@@ -200,3 +224,28 @@ def psq_latt(x, y, n):
 @myjit
 def store_c_fft_kernel(xi, c_fft, c):
     su.store(c[xi], c_fft[xi])
+
+@myjit
+def compute_delta_kernel(xi, n, u0, ug0, g0, delta0):
+    # Delta = \sum_i [(U_x-i,i - U_x,i) - hc - trace] with i=x,y 
+
+    buf = su.zero()
+
+    for d in range(2):
+        xiplus = l.shift(xi, d, +1, n)
+        ug0[xi, d] = l.dact(g0[xi], g0[xiplus], u0[xi, d])
+
+        ximinus = l.shift(xi, d, -1, n)
+        temp1 = l.add_mul(ug0[ximinus, d], ug0[xi, d], -1)
+        temp2 = su.dagger(temp1)
+        temp3 = l.add_mul(temp1, temp2, -1)
+        temp4 = su.mul_s(su.unit(), su.tr(temp3)/su.NC)
+
+        temp5 = l.add_mul(temp3, temp4, -1)
+        buf = su.add(buf, temp5)
+
+    su.store(delta0[xi], buf)
+
+@myjit
+def init_transf_kernel(xi, g0):
+    g0[xi] = su.unit()
