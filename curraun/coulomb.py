@@ -94,7 +94,7 @@ class CoulombGaugeTransf:
         # self.d_delta1 = cuda.to_device(self.delta1)
         self.d_theta = cuda.to_device(self.theta)
         self.d_c = cuda.to_device(self.c)
-        self.d_theta = cuda.to_device(self.thetax)
+        self.d_thetax = cuda.to_device(self.thetax)
         self.d_ugunit = cuda.to_device(self.ugunit)
         self.d_gunit = cuda.to_device(self.gunit)
 
@@ -111,7 +111,7 @@ class CoulombGaugeTransf:
         # self.d_delta1.copy_to_host(self.delta1)
         self.d_theta.copy_to_host(self.theta)
         self.d_c.copy_to_host(self.c)
-        self.d_theta.copy_to_host(self.thetax)
+        self.d_thetax.copy_to_host(self.thetax)
         self.d_ugunit.copy_to_host(self.ugunit)
         self.d_gunit.copy_to_host(self.gunit)
 
@@ -151,12 +151,12 @@ def init_gauge_links_kernel(xi, u0, ug0):
         su.store(ug0[xi, d], u0[xi, d])
 
 def iterate(self):
-    self.g0, self.g1 = self.g1, self.g0
-    self.ug0, self.ug1 = self.ug1, self.ug0
-    
     # iterate pointers to CUDA device memory
     self.d_g0, self.d_g1 = self.d_g1, self.d_g0
     self.d_ug0, self.d_ug1 = self.d_ug1, self.d_ug0
+    
+    self.g0, self.g1 = self.g1, self.g0
+    self.ug0, self.ug1 = self.ug1, self.ug0
 
 def init_transf_random(s, g0):
     n = s.n
@@ -174,14 +174,14 @@ def gauge_transform(self, alpha):
 
     # compute delta with previous iteration
     # compute_delta(self.s, self.d_g0, self.d_ug1, self.d_delta)
-    # compute_delta(self.s, self.d_ug1, self.d_delta)
+    compute_delta(self.s, self.d_ug1, self.d_delta)
 
-    # compute_thetax(self.s, self.d_delta, self.d_thetax)
-    # self.d_theta = cupy.mean(cupy.array(self.d_thetax))
+    compute_thetax(self.s, self.d_delta, self.d_thetax)
+    self.d_theta = cupy.mean(cupy.array(self.d_thetax))
 
     #TODO: algebra color elements debugging
-    compute_delta_alg(self.s, self.d_ug1, self.d_delta_alg)
-    compute_thetax_alg(self.s, self.d_delta_alg, self.d_thetax)
+    # compute_delta_alg(self.s, self.d_ug1, self.d_delta_alg)
+    # compute_thetax_alg(self.s, self.d_delta_alg, self.d_thetax)
 
     self.theta = np.mean(self.d_thetax).real
     # self.theta = np.mean(self.d_thetax[1])
@@ -193,10 +193,10 @@ def gauge_transform(self, alpha):
     # update_gauge_transf(self.s, self.d_g0, self.d_c, self.d_g1)
 
     #TODO: remove this, just debugging without fourier acceleration
-    # update_gauge_transf(self.s, self.d_g0, self.d_delta, self.d_g1)
+    update_gauge_transf(self.s, self.d_g0, self.d_delta, self.d_g1)
 
     #TODO: algebra color elements debugging
-    update_gauge_transf_alg(self.s, self.d_g0, self.d_delta_alg, self.d_g1)
+    # update_gauge_transf_alg(self.s, self.d_g0, self.d_delta_alg, self.d_g1)
 
     # check unitarity of the gauge transformation
     #TODO: separate the unitarity check as debugging
@@ -245,11 +245,12 @@ def update_gauge_transf(s, g0, c, g1):
     n = s.n
     nn = n ** 2
 
-    my_parallel_loop(update_gauge_transf_kernel, nn, g0, c, g1)
+    my_parallel_loop(update_gauge_transf_kernel, nn, n, g0, c, g1)
 
 @myjit
-def update_gauge_transf_kernel(xi, g0, c, g1):
-    buf = su.mexp(c[xi])
+def update_gauge_transf_kernel(xi, n, g0, c, g1):
+    # buf = su.mexp(c[xi])
+    buf = su.mul_s(su.mexp(c[xi]), -1/(4*su.NC*n**2))
     g1[xi] = su.mul(buf, g0[xi])
 
 #TODO: algebra color elements debugging
