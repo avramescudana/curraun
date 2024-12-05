@@ -4,19 +4,6 @@ import math
 import curraun.lattice as l
 import curraun.su as su
 from scipy.stats import unitary_group
-# if use_cuda:
-#     import numba.cuda as cuda
-
-"""
-    A module for performing the Coulomb gauge transformation on the lattice.
-    This is done at a fixed \tau time step and at a certain iteration.
-    The only external parameter is the \alpha convergence parameter.
-    #TODO: perform the guage transformation iterations on GPU
-    #TODO: iterate until convergence is reached
-"""
-
-# Use cupy only if cuda is available
-# cupy can be turned off by changing 'use_cupy'
 if use_cuda:
     use_cupy = True
     import numba.cuda as cuda
@@ -24,14 +11,30 @@ if use_cuda:
 else:
     use_cupy = False
 
-DEBUG = True
-#TODO: copy all objects only in debug mode
+"""
+    A module for performing the Coulomb gauge transformation on the lattice.
+    This is done at a fixed \tau time step in the glasma simulation.
+    The \alpha convergence parameter is fixed accordint to its value for the Abelian case.
+    The Coulomb gauge fixing is done until convergence is reached.
+"""
+
+DEBUG = False
+
+max_iters = 100
+if su.su_precision == 'single':
+    coulomb_accuracy = 1e-7
+elif su.su_precision == 'double':
+    coulomb_accuracy = 1e-17
+else:
+    print("Unsupported precision: " + su.su_precision)
 
 class CoulombGaugeTransf:
     def __init__(self, s):
         self.s = s
         self.n = s.n
         nn = self.n ** 2
+
+        self.alpha = psq_latt(self.n-1, self.n-1, self.n)
 
         # gauge transformation at previous iteration
         self.g0 = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
@@ -43,11 +46,11 @@ class CoulombGaugeTransf:
         # gauge links at current iteration
         self.ug1 = np.zeros((nn, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
-        #TODO: move this to separate debug function
-        # check unitarity of the gauge transformation
-        self.gunit = np.zeros(nn, dtype=su.GROUP_TYPE_REAL)
-        # check unitarity of the gauge links
-        self.ugunit = np.zeros((nn, 2), dtype=su.GROUP_TYPE_REAL)
+        if DEBUG:
+            # check unitarity of the gauge transformation
+            self.gunit = np.zeros(nn, dtype=su.GROUP_TYPE_REAL)
+            # check unitarity of the gauge links
+            self.ugunit = np.zeros((nn, 2), dtype=su.GROUP_TYPE_REAL)
 
         # divergence of the gauge field at previous iteration
         self.delta = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
@@ -68,9 +71,9 @@ class CoulombGaugeTransf:
         self.d_c = self.c
         self.d_thetax = self.thetax
 
-        #TODO: move this to separate debug function
-        self.d_ugunit = self.ugunit
-        self.d_gunit = self.gunit
+        if DEBUG:
+            self.d_ugunit = self.ugunit
+            self.d_gunit = self.gunit
 
     def copy_to_device(self):
         self.d_g0 = cuda.to_device(self.g0)
@@ -82,9 +85,9 @@ class CoulombGaugeTransf:
         self.d_c = cuda.to_device(self.c)
         self.d_thetax = cuda.to_device(self.thetax)
 
-        #TODO: move this to separate debug function
-        self.d_ugunit = cuda.to_device(self.ugunit)
-        self.d_gunit = cuda.to_device(self.gunit)
+        if DEBUG:
+            self.d_ugunit = cuda.to_device(self.ugunit)
+            self.d_gunit = cuda.to_device(self.gunit)
 
     def copy_to_host(self):
         self.d_g0.copy_to_host(self.g0)
@@ -96,9 +99,9 @@ class CoulombGaugeTransf:
         self.d_c.copy_to_host(self.c)
         self.d_thetax.copy_to_host(self.thetax)
 
-        #TODO: move this to separate debug function
-        self.d_ugunit.copy_to_host(self.ugunit)
-        self.d_gunit.copy_to_host(self.gunit)
+        if DEBUG:
+            self.d_ugunit.copy_to_host(self.ugunit)
+            self.d_gunit.copy_to_host(self.gunit)
 
     def copy_theta_to_device(self, stream=None):
         self.d_theta = cuda.to_device(self.p_theta, stream)
@@ -106,7 +109,20 @@ class CoulombGaugeTransf:
     def copy_theta_to_host(self, stream=None):
         self.d_theta.copy_to_host(self.theta, stream)
 
-def init_gauge_transform(self):
+def iter_gauge_transf(self):
+    for iter in range(max_iters):
+        theta = gauge_transform(self)
+        theta_accuracy = int(np.floor(np.log10(abs(theta))))
+
+        if theta <= coulomb_accuracy:
+            if DEBUG:
+                print(f"Coulomb gauge condition reached in {iter + 1} iterations with accuracy 1e{theta_accuracy}")
+            break
+    else:
+        if DEBUG:
+            print(f"Maximum iterations reached with accuracy: 1e{theta_accuracy}")
+
+def init_gauge_transf(self):
     n = self.s.n
     nn = n ** 2
 
@@ -144,13 +160,13 @@ def init_transf_random(s, g0):
     for xi in range(n*n):
         g0[xi] = unitary_group.rvs(su.NC).reshape(su.NC*su.NC)
 
-def gauge_transform(self, alpha):
+def gauge_transform(self):
     # apply the gauge transformation to the gauge links
     gauge_transf_links(self.s, self.d_g0, self.d_ug0, self.d_ug1)
 
     # check unitarity of the gauge links
-    #TODO: separate the unitarity check as debugging
-    # check_ugunit(self.s, self.d_ugunit, self.d_ug1)
+    if DEBUG:
+        check_ugunit(self.s, self.d_ugunit, self.d_ug1)
 
     # compute delta with previous iteration
     compute_delta(self.s, self.d_ug1, self.d_delta)
@@ -167,15 +183,25 @@ def gauge_transform(self, alpha):
     fourier_acceleration(self.s, self.d_delta, self.d_c)
 
     # update the gauge transformation
-    update_gauge_transf(self.s, self.d_g0, self.d_c, self.d_g1, alpha)
+    update_gauge_transf(self.s, self.d_g0, self.d_c, self.d_g1, self.alpha)
 
     # check unitarity of the gauge transformation
-    #TODO: separate the unitarity check as debugging
-    # check_gunit(self.s, self.d_gunit, self.d_g1)
-
-    #TODO: apply gauge transformation to aeta, peta and pi
+    if DEBUG:
+        check_gunit(self.s, self.d_gunit, self.d_g1)
 
     iterate(self)
+
+    return self.theta
+
+def apply_gauge_transf(self):  
+     #TODO: apply gauge transformation to aeta, peta and pti
+
+    n = self.s.n    
+    nn = n ** 2
+
+    aeta = self.s.d_aeta1
+    peta = self.s.d_peta1
+    pt = self.s.d_pt1
 
 def check_ugunit(s, ugunit, ug):
     n = s.n
