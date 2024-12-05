@@ -3,7 +3,6 @@ import numpy as np
 import math
 import curraun.lattice as l
 import curraun.su as su
-from numpy.fft import rfft2, irfft2
 from scipy.stats import unitary_group
 # if use_cuda:
 #     import numba.cuda as cuda
@@ -157,7 +156,10 @@ def gauge_transform(self, alpha):
     compute_delta(self.s, self.d_ug1, self.d_delta)
 
     compute_thetax(self.s, self.d_delta, self.d_thetax)
-    self.d_theta = cupy.mean(cupy.array(self.d_thetax))
+    if use_cupy:
+        self.d_theta = cupy.mean(cupy.array(self.d_thetax))
+    else:
+        self.d_theta = np.mean(self.d_thetax)
 
     self.theta = np.mean(self.d_thetax).real
 
@@ -255,32 +257,51 @@ def compute_delta_kernel(xi, n, ug0, delta):
 def fourier_acceleration(s, delta, c):
     n = s.n
 
-    # fourier transform to momentum space
-    delta_reshape = cupy.reshape(cupy.array(delta), (n, n, su.GROUP_ELEMENTS))
-    delta_fft = cupy.fft.fft2(delta_reshape, axes=(0, 1))
+    if use_cupy:
+        # fourier transform to momentum space
+        delta_reshape = cupy.reshape(cupy.array(delta), (n, n, su.GROUP_ELEMENTS))
+        delta_fft = cupy.fft.fft2(delta_reshape, axes=(0, 1))
 
-    # fourier accelerate with alpha
-    delta_fft_reshape = cupy.reshape(delta_fft, (n*n, su.GROUP_ELEMENTS))
+        # fourier accelerate with alpha
+        delta_fft_reshape = cupy.reshape(delta_fft, (n*n, su.GROUP_ELEMENTS))
 
-    my_parallel_loop(complex_fourier_acceleration_kernel, n*n , n, cupy.asnumpy(delta_fft_reshape))
+        my_parallel_loop(complex_fourier_acceleration_kernel, n*n , n, cupy.asnumpy(delta_fft_reshape))
 
-    # inverse fourier transform to position space
-    delta_accfft_reshape = cupy.reshape(cupy.array(delta_fft_reshape), (n, n, su.GROUP_ELEMENTS))
+        # inverse fourier transform to position space
+        delta_accfft_reshape = cupy.reshape(cupy.array(delta_fft_reshape), (n, n, su.GROUP_ELEMENTS))
 
-    delta_accfft = cupy.fft.ifft2(delta_accfft_reshape, axes=(0, 1), s=(n, n))
-    c_fft = cupy.asnumpy(cupy.reshape(delta_accfft, (n * n, su.GROUP_ELEMENTS)))
-    my_parallel_loop(store_c_fft_kernel, n*n , c_fft, c)
+        delta_accfft = cupy.fft.ifft2(delta_accfft_reshape, axes=(0, 1), s=(n, n))
+        c_fft = cupy.asnumpy(cupy.reshape(delta_accfft, (n * n, su.GROUP_ELEMENTS)))
+        my_parallel_loop(store_c_fft_kernel, n*n , c_fft, c)
+    else:
+        # fourier transform to momentum space
+        delta_reshape = np.reshape(delta, (n, n, su.GROUP_ELEMENTS))
+        delta_fft = np.fft.fft2(delta_reshape, axes=(0, 1))
+
+        # fourier accelerate with alpha
+        delta_fft_reshape = np.reshape(delta_fft, (n*n, su.GROUP_ELEMENTS))
+
+        my_parallel_loop(complex_fourier_acceleration_kernel, n*n , n, delta_fft_reshape)
+
+        # inverse fourier transform to position space
+        delta_accfft_reshape = np.reshape(delta_fft_reshape, (n, n, su.GROUP_ELEMENTS))
+
+        delta_accfft = np.fft.ifft2(delta_accfft_reshape, axes=(0, 1), s=(n, n))
+        c_fft = np.reshape(delta_accfft, (n * n, su.GROUP_ELEMENTS))
+        my_parallel_loop(store_c_fft_kernel, n*n , c_fft, c)
+
 
 @myjit  
 def complex_fourier_acceleration_kernel(xi, n, delta_fft):
     x, y = l.get_point(xi, n)
 
     # extract p^2 and p^2_max
-    psq = psq_latt(x, y, n)
-    psqmax = psq_latt(n-1, n-1, n)
+    if (x > 0 or y > 0):
+        psq = psq_latt(x, y, n)
+        psqmax = psq_latt(n-1, n-1, n)
 
-    buf = su.mul_s(delta_fft[xi], psqmax / psq)
-    su.store(delta_fft[xi], buf)
+        buf = su.mul_s(delta_fft[xi], psqmax / psq)
+        su.store(delta_fft[xi], buf)
 
 @myjit
 def psq_latt(x, y, n):
