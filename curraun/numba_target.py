@@ -37,6 +37,9 @@ elif target == 'python':
     print("Using Python")
 elif target == 'numba':
     import numba
+    #TODO: Check why parallel=True gives the warning 
+    # NumbaPerformanceWarning: The keyword argument 'parallel=True' was specified 
+    # but no transformation for parallel execution was possible.
     myjit = numba.jit(parallel=True, nogil=True, fastmath=True)
     mycudajit = lambda a : a
     prange = numba.prange

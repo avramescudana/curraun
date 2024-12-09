@@ -59,18 +59,18 @@ class Energy():
         self.d_ET.copy_to_host(self.ET)
         self.d_BT.copy_to_host(self.BT)
 
-    def compute(self):
+    def compute(self, s):
         # compute contributions in 2d
-        u0 = self.s.d_u0
-        u1 = self.s.d_u1
-        pt1 = self.s.d_pt1
-        aeta0 = self.s.d_aeta0
-        aeta1 = self.s.d_aeta1
-        peta1 = self.s.d_peta1
+        u0 = s.d_u0
+        u1 = s.d_u1
+        pt1 = s.d_pt1
+        aeta0 = s.d_aeta0
+        aeta1 = s.d_aeta1
+        peta1 = s.d_peta1
 
-        dt = self.s.dt
+        dt = s.dt
         dth = dt / 2.0
-        t = self.s.t
+        t = s.t
 
         EL = self.d_EL
         BL = self.d_BL
