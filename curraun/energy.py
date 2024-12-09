@@ -126,4 +126,3 @@ def fields_kernel(xi, n, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth, t, EL, BL, E
     buffer1 = l.transport(aeta1, u1, xi, d, 1, n)
     buffer1 = l.add_mul(buffer1, aeta1[xi], -1)
     BT[xi] += su.sq(buffer1) / 2 / (t + dt)
-
