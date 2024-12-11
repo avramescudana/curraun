@@ -21,13 +21,10 @@ else:
 DEBUG = True
 TRANSF_GLASMA = True
 
-max_iters = 1000
-# max_iters = 1
+max_iters = 500
 if su.su_precision == 'single':
-    # coulomb_accuracy = 1e-7
-    coulomb_accuracy = 1e-6
+    coulomb_accuracy = 1e-7
 elif su.su_precision == 'double':
-    # coulomb_accuracy = 1e-17
     coulomb_accuracy = 1e-15
 else:
     print("Unsupported precision: " + su.su_precision)
@@ -38,8 +35,8 @@ class CoulombGaugeTransf:
         self.n = s.n
         nn = self.n ** 2
 
-        self.alpha = psq_latt_cpu(self.n-1, self.n-1, self.n) 
-        # self.alpha = 0.02
+        self.alpha = psq_latt_cpu(self.n-1, self.n-1, self.n)
+        # self.alpha = 0.08
 
         if DEBUG:
             print("alpha:", self.alpha)
@@ -91,7 +88,6 @@ class CoulombGaugeTransf:
         self.d_ug0 = self.ug0
         self.d_ug1 = self.ug1
         self.d_delta = self.delta
-        # self.d_theta = self.theta
         self.d_c = self.c
         self.d_thetax = self.thetax
 
@@ -115,7 +111,6 @@ class CoulombGaugeTransf:
         self.d_ug0 = cuda.to_device(self.ug0)
         self.d_ug1 = cuda.to_device(self.ug1)
         self.d_delta = cuda.to_device(self.delta)
-        # self.d_theta = cuda.to_device(self.theta)
         self.d_c = cuda.to_device(self.c)
         self.d_thetax = cuda.to_device(self.thetax)
 
@@ -139,7 +134,6 @@ class CoulombGaugeTransf:
         self.d_ug0.copy_to_host(self.ug0)   
         self.d_ug1.copy_to_host(self.ug1)
         self.d_delta.copy_to_host(self.delta)
-        # self.d_theta.copy_to_host(self.theta)
         self.d_c.copy_to_host(self.c)
         self.d_thetax.copy_to_host(self.thetax)
 
@@ -157,90 +151,16 @@ class CoulombGaugeTransf:
             self.d_peta1.copy_to_host(self.peta1)
             self.d_peta0.copy_to_host(self.peta0)
 
-    # def copy_theta_to_device(self, stream=None):
-    #     self.d_theta = cuda.to_device(self.theta, stream)
-
-    # def copy_theta_to_host(self, stream=None):
-    #     self.d_theta.copy_to_host(self.theta, stream)
-
-# def apply_gauge_transf(self):
-#     n = self.s.n
-#     nn = n ** 2
-
-#     # apply the coulomb gauge transformation to glasma fields
-#     # namely u0, u1, aeta0, aeta1 and conjugate momenta peta0, peta1, pt0, pt1
-#     my_parallel_loop(apply_gauge_links_kernel, nn, n, self.d_g1, self.d_u0, self.s.d_u0, self.d_u1, self.s.d_u1, self.d_aeta0, self.s.d_aeta0, self.d_aeta1, self.s.d_aeta1, self.d_peta0, self.s.d_peta0, self.d_peta1, self.s.d_peta1, self.d_pt0, self.s.d_pt0, self.d_pt1, self.s.d_pt1)
-
-# @myjit
-# def apply_gauge_links_kernel(xi, n, g1, u0_coul, u0_glasma, u1_coul, u1_glasma, aeta0_coul, aeta0_glasma, aeta1_coul, aeta1_glasma, peta0_coul, peta0_glasma, peta1_coul, peta1_glasma, pt0_coul, pt0_glasma, pt1_coul, pt1_glasma):
-#     for d in range(2):
-#         xiplus = l.shift(xi, d, +1, n)
-#         u0_coul[xi, d] = l.dact(g1[xi], g1[xiplus], u0_glasma[xi, d])
-#         u1_coul[xi, d] = l.dact(g1[xi], g1[xiplus], u1_glasma[xi, d])
-
-#         pt0_coul[xi, d] = l.act(g1[xi], pt0_glasma[xi, d])
-#         pt1_coul[xi, d] = l.act(g1[xi], pt1_glasma[xi, d])
-
-#     aeta0_coul[xi] = l.act(g1[xi], aeta0_glasma[xi])
-#     aeta1_coul[xi] = l.act(g1[xi], aeta1_glasma[xi])
-
-#     peta0_coul[xi] = l.act(g1[xi], peta0_glasma[xi])
-#     peta1_coul[xi] = l.act(g1[xi], peta1_glasma[xi])
-
-def apply_gauge_transf(self):
-    n = self.s.n
-    nn = n ** 2
-
-    # apply the coulomb gauge transformation to glasma fields
-    # namely u0, u1, aeta0, aeta1 and conjugate momenta peta0, peta1, pt0, pt1
-    my_parallel_loop(apply_gauge_links_kernel, nn, n, self.d_g1, self.d_u0, self.d_u1, self.d_aeta0, self.d_aeta1, self.d_peta0, self.d_peta1, self.d_pt0, self.d_pt1)
-
-@myjit
-def apply_gauge_links_kernel(xi, n, g1, u0, u1, aeta0, aeta1, peta0, peta1, pt0, pt1):
-    for d in range(2):
-        u0_prev, u1_prev = u0[xi, d], u1[xi, d]
-        pt0_prev, pt1_prev = pt0[xi, d], pt1[xi, d]
-
-        xiplus = l.shift(xi, d, +1, n)
-        su.store(u0[xi, d], l.dact(g1[xi], g1[xiplus], u0_prev))
-        u1[xi, d] = l.dact(g1[xi], g1[xiplus], u1_prev)
-
-        pt0[xi, d] = l.act(g1[xi], pt0_prev)
-        pt1[xi, d] = l.act(g1[xi], pt1_prev)
-
-    aeta0_prev, aeta1_prev = aeta0[xi], aeta1[xi]
-    peta0_prev, peta1_prev = peta0[xi], peta1[xi]
-
-    aeta0[xi] = l.act(g1[xi], aeta0_prev)
-    aeta1[xi] = l.act(g1[xi], aeta1_prev)
-
-    peta0[xi] = l.act(g1[xi], peta0_prev)
-    peta1[xi] = l.act(g1[xi], peta1_prev)
-
-def iter_gauge_transf(self):
-    for iter in range(max_iters):
-        gauge_transform(self)
-        apply_gauge_transf(self)
-
-        # if DEBUG:
-        #     print('iter:', iter+1, 'theta:', self.theta)
-
-        theta_accuracy = int(np.floor(np.log10(abs(self.theta))))
-
-        if self.theta <= coulomb_accuracy:
-            if DEBUG:
-                print(f"Coulomb gauge condition reached in {iter + 1} iterations with accuracy 1e{theta_accuracy}")
-            break
-    else:
-        if DEBUG:
-            print(f"Maximum iterations reached with accuracy: 1e{theta_accuracy}")
+"""
+    Initialize the objects in the gauge transformation
+"""
 
 def init_gauge_transf(self):
     n = self.s.n
     nn = n ** 2
 
     # initialize gauge transformation with identity matrix
-    init_transf(self.s, self.d_g0)
+    my_parallel_loop(init_transf_kernel, nn, self.d_g0)
    
     # initialize gauge links with the glasma ones
     my_parallel_loop(init_gauge_links_kernel, nn, self.s.d_u0, self.d_ug0)
@@ -248,6 +168,15 @@ def init_gauge_transf(self):
     if TRANSF_GLASMA:
         # initialize all glasma objects
         my_parallel_loop(init_glasma_fields_kernel, nn, self.d_u0, self.s.d_u0, self.d_u1, self.s.d_u1, self.d_aeta0, self.s.d_aeta0, self.d_aeta1, self.s.d_aeta1, self.d_peta0, self.s.d_peta0, self.d_peta1, self.s.d_peta1, self.d_pt0, self.s.d_pt0, self.d_pt1, self.s.d_pt1)
+
+@myjit
+def init_transf_kernel(xi, g0):
+    g0[xi] = su.unit()
+
+@myjit
+def init_gauge_links_kernel(xi, u0, ug0):
+    for d in range(2):
+        su.store(ug0[xi, d], u0[xi, d])
 
 @myjit
 def init_glasma_fields_kernel(xi, u0, u0_glasma, u1, u1_glasma, aeta0, aeta0_glasma, aeta1, aeta1_glasma, peta0, peta0_glasma, peta1, peta1_glasma, pt0, pt0_glasma, pt1, pt1_glasma):
@@ -262,34 +191,34 @@ def init_glasma_fields_kernel(xi, u0, u0_glasma, u1, u1_glasma, aeta0, aeta0_gla
     su.store(peta0[xi], peta0_glasma[xi])
     su.store(peta1[xi], peta1_glasma[xi])
 
-def init_transf(s, g0):
-    n = s.n
-    
-    my_parallel_loop(init_transf_kernel, n * n, g0)
 
-@myjit
-def init_transf_kernel(xi, g0):
-    g0[xi] = su.unit()
+"""
+    Perform the Coulomb gauge transformation iteratively until convergence is reached
+"""
 
-@myjit
-def init_gauge_links_kernel(xi, u0, ug0):
-    for d in range(2):
-        su.store(ug0[xi, d], u0[xi, d])
+def iter_gauge_transf(self):
+    for iter in range(max_iters):
+        gauge_transform(self)
+        apply_gauge_transf(self)
 
-def iterate(self):
-    # iterate pointers to CUDA device memory
-    self.d_g0, self.d_g1 = self.d_g1, self.d_g0
-    self.d_ug0, self.d_ug1 = self.d_ug1, self.d_ug0
-    
-    self.g0, self.g1 = self.g1, self.g0
-    self.ug0, self.ug1 = self.ug1, self.ug0
+        if iter==0:
+            theta0 = self.theta
 
-#TODO: remove this
-def init_transf_random(s, g0):
-    n = s.n
-    
-    for xi in range(n*n):
-        g0[xi] = unitary_group.rvs(su.NC).reshape(su.NC*su.NC)
+        # theta_accuracy = int(np.floor(np.log10(abs(self.theta))))
+        theta_relative = self.theta / theta0
+        theta_accuracy = int(np.floor(np.log10(abs(theta_relative))))
+
+        if DEBUG:
+            print('iter:', iter+1, 'theta:', self.theta, 'accuracy:', theta_accuracy)
+
+        if self.theta <= coulomb_accuracy:
+            if DEBUG:
+                print(f"Coulomb gauge condition reached in {iter + 1} iterations with accuracy 1e{theta_accuracy}")
+            break
+    else:
+        if DEBUG:
+            print(f"Maximum iterations reached with accuracy: 1e{theta_accuracy}")
+
 
 def gauge_transform(self):
     # apply the gauge transformation to the gauge links
@@ -327,31 +256,6 @@ def gauge_transform(self):
 
     iterate(self)
 
-    # return self.theta
-
-def check_ugunit(s, ugunit, ug):
-    n = s.n
-    nn = n ** 2
-
-    my_parallel_loop(check_ugunit_kernel, nn, ugunit, ug)
-
-@myjit  
-def check_ugunit_kernel(xi, ugunit, ug):
-    for d in range(2):
-        buf = su.mul(su.dagger(ug[xi, d]), ug[xi, d])
-        ugunit[xi, d] = (su.sq(l.add_mul(su.unit(), buf, -1)))
-
-def check_gunit(s, gunit, g):
-    n = s.n
-    nn = n ** 2
-
-    my_parallel_loop(check_gunit_kernel, nn, gunit, g)
-
-@myjit  
-def check_gunit_kernel(xi, gunit, g):
-    buf = su.mul(su.dagger(g[xi]), g[xi])
-    gunit[xi] = (su.sq(l.add_mul(su.unit(), buf, -1)))
-
 def gauge_transf_links(s, g1, ug0, ug1):
     n = s.n
     nn = n ** 2
@@ -363,30 +267,6 @@ def gauge_transf_links_kernel(xi, n, g1, ug0, ug1):
     for d in range(2):
         xiplus = l.shift(xi, d, +1, n)
         ug1[xi, d] = l.dact(g1[xi], g1[xiplus], ug0[xi, d])
-
-def update_gauge_transf(s, g0, c, g1, alpha):
-    n = s.n
-    nn = n ** 2
-
-    my_parallel_loop(update_gauge_transf_kernel, nn, g0, c, g1, alpha)
-
-@myjit
-def update_gauge_transf_kernel(xi, g0, c, g1, alpha):
-    buf = su.mexp(su.mul_s(c[xi], alpha))
-    su.store(g1[xi], buf)
-
-    # buf1 = su.mul(buf, g0[xi])
-    # su.store(g1[xi], buf1)
-
-def compute_thetax(s, delta, thetax):
-    n = s.n
-    nn = n ** 2 
-
-    my_parallel_loop(compute_thetax_kernel, nn, delta, thetax)
-
-@myjit
-def compute_thetax_kernel(xi, delta, thetax):
-    thetax[xi] = su.tr(su.mul(delta[xi], su.dagger(delta[xi])))
 
 def compute_delta(s, ug0, delta):
     n = s.n
@@ -408,6 +288,16 @@ def compute_delta_kernel(xi, n, ug0, delta):
         buf = su.add(buf, temp5)
 
     su.store(delta[xi], buf)
+
+def compute_thetax(s, delta, thetax):
+    n = s.n
+    nn = n ** 2 
+
+    my_parallel_loop(compute_thetax_kernel, nn, delta, thetax)
+
+@myjit
+def compute_thetax_kernel(xi, delta, thetax):
+    thetax[xi] = su.tr(su.mul(delta[xi], su.dagger(delta[xi])))
 
 def fourier_acceleration(s, delta, c):
     n = s.n
@@ -471,3 +361,84 @@ def psq_latt_cpu(x, y, n):
 def store_c_fft_kernel(xi, c_fft, c):
     su.store(c[xi], c_fft[xi])
 
+def update_gauge_transf(s, g0, c, g1, alpha):
+    n = s.n
+    nn = n ** 2
+
+    my_parallel_loop(update_gauge_transf_kernel, nn, g0, c, g1, alpha)
+
+@myjit
+def update_gauge_transf_kernel(xi, g0, c, g1, alpha):
+    buf = su.mexp(su.mul_s(c[xi], alpha))
+    su.store(g1[xi], buf)
+
+    # buf1 = su.mul(buf, g0[xi])
+    # su.store(g1[xi], buf1)
+
+def iterate(self):
+    # iterate pointers to CUDA device memory
+    self.d_g0, self.d_g1 = self.d_g1, self.d_g0
+    self.d_ug0, self.d_ug1 = self.d_ug1, self.d_ug0
+    
+    self.g0, self.g1 = self.g1, self.g0
+    self.ug0, self.ug1 = self.ug1, self.ug0
+
+"""
+    Apply the coulomb gauge transformation to glasma fields
+    Namely u0, u1, aeta0, aeta1 and conjugate momenta peta0, peta1, pt0, pt1
+"""
+
+def apply_gauge_transf(self):
+    n = self.s.n
+    nn = n ** 2
+
+    my_parallel_loop(apply_gauge_transf_kernel, nn, n, self.d_g1, self.d_u0, self.d_u1, self.d_aeta0, self.d_aeta1, self.d_peta0, self.d_peta1, self.d_pt0, self.d_pt1)
+
+@myjit
+def apply_gauge_transf_kernel(xi, n, g1, u0, u1, aeta0, aeta1, peta0, peta1, pt0, pt1):
+    for d in range(2):
+        u0_prev, u1_prev = u0[xi, d], u1[xi, d]
+        pt0_prev, pt1_prev = pt0[xi, d], pt1[xi, d]
+
+        xiplus = l.shift(xi, d, +1, n)
+        su.store(u0[xi, d], l.dact(g1[xi], g1[xiplus], u0_prev))
+        u1[xi, d] = l.dact(g1[xi], g1[xiplus], u1_prev)
+
+        pt0[xi, d] = l.act(g1[xi], pt0_prev)
+        pt1[xi, d] = l.act(g1[xi], pt1_prev)
+
+    aeta0_prev, aeta1_prev = aeta0[xi], aeta1[xi]
+    peta0_prev, peta1_prev = peta0[xi], peta1[xi]
+
+    aeta0[xi] = l.act(g1[xi], aeta0_prev)
+    aeta1[xi] = l.act(g1[xi], aeta1_prev)
+
+    peta0[xi] = l.act(g1[xi], peta0_prev)
+    peta1[xi] = l.act(g1[xi], peta1_prev)
+
+"""
+    Check the unitarity of the gauge transformation and the gauge links
+"""
+
+def check_ugunit(s, ugunit, ug):
+    n = s.n
+    nn = n ** 2
+
+    my_parallel_loop(check_ugunit_kernel, nn, ugunit, ug)
+
+@myjit  
+def check_ugunit_kernel(xi, ugunit, ug):
+    for d in range(2):
+        buf = su.mul(su.dagger(ug[xi, d]), ug[xi, d])
+        ugunit[xi, d] = (su.sq(l.add_mul(su.unit(), buf, -1)))
+
+def check_gunit(s, gunit, g):
+    n = s.n
+    nn = n ** 2
+
+    my_parallel_loop(check_gunit_kernel, nn, gunit, g)
+
+@myjit  
+def check_gunit_kernel(xi, gunit, g):
+    buf = su.mul(su.dagger(g[xi]), g[xi])
+    gunit[xi] = (su.sq(l.add_mul(su.unit(), buf, -1)))
