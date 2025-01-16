@@ -131,6 +131,7 @@ results/
 
 # Debug folder for testing
 debug/
+debug_*.ipynb
 
 # Plots
 *.png

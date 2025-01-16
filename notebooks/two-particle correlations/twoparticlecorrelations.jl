@@ -45,14 +45,15 @@ Store the name of either a single event file or all files from a folder
 # ╔═╡ 97e3098c-e036-11ed-24a9-1d300dc10496
 begin
 	current_path = pwd()
+	parent_path = dirname(current_path)
 	if allevents == true
-		folder_path = current_path * "/results/" * folder * "/"
+		folder_path = parent_path * "/results/" * folder * "/"
 		cd(folder_path)
 		events = readdir()
-		filenames = current_path * "/results/" * folder * "/" .* events
+		filenames = parent_path * "/results/" * folder * "/" .* events
 		cd(current_path)
 	else
-		filename = current_path * "/results/" * folder * "/event_1.pickle"
+		filename = parent_path * "/results/" * folder * "/event_1.pickle"
 	end
 end
 
@@ -197,50 +198,50 @@ Surface plot of dNdΔηdΔϕ as a function of Δη and Δϕ at a given Δτᵢ
 """
 
 # ╔═╡ adc33def-c60a-4883-91a0-5e65cf1ddff1
-begin
-	# \tau=0.01
-	bandwidth_τ = (0.1, 0.1)
-	limits_τ = ((0, 2*π), (-1.2, 1.2), (nothing, 4.5))
-	yticks_τ = ([-1, 0, 1], ["-1", "0", "1"])
+# begin
+# 	# \tau=0.01
+# 	bandwidth_τ = (0.1, 0.1)
+# 	limits_τ = ((0, 2*π), (-1.2, 1.2), (nothing, 4.5))
+# 	yticks_τ = ([-1, 0, 1], ["-1", "0", "1"])
 
-	# \tau=0.1
-	# bandwidth_τ = (0.2, 0.2)
-	# limits_τ = ((0, 2*π), (-5, 5), (nothing, 0.22))
-	# yticks_τ = ([-4, 0, 4], ["-4", "0", "4"])
+# 	# \tau=0.1
+# 	# bandwidth_τ = (0.2, 0.2)
+# 	# limits_τ = ((0, 2*π), (-5, 5), (nothing, 0.22))
+# 	# yticks_τ = ([-4, 0, 4], ["-4", "0", "4"])
 
-	# \tau=0.3
-	# bandwidth_τ = (0.25, 0.25)
-	# limits_τ = ((0, 2*π), (-5.1, 5.1), (nothing, 0.15))
-	# yticks_τ = ([-4, 0, 4], ["-4", "0", "4"])
+# 	# \tau=0.3
+# 	# bandwidth_τ = (0.25, 0.25)
+# 	# limits_τ = ((0, 2*π), (-5.1, 5.1), (nothing, 0.15))
+# 	# yticks_τ = ([-4, 0, 4], ["-4", "0", "4"])
 	
-	dNdΔηdΔϕ3D = data(dfᵢ) * mapping(:Δϕᵢ, :Δηᵢ) *
-		    AlgebraOfGraphics.density(npoints=np; bandwidth=bandwidth_τ) * visual(Surface, shading=false, colormap = reverse(cgrad(cmap_transp)))
-	axis3D = (width = 350, height = 320,
-		type=Axis3, 
-		protrusions=2,
-		# limits=(nothing, nothing, (nothing, nothing)), 
-		limits = limits_τ,
-		yticks = yticks_τ,
-		elevation=0.15π, azimuth=1.3π, 
-		ylabel=L"\Delta\eta", xlabel=L"\Delta\phi", zlabel="", xlabelsize = 20, ylabelsize = 20, zlabelsize = 0, 
-		xticks = ([0, π, 2*π], ["0", "π", "2π"]), 
-		xspinecolor_1 =:black, xtickcolor=(:white, 0), xticklabelpad=-5, xspinewidth=0.5,
-		yspinecolor_1 =:black, ytickcolor=(:white, 0), yticklabelpad=-5, yspinewidth=0.5,
-		zspinesvisible=false, zticklabelsvisible=false, zticksvisible=false,
-		titlegap = -18,
-		title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
-	)
+# 	dNdΔηdΔϕ3D = data(dfᵢ) * mapping(:Δϕᵢ, :Δηᵢ) *
+# 		    AlgebraOfGraphics.density(npoints=np; bandwidth=bandwidth_τ) * visual(Surface, shading=false, colormap = reverse(cgrad(cmap_transp)))
+# 	axis3D = (width = 350, height = 320,
+# 		type=Axis3, 
+# 		protrusions=2,
+# 		# limits=(nothing, nothing, (nothing, nothing)), 
+# 		limits = limits_τ,
+# 		yticks = yticks_τ,
+# 		elevation=0.15π, azimuth=1.3π, 
+# 		ylabel=L"\Delta\eta", xlabel=L"\Delta\phi", zlabel="", xlabelsize = 20, ylabelsize = 20, zlabelsize = 0, 
+# 		xticks = ([0, π, 2*π], ["0", "π", "2π"]), 
+# 		xspinecolor_1 =:black, xtickcolor=(:white, 0), xticklabelpad=-5, xspinewidth=0.5,
+# 		yspinecolor_1 =:black, ytickcolor=(:white, 0), yticklabelpad=-5, yspinewidth=0.5,
+# 		zspinesvisible=false, zticklabelsvisible=false, zticksvisible=false,
+# 		titlegap = -18,
+# 		title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+# 	)
 
-	fig3D = draw(dNdΔηdΔϕ3D; axis = axis3D, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=12, ticksize=0, labelsize=20, flipaxis=true, labelpadding=10, width = 10, height = Relative(0.85), tickcolor=(:gray,0)))
-	# if saveplots
-	# save("plots/paper_Cdetadphi_3D_toy_charm_pT_1_tau_$(τₛ[i]).png", fig3D, px_per_unit = 10)
-	save("plots/paper/Cdetadphi_3D_toy_charm_pT_1_tau_$(τₛ[i]).pdf", fig3D)
-	# end
+# 	fig3D = draw(dNdΔηdΔϕ3D; axis = axis3D, colorbar=(position=:right, label = L"\mathcal{C}(\Delta\phi,\Delta\eta)", ticklabelsize=12, ticksize=0, labelsize=20, flipaxis=true, labelpadding=10, width = 10, height = Relative(0.85), tickcolor=(:gray,0)))
+# 	# if saveplots
+# 	# save("plots/paper_Cdetadphi_3D_toy_charm_pT_1_tau_$(τₛ[i]).png", fig3D, px_per_unit = 10)
+# 	save("plots/paper/Cdetadphi_3D_toy_charm_pT_1_tau_$(τₛ[i]).pdf", fig3D)
+# 	# end
 
-	# text!(1, 1, 1, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
+# 	# text!(1, 1, 1, text=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", fontsize=20)
 
-	fig3D
-end
+# 	fig3D
+# end
 
 # ╔═╡ ce08c947-a871-4642-afed-427e04ae8485
 # begin
@@ -327,27 +328,27 @@ Density plot of dNdΔϕ as a function of Δϕ at Δτ
 """
 
 # ╔═╡ b7498278-7582-4679-a69f-49bce37f1715
-# begin
-# 	set_aog_theme!(fonts = (; regular = "CMU Serif"))
-# 	axis_dNdΔϕ = (width = 300, height = 300, xlabel=L"\Delta\phi", ylabel=L"1/N_\mathrm{pairs}\,\mathrm{d}N/\mathrm{d}\Delta\phi",
-# 		xlabelsize = 20, ylabelsize = 20, xticklabelsize = 14, yticklabelsize=14, 
-# 		# xticks = ([π/2, 3*π/4, π, 5*π/4, 3*π/2], [L"\pi/2", L"3\pi/4", L"\pi", L"5\pi/4", L"3\pi/2"]), 
-# 		# limits = (π/2, 3*π/2, nothing), 
-# 		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
-# 	)
-# 	dNdΔϕ = data(df) * mapping(:Δϕᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density() 
-# 	# * visual(Heatmap, colormap = reverse(cgrad(:beach)))
+begin
+	set_aog_theme!(fonts = (; regular = "CMU Serif"))
+	axis_dNdΔϕ = (width = 300, height = 300, xlabel=L"\Delta\phi", ylabel=L"1/N_\mathrm{pairs}\,\mathrm{d}N/\mathrm{d}\Delta\phi",
+		xlabelsize = 20, ylabelsize = 20, xticklabelsize = 14, yticklabelsize=14, 
+		# xticks = ([π/2, 3*π/4, π, 5*π/4, 3*π/2], [L"\pi/2", L"3\pi/4", L"\pi", L"5\pi/4", L"3\pi/2"]), 
+		# limits = (π/2, 3*π/2, nothing), 
+		# title=L"\Delta\tau=%$(τₛ[i])\,\mathrm{fm/}c", titlesize = 20
+	)
+	dNdΔϕ = data(df) * mapping(:Δϕᵢ, color=:τₛ=>L"\Delta\tau\,\mathrm{[fm/}c\mathrm{]}") * AlgebraOfGraphics.density() 
+	# * visual(Heatmap, colormap = reverse(cgrad(:beach)))
 
-# 	segmented_cmap = cgrad(:beach, 16, categorical = true)
-# 	colors = [segmented_cmap[12], segmented_cmap[9], segmented_cmap[4]]
-# 	fig_dNdΔϕ = draw(dNdΔϕ; axis = axis_dNdΔϕ, legend=(;position=:right, linewidth=1.5), 
-# 		palettes=(; color=colors)
-# 	)
-# 	if saveplots
-# 		save("plots/dNdphi_tau_dep.png", fig_dNdΔϕ, px_per_unit = 5)
-# 	end
-# 	fig_dNdΔϕ
-# end
+	segmented_cmap = cgrad(:beach, 16, categorical = true)
+	colors = [segmented_cmap[12], segmented_cmap[9], segmented_cmap[4]]
+	fig_dNdΔϕ = draw(dNdΔϕ; axis = axis_dNdΔϕ, legend=(;position=:right, linewidth=1.5), 
+		palettes=(; color=colors)
+	)
+	# if saveplots
+	# 	save("plots/dNdphi_tau_dep.png", fig_dNdΔϕ, px_per_unit = 5)
+	# end
+	fig_dNdΔϕ
+end
 
 # ╔═╡ d46c4198-3991-4626-9c18-443d6feb9c04
 md"""
@@ -660,9 +661,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
+git-tree-sha1 = "8873e196c2eb87962a2048b3b8e08946535864a1"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+1"
+version = "1.0.8+4"
 
 [[deps.CEnum]]
 git-tree-sha1 = "eb4cb44a499229b3b8426dcfb5dd85333951ff90"
@@ -873,9 +874,9 @@ version = "1.6.0"
 
 [[deps.FFTW_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "c6033cc3892d0ef5bb9cd29b7f2f0331ea5184ea"
+git-tree-sha1 = "4d81ed14783ec49ce9f2e168208a12ce1815aa25"
 uuid = "f5851436-0d7a-5f13-b9de-f02708fd171a"
-version = "3.3.10+0"
+version = "3.3.10+3"
 
 [[deps.FileIO]]
 deps = ["Pkg", "Requires", "UUIDs"]
@@ -982,9 +983,9 @@ version = "1.1.2"
 
 [[deps.Graphite2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "344bf40dcab1073aca04aa0df4fb092f920e4011"
+git-tree-sha1 = "01979f9b37367603e2848ea225918a3b3861b606"
 uuid = "3b182d85-2403-5c21-9c21-1e1f0cc25472"
-version = "1.3.14+0"
+version = "1.3.14+1"
 
 [[deps.GridLayoutBase]]
 deps = ["GeometryBasics", "InteractiveUtils", "Observables"]
@@ -1206,9 +1207,9 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
 [[deps.Libffi_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "0b4a5d71f3e5200a7dff793393e09dfc2d874290"
+git-tree-sha1 = "27ecae93dd25ee0909666e6835051dd684cc035e"
 uuid = "e9f186c6-92d2-5b65-8a66-fee21dc1b490"
-version = "3.2.2+1"
+version = "3.2.2+2"
 
 [[deps.Libgcrypt_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgpg_error_jll", "Pkg"]
@@ -1398,7 +1399,7 @@ version = "1.1.20+0"
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
 uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
-version = "0.5.5+0"
+version = "0.5.5+2"
 
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1946,9 +1947,9 @@ version = "1.6.38+1"
 
 [[deps.libsixel_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]
-git-tree-sha1 = "d4f63314c8aa1e48cd22aa0c17ed76cd1ae48c3c"
+git-tree-sha1 = "7dfa0fd9c783d3d0cc43ea1af53d69ba45c447df"
 uuid = "075b6546-f08a-558a-be8f-8157d0f608a5"
-version = "1.10.3+0"
+version = "1.10.3+3"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
