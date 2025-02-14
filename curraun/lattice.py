@@ -2,7 +2,7 @@
     General group and algebra functions
     Grid functions
 """
-from curraun.numba_target import myjit
+from curraun.numba_target import myjit, mynonparjit
 import curraun.su as su
 
 import math
@@ -12,7 +12,8 @@ import math
 """
 
 # product of 4 matrices
-@myjit
+# @myjit
+@mynonparjit
 def mul4(a, b, c, d):
     ab = su.mul(a, b)
     cd = su.mul(c, d)
@@ -20,19 +21,22 @@ def mul4(a, b, c, d):
     return abcd
 
 # group add: g0 = g0 + f * g1
-@myjit
+# @myjit
+@mynonparjit
 def add_mul(g0, g1, f):  # TODO: inline explicitly everywhere and remove this function
     return su.add(g0, su.mul_s(g1, f))
 
 # adjoint action a -> u a u^t
-@myjit
+# @myjit
+@mynonparjit
 def act(u, a):
     buffer1 = su.mul(u, a)
     result =  su.mul(buffer1, su.dagger(u))
     return result
 
 # commutator of two su(2) elements
-@myjit
+# @myjit
+@mynonparjit
 def comm(a, b):
     buffer1 = su.mul(a, b)
     buffer2 = su.mul(b, a)
@@ -44,7 +48,8 @@ def comm(a, b):
 """
 
 # compute 'positive' plaquette U_{x, i, j}
-@myjit
+# @myjit
+@mynonparjit
 def plaq_pos(u, x, i, j, n):
     x1 = shift(x, i, 1, n)
     x2 = shift(x, j, 1, n)
@@ -54,7 +59,8 @@ def plaq_pos(u, x, i, j, n):
     return plaquette
 
 # compute 'negative' plaquette U_{x, i, -j}
-@myjit
+# @myjit
+@mynonparjit
 def plaq_neg(u, x, i, j, n):
     x0 = x
     x1 = shift(shift(x0, i, 1, n), j, -1, n)
@@ -66,7 +72,8 @@ def plaq_neg(u, x, i, j, n):
 
 
 # compute general plaquette U_{x, oi*i, oj*j}
-@myjit
+# @myjit
+@mynonparjit
 def plaq(u, x, i, j, oi, oj, n):
     x0 = x
     x1 = shift(x0, i, oi, n)
@@ -81,7 +88,8 @@ def plaq(u, x, i, j, oi, oj, n):
     # U_{x, i} * U_{x+i, j} * U_{x+i+j, -i} * U_{x+j, -j}
     return mul4(u0, u1, u2, u3)
 
-@myjit
+# @myjit
+@mynonparjit
 def get_link(u, x, i, oi, n):
     if oi > 0:
         return su.load(u[x, i])
@@ -90,7 +98,8 @@ def get_link(u, x, i, oi, n):
         return su.dagger(u[xs, i])
 
 # compute staple sum for optimized eom
-@myjit
+# @myjit
+@mynonparjit
 def plaquettes(x, d, u, n):
     ci1 = shift(x, d, 1, n)
     i = (d + 1) % 2
@@ -111,7 +120,8 @@ def plaquettes(x, d, u, n):
     Parallel transport of 'scalar' fields (aeta, peta)
 """
 
-@myjit
+# @myjit
+@mynonparjit
 def transport(f, u, x, i, o, n):
     xs = shift(x, i, o, n)
     if o > 0:
@@ -127,17 +137,20 @@ def transport(f, u, x, i, o, n):
 """
 
 # compute index from grid point
-@myjit
+# @myjit
+@mynonparjit
 def get_index(ix, iy, n):  # TODO: remove
     return n * (ix % n) + (iy % n)
 
 # index from grid point (no modulo)
-@myjit
+# @myjit
+@mynonparjit
 def get_index_nm(ix, iy, n):
     return n * ix + iy
 
 # compute grid point from index
-@myjit
+# @myjit
+@mynonparjit
 def get_point(x, n):
     r1 = x % n
     r0 = (x - r1) // n
@@ -148,7 +161,8 @@ def get_point(x, n):
 #@njit(locals={'result' : nb.int64},
 #      parallel=True, nogil=True, fastmath=True)
 #@cuda.jit(device=True)
-@myjit
+# @myjit
+@mynonparjit
 def shift(x, i, o, n):
     r0, r1 = get_point(x, n)
     if i == 0:

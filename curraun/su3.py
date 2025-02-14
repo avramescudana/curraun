@@ -4,10 +4,12 @@
 import os
 # os.environ["MY_NUMBA_TARGET"] = "python"  # Pure Python version    # TODO: remove debug code
 # from curraun import su as su
-from curraun.numba_target import myjit
+from curraun.numba_target import myjit, mynonparjit
 
 import math
 import numpy as np
+
+# from numba import prange
 
 # Definition of constants
 
@@ -63,7 +65,8 @@ s8 = complex_tuple(1 / math.sqrt(3), 0, 0, 0, 1 / math.sqrt(3), 0, 0, 0, -2 / ma
 
 slist = (id0, s1, s2, s3, s4, s5, s6, s7, s8)
 
-@myjit
+# @myjit
+@mynonparjit
 def get_algebra_element(algebra_factors):
     """
     Algebra elements are formed from the algebra factors by:
@@ -115,7 +118,8 @@ def get_algebra_element(algebra_factors):
 # Generate the matrix multiplication code:
 # print("\n".join(["r{} = ".format(j) + " + ".join(["a[{}] * b[{}]".format(3 * (j // 3) + i, 3 * i + (j % 3)) for i in range(3)]) for j in range(9)]))
 
-@myjit
+# @myjit
+@mynonparjit
 def mul(a, b):
     """SU(3) multiplication: 3x3 matrix multiplication
 
@@ -150,7 +154,8 @@ def mul(a, b):
     return r0, r1, r2, r3, r4, r5, r6, r7, r8
 
 # exponential map
-@myjit
+# @myjit
+@mynonparjit
 def mexp(a):
     """ Calculate exponential using Taylor series
 
@@ -177,7 +182,8 @@ def mexp(a):
 
 
 # derivative of exponential map
-@myjit
+# @myjit
+@mynonparjit
 def dmexp(a, da):
     """ Calculate derivative of exponential using Taylor series
 
@@ -212,7 +218,8 @@ def dmexp(a, da):
     return res
 
 # inverse
-@myjit
+# @myjit
+@mynonparjit
 def inv(a):
     """
     >>> u = (1,1,0,1,2,0,0,0,1)
@@ -257,7 +264,8 @@ def inv(a):
     return r0, r1, r2, r3, r4, r5, r6, r7, r8
 
 # determinant
-@myjit
+# @myjit
+@mynonparjit
 def det(a):
     res  = a[0] * (a[4] * a[8] - a[5] * a[7])
     res += a[1] * (a[5] * a[6] - a[3] * a[8])
@@ -265,7 +273,8 @@ def det(a):
     return res
 
 # anti-hermitian part, eq. (C.25)
-@myjit
+# @myjit
+@mynonparjit
 def ah(u):
     """
     >>> u = get_algebra_element((1,0,0,0,0,0,0,0))
@@ -305,7 +314,8 @@ def ah(u):
     return r0, r1, r2, r3, r4, r5, r6, r7, r8
 
 # group add: g0 = g0 + f * g1
-@myjit
+# @myjit
+@mynonparjit
 def add(g0, g1):
     # Unfortunately, tuple creation from list comprehension does not work in numba:
     # see https://github.com/numba/numba/issues/2771
@@ -324,7 +334,8 @@ def add(g0, g1):
     return r0, r1, r2, r3, r4, r5, r6, r7, r8
 
 # multiply by scalar
-@myjit
+# @myjit
+@mynonparjit
 def mul_s(g0, f):
     # Unfortunately, tuple creation from list comprehension does not work in numba:
     # see https://github.com/numba/numba/issues/2771
@@ -343,7 +354,8 @@ def mul_s(g0, f):
     return r0, r1, r2, r3, r4, r5, r6, r7, r8
 
 # conjugate transpose
-@myjit
+# @myjit
+@mynonparjit
 def dagger(a):
     r0 = a[0].conjugate()
     r1 = a[3].conjugate()
@@ -361,34 +373,41 @@ def dagger(a):
 """
 
 # get group element zero
-@myjit
+# @myjit
+@mynonparjit
 def zero():
     return GROUP_TYPE(0), GROUP_TYPE(0), GROUP_TYPE(0), GROUP_TYPE(0),\
            GROUP_TYPE(0), GROUP_TYPE(0), GROUP_TYPE(0), GROUP_TYPE(0), GROUP_TYPE(0)
 
 # get group element unit
-@myjit
+# @myjit
+@mynonparjit
 def unit():
     return id0
 
 # group store: g0 <- g1
-@myjit
+# @myjit
+@mynonparjit
 def store(g_to, g_from):
     for i in range(9):
+    # for i in prange(9):
         g_to[i] = g_from[i]
 
 # return tuple (local memory)
-@myjit
+# @myjit
+@mynonparjit
 def load(g):
     return g[0], g[1], g[2], g[3], g[4], g[5], g[6], g[7], g[8]
 
 # trace
-@myjit
+# @myjit
+@mynonparjit
 def tr(a):
     return a[0] + a[4] + a[8]
 
 # trace ( a . dagger(a) )
-@myjit
+# @myjit
+@mynonparjit
 def sq(a): # TODO: rename to tr_sq? or tr_abs_sq?
     """
     >>> a = (1,2,3,4,6,8,9,5,4)
@@ -413,7 +432,8 @@ def sq(a): # TODO: rename to tr_sq? or tr_abs_sq?
         s += a[i].real * a[i].real + a[i].imag * a[i].imag
     return s
 
-@myjit
+# @myjit
+@mynonparjit
 def check_unitary(u):  # TODO: remove debugging code
     x = mul(u, dagger(u))
     d = add(x, mul_s(id0, -1))
@@ -426,7 +446,8 @@ def check_unitary(u):  # TODO: remove debugging code
     Functions for algebra elements
 """
 
-@myjit
+# @myjit
+@mynonparjit
 def add_algebra(a, b):
     r0 = a[0] + b[0]
     r1 = a[1] + b[1]
@@ -438,7 +459,8 @@ def add_algebra(a, b):
     r7 = a[7] + b[7]
     return r0, r1, r2, r3, r4, r5, r6, r7
 
-@myjit
+# @myjit
+@mynonparjit
 def mul_algebra(a, f):
     r0 = a[0] * f
     r1 = a[1] * f
@@ -450,7 +472,8 @@ def mul_algebra(a, f):
     r7 = a[7] * f
     return r0, r1, r2, r3, r4, r5, r6, r7
 
-@myjit
+# @myjit
+@mynonparjit
 def get_algebra_factors_from_group_element_approximate(g):
     r1 = tr(mul(s1, g)).imag
     r2 = tr(mul(s2, g)).imag
@@ -462,7 +485,8 @@ def get_algebra_factors_from_group_element_approximate(g):
     r8 = tr(mul(s8, g)).imag
     return r1, r2, r3, r4, r5, r6, r7, r8
 
-@myjit
+# @myjit
+@mynonparjit
 def proj(g, i, j):
     """
     A helper function for initial_su3.py that only seems to work if I put it here.

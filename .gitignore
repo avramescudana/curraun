@@ -111,3 +111,6 @@ venv.bak/
 
 # Simulation data
 *.dat
+
+# VSCode
+.vscode/

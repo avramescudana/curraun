@@ -1,4 +1,4 @@
-from curraun.numba_target import myjit, my_parallel_loop, use_cuda
+from curraun.numba_target import myjit, my_parallel_loop, use_cuda, mynonparjit
 import curraun.su as su
 import numpy as np
 from numpy.fft import rfft2, irfft2
@@ -15,6 +15,8 @@ else:
     use_cupy = False
 
 PI = np.pi
+
+from numba import prange
 
 if use_cupy:
     random_cupy = cupy.random.RandomState()
@@ -131,25 +133,29 @@ def modulate_kernel(xi, field, num, kernel):
     for i in range(num):
         field[xi, i] = field[xi, i] * kernel[xi]
 
-@myjit
+# @myjit
+@mynonparjit
 def reset_wilsonfield(x, wilsonfield):
     su.store(wilsonfield[x], su.unit())
 
 @myjit
 def wilson_compute_poisson_kernel(x, mass, n, new_n, uv, kernel):
-    for y in range(new_n):
+    # for y in range(new_n):
+    for y in prange(new_n):
         k2 = k2_latt(x, y, n)
         if (x > 0 or y > 0) and k2 <= uv ** 2:
             kernel[x, y] = 1.0 / (k2 + mass ** 2)
 
-@myjit
+# @myjit
+@mynonparjit
 def wilson_exponentiation_kernel(x, field, wilsonfield):
     a = su.get_algebra_element(field[x])
     buffer1 = su.mexp(a)
     buffer2 = su.mul(buffer1, wilsonfield[x])
     su.store(wilsonfield[x], buffer2)
 
-@myjit
+# @myjit
+@mynonparjit
 def k2_latt(x, y, nt):
     result = 4.0 * (math.sin((PI * x) / nt) ** 2 + math.sin((PI * y) / nt) ** 2)
     return result

@@ -1,10 +1,12 @@
-from curraun.numba_target import myjit
+from curraun.numba_target import myjit, mynonparjit
 import numba
 import curraun.su as su
 from curraun.su3 import proj
 from math import sqrt
 from numba import cuda
 import numpy as np
+
+from numba import prange
 
 """
     A module that solves the initial conditions for the longitudinal magnetic field for SU(3).
@@ -23,14 +25,15 @@ ITERATION_MAX_ROUND_1 = 100
 def init_kernel_2_su3_numba(xi, u0, u1, ua, ub):
     # initialize transverse gauge links (longitudinal magnetic field)
     # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
-    for d in range(2):
+    # for d in range(2):
+    for d in prange(2):
         u_a = su.load(ua[xi, d])
         u_b = su.load(ub[xi, d])
 
         b3, check = solve_initial_numba(u_a, u_b)
 
-        if check > ACCURACY_GOAL:
-            print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
+        # if check > ACCURACY_GOAL:
+        #     print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
 
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
@@ -46,8 +49,8 @@ def init_kernel_2_su3_cuda(xi, u0, u1, ua, ub):
 
         b3, check = solve_initial_cuda(u_a, u_b)
 
-        if check > ACCURACY_GOAL:
-            print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
+        # if check > ACCURACY_GOAL:
+        #     print("Kernel xi:", xi, "d: ", d, "did not reach goal. check: ", check)
 
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
@@ -57,7 +60,8 @@ def init_kernel_2_su3_cuda(xi, u0, u1, ua, ub):
     New approach: fixed point iteration
 """
 
-@myjit
+# @myjit
+@mynonparjit
 def solve_initial_cuda(u_a, u_b):
     w = su.add(u_a, u_b)
 
@@ -114,7 +118,8 @@ def solve_initial_cuda(u_a, u_b):
 
     return u, check
 
-@myjit
+# @myjit
+@mynonparjit
 def solve_initial_numba(u_a, u_b):
     w = su.add(u_a, u_b)
 
@@ -142,7 +147,11 @@ def solve_initial_numba(u_a, u_b):
 
         # extract color components of 'b'
         B = su.get_algebra_factors_from_group_element_approximate(b)
-        A = np.linalg.solve(Y, B)
+
+        # fix error from numba
+        # A = np.linalg.solve(Y, B)
+        B_array = np.array(B)
+        A = np.linalg.solve(Y, B_array)
 
         # reduce 'largeness' of A if needed
         norm = np.linalg.norm(A)

@@ -1,4 +1,4 @@
-from curraun.numba_target import myjit, prange, my_parallel_loop
+from curraun.numba_target import myjit, prange, my_parallel_loop, mynonparjit
 import curraun.lattice as l
 import curraun.su as su
 import numpy as np
@@ -25,7 +25,8 @@ def evolve(s, stream=None):
     my_parallel_loop(evolve_kernel, n * n, u0, u1, pt1, pt0, aeta0, aeta1, peta1, peta0, dt, dth, t, n, stream=stream)
 
 
-@myjit
+# @myjit
+@mynonparjit
 def evolve_kernel(xi, u0, u1, pt1, pt0, aeta0, aeta1, peta1, peta0, dt, dth, t, n):
     # Momentum update
     # Input:

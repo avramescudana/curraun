@@ -1,4 +1,4 @@
-from curraun.numba_target import myjit, prange, my_parallel_loop, use_cuda
+from curraun.numba_target import myjit, prange, my_parallel_loop, use_cuda, mynonparjit
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
@@ -81,6 +81,9 @@ class Energy():
 
         my_parallel_loop(fields_kernel, n ** 2, n, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth, t, EL, BL, ET, BT)
 
+        # if t==0.5:
+        #     fields_kernel.parallel_diagnostics(level=4)
+
         # compute means (very inefficient, but want to keep the arrays intact)
         if use_cuda:
             self.copy_to_host()
@@ -96,7 +99,8 @@ class Energy():
         self.pT = (self.EL_mean + self.BL_mean) / self.s.t
 
 
-@myjit
+# @myjit
+@mynonparjit
 def fields_kernel(xi, n, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth, t, EL, BL, ET, BT):
     # longitudinal electric field at t + dth
     EL[xi] = su.sq(peta1[xi]) * (t + dth)
