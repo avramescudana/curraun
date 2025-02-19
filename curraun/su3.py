@@ -210,6 +210,7 @@ LOG_MAX_TERMS = 100 # maximum number of terms in Taylor series
 LOG_ACCURACY_SQUARED = 1.e-32 # 1.e-32 # accuracy
 
 # logarithm map
+@myjit
 def mlog(a):
     """
     Computes logarithm of a matrix using Taylor series
