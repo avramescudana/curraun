@@ -23,6 +23,7 @@ class LCGaugeTransf:
         
         # We create object to store the links
         self.up_temp = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.up_temp_reorder = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.up_lc = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.up_lc_reorder = np.zeros((self.n**2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         
@@ -34,6 +35,7 @@ class LCGaugeTransf:
         self.d_ux = self.ux
         self.d_aeta = self.aeta
         self.d_up_temp = self.up_temp
+        self.d_up_temp_reorder = self.up_temp_reorder
         self.d_up_lc = self.up_lc
         self.d_up_lc_reorder = self.up_lc_reorder
         self.d_vlc_dag = self.vlc_dag
@@ -44,6 +46,7 @@ class LCGaugeTransf:
         self.d_ux = cuda.to_device(self.ux)
         self.d_aeta = cuda.to_device(self.aeta)
         self.d_up_temp = cuda.to_device(self.up_temp)
+        self.d_up_temp_reorder = cuda.to_device(self.up_temp_reorder)
         self.d_up_lc = cuda.to_device(self.up_lc)
         self.d_up_lc_reorder = cuda.to_device(self.up_lc_reorder)
         self.d_vlc_dag = cuda.to_device(self.vlc_dag)
@@ -52,6 +55,7 @@ class LCGaugeTransf:
     # Copies from the device to the host
     def copy_to_host(self):
         self.d_up_lc_reorder.copy_to_host(self.up_lc_reorder)
+        self.d_up_temp_reorder.copy_to_host(self.up_temp_reorder)
     
     # We copy the object to the device
     def init(self):
@@ -70,13 +74,14 @@ class LCGaugeTransf:
         
         # We gauge transform the field at the previous step
         if xplus != 0:
-            act_vlc(self.d_up_temp, self.d_vlc_dag, self.d_vlc_prev, self.n, self.d_up_lc)
+            act_vlc(self.d_up_temp, self.d_vlc_dag, self.d_vlc_prev, self.n, self.d_up_lc, xplus)
         
         # Compute the plus links in temp gauge
         compute_uplus_temp(self.d_ux, self.d_aeta, self.n, self.dts, xplus, self.d_up_temp)
         
         # We reorder the transformed fields
         reorder(self.d_up_lc_reorder, self.d_up_lc, self.s.n)
+        reorder(self.d_up_temp_reorder, self.d_up_temp, self.s.n)
         
         # Copy the results back to the host
         if use_cuda:
@@ -97,12 +102,12 @@ def compute_uplus_temp_kernel(yi, ux, aeta, n, DTS, xplus, up_temp):
     y, z = yz[0], yz[1]
     
     # We restrict ourselves to the light-cone of the Glasma
-    if -xplus<(z-n//2)<xplus:
+    if -(xplus)<(z-n//2)<(xplus):
         
         # We get the proper time and the GPU index
-        tau = round(DTS*math.sqrt(xplus**2-(z-n//2)**2))
-        tauxy_x = l.get_index_n2xm(tau, xplus, y, n)
-        tauxy_t = l.get_index_n2xm(tau, xplus+1, y, n)
+        tau = math.sqrt((xplus)**2-(z-n//2)**2)
+        tauxy_x = l.get_index_n2xm(round(DTS*tau), xplus, y, n)
+        tauxy_t = l.get_index_n2xm(round(DTS*tau), xplus+1, y, n)
         
         # We compute the x and t links
         ux_latt = ux[tauxy_x]
@@ -136,8 +141,8 @@ def compute_vlc_kernel(yi, ux, aeta, n, DTS, xplus, xminus, vlc_dag):
     if -(xplus+xminus-1)<(z-n//2)<(xplus+xminus-1):
             
         # Compute the proper time and time index
-        tau = round(DTS*math.sqrt((xplus+xminus-1)**2-(z-n//2)**2))
-        tauxy = l.get_index_n2xm(tau, xplus-xminus, y, n)
+        tau = math.sqrt((xplus+xminus-1)**2-(z-n//2)**2)
+        tauxy = l.get_index_n2xm(round(DTS*tau), xplus-xminus, y, n)
             
         # Compute the x and t links
         ux_latt = ux[tauxy]
@@ -160,17 +165,22 @@ def compute_vlc_kernel(yi, ux, aeta, n, DTS, xplus, xminus, vlc_dag):
     Apply the gauge transformation V_LC on the U_+ gauge link.
 """
 
-def act_vlc(up_temp, vlc_dag, vlcprev_dag, n, up_lc):
-    my_parallel_loop(act_vlc_kernel, n*n, up_temp, vlc_dag, vlcprev_dag, up_lc)  
+def act_vlc(up_temp, vlc_dag, vlcprev_dag, n, up_lc, xplus):
+    my_parallel_loop(act_vlc_kernel, n*n, up_temp, vlc_dag, vlcprev_dag, up_lc, xplus)  
 
 @myjit
-def act_vlc_kernel(yi, up_temp, vlc_dag, vlcprev_dag, up_lc):
+def act_vlc_kernel(yi, up_temp, vlc_dag, vlcprev_dag, up_lc, xplus):
     
-    aux = su.mul(up_temp[yi], vlc_dag[yi])
-    res_dag = su.mul(su.dagger(vlcprev_dag[yi]), aux)
-    res = su.dagger(res_dag)
+    # We intialize the jet at the third time step
+    if xplus <= -1:
+        su.store(up_lc[yi], su.unit())
+    
+    # We compute U_+^{LC}
+    else:
+        aux = su.mul(up_temp[yi], vlc_dag[yi])
+        res = su.mul(su.dagger(vlcprev_dag[yi]), aux)
 
-    su.store(up_lc[yi], res)
+        su.store(up_lc[yi], res)
     
 
 """
@@ -197,7 +207,7 @@ def reorder_kernel(yi, n, up_lc, up_lc_reorder):
     yz = l.get_point(yi, n)
     y, z = yz[0], yz[1]
     
-    if z < n/2:
+    if z < n//2:
         ind = l.get_index(y, z+n//2, n)
         aux = up_lc[ind]
                 
@@ -205,4 +215,4 @@ def reorder_kernel(yi, n, up_lc, up_lc_reorder):
         ind = l.get_index(y, z-n//2, n)
         aux = up_lc[ind]
     
-    su.store(up_lc_reorder[yi], aux)
+    su.store(up_lc_reorder[yi], su.dagger(aux))
