@@ -118,6 +118,15 @@ venv.bak/
 *.zip
 plots/
 results/
+files/
+*.jld
+*.jld2
+*.csv
 
 # VSCode
 .vscode
+
+# Plots
+*.png
+'Jets in Glasma Results'/up_temp
+'Jets in Glasma Results'/mid_rapidity
