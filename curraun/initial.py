@@ -1,10 +1,12 @@
-from curraun.numba_target import myjit, my_parallel_loop, use_cuda
+from curraun.numba_target import myjit, my_parallel_loop, use_cuda, mynonparjit
 import numpy as np
 import curraun.lattice as l
 import curraun.su as su
 from curraun.initial_su3 import init_kernel_2_su3_cuda, init_kernel_2_su3_numba
 from curraun.initial_su2 import init_kernel_2_su2_cuda, init_kernel_2_su2_numba
 from time import time
+
+from numba import prange
 
 DEBUG = False
 
@@ -79,7 +81,8 @@ def init(s, w1, w2):
 @myjit
 def init_kernel_1(xi, v1, v2, n, ua, ub):
     # temporary transverse gauge fields
-    for d in range(2):
+    # for d in range(2):
+    for d in prange(2):
         xs = l.shift(xi, d, 1, n)
         buffer1 = su.mul(v1[xi], su.dagger(v1[xs]))
         su.store(ua[xi, d], buffer1)
@@ -92,7 +95,8 @@ def init_kernel_2(xi, u0, u1, ua, ub):
     # initialize transverse gauge links (longitudinal magnetic field)
     # (see PhD thesis eq.(2.135))  # TODO: add proper link or reference
     # This only works for SU(2).
-    for d in range(2):
+    # for d in range(2):
+    for d in prange(2):
         b1 = su.load(ua[xi, d])
         b1 = su.add(b1, ub[xi, d])
         b2 = su.dagger(b1)
@@ -101,11 +105,14 @@ def init_kernel_2(xi, u0, u1, ua, ub):
         su.store(u0[xi, d], b3)
         su.store(u1[xi, d], b3)
 
-@myjit
+# @myjit
+@mynonparjit
 def init_kernel_3(xi, u0, peta1, n, ua, ub):
     # initialize pi field (longitudinal electric field)
     # (see PhD thesis eq.(2.136))  # TODO: add proper link or reference
     tmp_peta1 = su.zero()
+    # unsupported prange parrallelization with numba due to unsupported reduction functions
+    # numba cannot parallelize the loop in which tmp_peta1 at d=1 depends on tmp_peta1 at d=0
     for d in range(2):
         xs = l.shift(xi, d, -1, n)
 
@@ -133,7 +140,8 @@ def init_kernel_3(xi, u0, peta1, n, ua, ub):
 @myjit
 def init_kernel_4(xi, u0, pt1, n, dt):
     # pt corrections at tau = dt / 2
-    for d in range(2):
+    # for d in range(2):
+    for d in prange(2):
         # transverse electric field update
         b1 = l.plaquettes(xi, d, u0, n)
         b1 = l.add_mul(pt1[xi, d], b1, - dt ** 2 / 2.0)
@@ -142,7 +150,8 @@ def init_kernel_4(xi, u0, pt1, n, dt):
 @myjit
 def init_kernel_5(xi, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth):
     # coordinate update
-    for d in range(2):
+    # for d in range(2):
+    for d in prange(2):
         # transverse link variables update
         b0 = su.mul_s(pt1[xi, d], dt / dth)
         b1 = su.mexp(b0)
@@ -154,7 +163,8 @@ def init_kernel_5(xi, u0, u1, pt1, aeta0, aeta1, peta1, dt, dth):
     su.store(aeta1[xi], b1)
 
 
-@myjit
+# @myjit
+@mynonparjit
 def init_kernel_6(xi, u0, u1, peta1, n, en_EL, en_BL):
     # initial condition check (EL ~ BL?)
     b1 = l.plaq(u0, xi, 0, 1, 1, 1, n)

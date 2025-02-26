@@ -1,7 +1,8 @@
 """
     SU(2) group and algebra functions
 """
-from curraun.numba_target import myjit
+from curraun.numba_target import myjit, mynonparjit
+from numba import prange
 
 import os
 import math
@@ -32,7 +33,8 @@ elif su_precision == 'double':
 else:
     print("Unsupported precision: " + su_precision)
 
-@myjit
+# @myjit
+@mynonparjit
 def get_algebra_element(algebra_factors):
     r0 = GROUP_TYPE(0.)
     r1 = GROUP_TYPE(algebra_factors[0] * 0.5)
@@ -41,7 +43,8 @@ def get_algebra_element(algebra_factors):
     return r0, r1, r2, r3
 
 # su2 multiplication
-@myjit
+# @myjit
+@mynonparjit
 def mul(a, b): # TODO: rename to matmul (as in numpy)
     r0 = a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3]
     r1 = a[1] * b[0] + a[0] * b[1] + a[3] * b[2] - a[2] * b[3]
@@ -50,7 +53,8 @@ def mul(a, b): # TODO: rename to matmul (as in numpy)
     return r0, r1, r2, r3
 
 # exponential map
-@myjit
+# @myjit
+@mynonparjit
 def mexp(a):
     norm = GROUP_TYPE(math.sqrt(a[1] * a[1] + a[2] * a[2] + a[3] * a[3]))
 
@@ -68,7 +72,8 @@ def mexp(a):
     #     r[i] = a[i]
 
 # inverse
-@myjit
+# @myjit
+@mynonparjit
 def inv(a):
     norm2 = a[0] ** 2 + a[1] ** 2 + a[2] ** 2 + a[3] ** 2
     r0 = a[0] / norm2
@@ -78,12 +83,14 @@ def inv(a):
     return r0, r1, r2, r3
 
 # anti-hermitian part
-@myjit
+# @myjit
+@mynonparjit
 def ah(u):
     return GROUP_TYPE(0), u[1], u[2], u[3]
 
 # group add: g0 = g0 + f * g1
-@myjit
+# @myjit
+@mynonparjit
 def add(g0, g1):
     # Unfortunately, tuple creation from list comprehension does not work in numba:
     # see https://github.com/numba/numba/issues/2771
@@ -97,7 +104,8 @@ def add(g0, g1):
     return r0, r1, r2, r3
 
 # multiply by scalar
-@myjit
+# @myjit
+@mynonparjit
 def mul_s(g0, f):  # TODO: rename to mul
     # Unfortunately, tuple creation from list comprehension does not work in numba:
     # see https://github.com/numba/numba/issues/2771
@@ -111,7 +119,8 @@ def mul_s(g0, f):  # TODO: rename to mul
     return r0, r1, r2, r3
 
 # conjugate transpose
-@myjit
+# @myjit
+@mynonparjit
 def dagger(a):  # TODO: rename to 'H'? See Numpy https://docs.scipy.org/doc/numpy/reference/generated/numpy.matrix.H.html
     return a[0], -a[1], -a[2], -a[3]
 
@@ -120,17 +129,20 @@ def dagger(a):  # TODO: rename to 'H'? See Numpy https://docs.scipy.org/doc/nump
 """
 
 # get group element zero
-@myjit
+# @myjit
+@mynonparjit
 def zero():
     return GROUP_TYPE(0), GROUP_TYPE(0), GROUP_TYPE(0), GROUP_TYPE(0)
 
 # get group element unit
-@myjit
+# @myjit
+@mynonparjit
 def unit():
     return GROUP_TYPE(1), GROUP_TYPE(0), GROUP_TYPE(0), GROUP_TYPE(0)
 
 # group store: g0 <- g1
-@myjit
+# @myjit
+@mynonparjit
 def store(g_to, g_from):
     g_to[0] = g_from[0] # Type-safe version
     g_to[1] = g_from[1]
@@ -140,22 +152,26 @@ def store(g_to, g_from):
     #    g_to[i] = g_from[i]
 
 # return tuple (local memory)
-@myjit
+# @myjit
+@mynonparjit
 def load(g):
     return g[0], g[1], g[2], g[3]
 
 # trace
-@myjit
+# @myjit
+@mynonparjit
 def tr(a):
     return 2 * a[0]
 
 # trace of square - return real part
-@myjit
+# @myjit
+@mynonparjit
 def sq(a): # tr(mul(a,a)) - valid only for traceless matrices a.
     return 2 * (a[1] ** 2 + a[2] ** 2 + a[3] ** 2)
 
 # algebra dot product
-@myjit
+# @myjit
+@mynonparjit
 def dot(a, b): # TODO: remove
     return a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 
@@ -163,11 +179,13 @@ def dot(a, b): # TODO: remove
 @myjit
 def normalize(u):
     norm = GROUP_TYPE(0)
-    for i in range(4):
+    # for i in range(4):
+    for i in prange(4):
         norm += u[i] ** 2
 
     norm = math.sqrt(norm)
-    for i in range(4):
+    # for i in range(4):
+    for i in prange(4):
         u[i] = u[i] / norm
 
 @myjit

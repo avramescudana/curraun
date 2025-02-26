@@ -21,6 +21,7 @@ except ModuleNotFoundError:
 if target == 'cuda':
     from numba import cuda
     myjit = cuda.jit(device=True)
+    mynonparjit = cuda.jit(device=True)
     mycudajit = cuda.jit
     prange = range
     use_cuda = True
@@ -29,6 +30,7 @@ if target == 'cuda':
     print("Using CUDA")
 elif target == 'python':
     myjit = lambda a : a
+    mynonparjit = lambda a : a
     mycudajit = lambda a : a
     prange = range
     use_cuda = False
@@ -38,6 +40,7 @@ elif target == 'python':
 elif target == 'numba':
     import numba
     myjit = numba.jit(parallel=True, nogil=True, fastmath=True)
+    mynonparjit = numba.jit(nogil=True, fastmath=True)
     mycudajit = lambda a : a
     prange = numba.prange
     use_cuda = False
