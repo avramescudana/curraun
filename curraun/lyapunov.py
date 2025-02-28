@@ -3,6 +3,7 @@ import numpy as np
 import curraun.lattice as l
 import curraun.su as su
 import os
+random_np = np.random.RandomState()
 
 if use_cuda:
     import numba.cuda as cuda
@@ -45,4 +46,6 @@ class Lyapunov():
 @mynonparjit
 def change_el_kernel(xi, peta1, alpha):
     buf1 = su.mul_s(peta1[xi], 1.1)
+    # eta = random_np.normal(loc=0.0, scale=alpha, size=(su.GROUP_ELEMENTS))
+    # buf1 = su.add(peta1[xi], eta)
     peta1[xi] = buf1
