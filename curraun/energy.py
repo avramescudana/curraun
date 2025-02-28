@@ -25,6 +25,8 @@ class Energy():
     def __init__(self, s):
         self.s = s
 
+      #  s_prime = copy.deepcopy(s)            # POOJA: Copy s
+
         self.EL = np.zeros(shape=s.n ** 2, dtype=DTYPE)
         self.BL = np.zeros(shape=s.n ** 2, dtype=DTYPE)
         self.ET = np.zeros(shape=s.n ** 2, dtype=DTYPE)

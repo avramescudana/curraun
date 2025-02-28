@@ -1,6 +1,6 @@
 from curraun.numba_target import myjit, my_parallel_loop, use_cuda, mynonparjit
 import curraun.su as su
-import numpy as np
+import numpy as np                      # POOJA: np refers to the NumPy library, which is a popular numerical computing library in Python.
 from numpy.fft import rfft2, irfft2
 from numpy import newaxis as na
 import math
@@ -14,7 +14,9 @@ if use_cuda:
 else:
     use_cupy = False
 
-PI = np.pi
+PI = np.pi              # POOJA: np.pi is a constant provided by NumPy that represents the mathematical value of π (pi), approximately 3.141592653589793.
+                        # POOJA: PI is a user-defined variable that stores the value of np.pi.
+                        # POOJA: Use this statement to check the value of pi :  print(PI)
 
 from numba import prange
 

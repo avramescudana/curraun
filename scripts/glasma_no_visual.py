@@ -17,7 +17,7 @@ import os
 ########################################
 
 # environment
-os.environ["MY_NUMBA_TARGET"] = "cuda"
+os.environ["MY_NUMBA_TARGET"] = "numba"
 os.environ["GAUGE_GROUP"] = "su3"
 os.environ["PRECISION"] = "double"
 
