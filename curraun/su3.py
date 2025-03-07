@@ -455,12 +455,12 @@ def sq(a): # TODO: rename to tr_sq? or tr_abs_sq?
     :param a:
     :return:
     """
-    # return tr(mul(a, dagger(a))).real
+    return tr(mul(a, dagger(a))).real
 
-    s = GROUP_TYPE_REAL(0)
-    for i in range(9):
-        s += a[i].real * a[i].real + a[i].imag * a[i].imag
-    return s
+    # s = GROUP_TYPE_REAL(0)
+    # for i in range(9):
+    #     s += a[i].real * a[i].real + a[i].imag * a[i].imag
+    # return s
 
 # @myjit
 @mynonparjit
