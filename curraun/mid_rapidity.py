@@ -38,7 +38,7 @@ class PlusLink:
     # We copy the objects to the device
     def init(self):
         if use_cuda:
-            self.d_up = cuda.to_device(self.up)
+            self.copy_to_device()
         
     
     # We compute the plus links
