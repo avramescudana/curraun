@@ -99,16 +99,13 @@ def compute_ay_kernel(yi, u1, ay, xplus, n, a):
     xy = l.get_index(xplus, y, n)
     
     # Compute the corresponding U_x link
-    uy_latt = u1[xy, 1, :]
+    uy = u1[xy, 1, :]
     
-    # We take the logarithm
-    luy_latt = su.mlog(uy_latt)
+    # Take the logarithm
+    luy = su.mlog(uy)
     
     # We extract the field
-    ay_latt  = su.mul_s(luy_latt, -1j/a)
-    
-    # We take complex conjugation
-    res = su.dagger(ay_latt)
+    res  = su.mul_s(luy, 1j/a)
     
     su.store(ay[yi], res)
 
@@ -122,22 +119,24 @@ def compute_az(aeta1, az, n, xplus, a):
 @myjit
 def compute_az_kernel(yi, aeta1, az, xplus, n, a):
     
-    # We get the transverse indices
-    yz = l.get_point(yi, n)
-    y, z = yz[0], yz[1]
+    if xplus == 0:
+        return
     
-    # Construct the (x, y) index
-    xy = l.get_index(xplus, y, n)
+    else:
     
-    # Compute the corresponding A_eta field
-    aeta_latt = aeta1[xy, :]
+        # We get the transverse indices
+        yz = l.get_point(yi, n)
+        y, z = yz[0], yz[1]
     
-    # We get the Az field
-    az_latt  = su.mul_s(aeta_latt, -1j/(xplus*a))
+        # Construct the (x, y) index
+        xy = l.get_index(xplus, y, n)
     
-    # We take complex conjugation
-    res = su.dagger(az_latt)
+        # Compute the corresponding A_eta field
+        aeta_latt = aeta1[xy, :]
     
-    su.store(az[yi], res)
+        # We get the Az field
+        res  = su.mul_s(aeta_latt, 1j/(xplus*a))
+    
+        su.store(az[yi], res)
 
 
