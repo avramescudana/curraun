@@ -31,6 +31,10 @@ class Lyapunov():
         self.sprime = sprime
 
         n = self.s.n
+
+        #print("n = = self.s.n", n)
+
+
         self.tr_sq_el = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
         self.tr_sq_dif = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
         self.d_tr_sq_el = self.tr_sq_el
@@ -47,6 +51,7 @@ class Lyapunov():
 
         eta = random_np.normal(loc=0.0, scale=alpha, size=(n ** 2 * su.GROUP_ELEMENTS))
         eta = eta.reshape((n * n, su.GROUP_ELEMENTS))
+        #print("su.GROUP_ELEMENTS", su.GROUP_ELEMENTS)
 
 
         my_parallel_loop(change_el_kernel, n ** 2, peta1, eta)
