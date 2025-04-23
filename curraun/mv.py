@@ -40,6 +40,7 @@ def wilson(s, mu, m, uv, num_sheets, shape_func=None):
     # compute poisson kernel
     new_n = (n // 2 + 1) if n % 2 == 0 else (n + 1) // 2
     kernel = np.zeros((n, new_n), dtype=su.GROUP_TYPE_REAL)
+
     d_kernel = kernel
     if use_cupy:
         d_kernel = cupy.array(kernel)
@@ -140,7 +141,7 @@ def reset_wilsonfield(x, wilsonfield):
 
 @myjit
 def wilson_compute_poisson_kernel(x, mass, n, new_n, uv, kernel):
-    # for y in range(new_n):
+    # for y in range(new_n):                                                        # Commented Already, use this with @mynonparjit
     for y in prange(new_n):
         k2 = k2_latt(x, y, n)
         if (x > 0 or y > 0) and k2 <= uv ** 2:
