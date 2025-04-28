@@ -74,7 +74,10 @@ class Lyapunov():           # All classes have a function called __init__(), whi
         peta1 = self.sprime.d_peta1  
 
         n = self.sprime.n                                   # Gets the lattice size n from the perturbed config
-
+""""
+    #   field = random_np.normal(loc=0.0, scale=g ** 2 * mu / math.sqrt(num_sheets), size=(n ** 2 * su.ALGEBRA_ELEMENTS))           # In mv.py module
+    #   field = field.reshape((n * n, su.ALGEBRA_ELEMENTS))                                                                         # In mv.py module
+"""
         eta = random_np.normal(loc=0.0, scale=alpha, size=(n ** 2 * su.GROUP_ELEMENTS))        # Add Gaussian noise with parameter alpha   
         # This generates a random array eta with values drawn from a normal (Gaussian) distribution centered at 0.0, with standard deviation alpha.
         # The total number of elements is n² × N²
@@ -106,8 +109,10 @@ class Lyapunov():           # All classes have a function called __init__(), whi
 
 
         my_parallel_loop(compute_noise_kernel, n, m_noise, n, noise_n, noise_kernel)    # Just for reference: def compute_noise_kernel(x, mass, n, new_n, kernel): 
-        # my_parallel_loop(wilson_compute_poisson_kernel, n, m, n, new_n, uv, d_kernel)     # In mv.py module. Just for reference: def wilson_compute_poisson_kernel(x, mass, n, new_n, uv, kernel):
-
+ """ 
+        # In mv.py module.
+               # my_parallel_loop(wilson_compute_poisson_kernel, n, m, n, new_n, uv, d_kernel)     # In mv.py module. Just for reference: def wilson_compute_poisson_kernel(x, mass, n, new_n, uv, kernel):
+"""
 
 
 # Multiply the noise kernel with the Gaussian noise (eta) in Fourier space
@@ -178,6 +183,11 @@ def compute_change_el_kernel(xi, peta1s, peta1sprime, tr_sq_el, tr_sq_dif):
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # Add Fourier transform   23.04.2025
 
+
+
+
+
+
 #@mynonparjit                                                # Works            # @mynonparjit for SERIAL Computations  
 @myjit                                                                          # @myjit for PARALLEL Computations 
 def compute_noise_kernel(x, mass, n, new_n, kernel):                            # Just for reference: my_parallel_loop(compute_noise_kernel, n, m_noise, n, noise_n, noise_kernel)                                                                       
@@ -189,8 +199,8 @@ def compute_noise_kernel(x, mass, n, new_n, kernel):                            
         
         if (x > 0 or y > 0):                                                    # if (x > 0 or y > 0) and k2 <= uv ** 2:    # Used in mv.py module
             
-            kernel[x, y] = 1.0 / (k2 + mass ** 2)                               # np.exp(-k2/mass**2)
-                                                                                # kernel[x, y] = 1.0 / (k2 + mass ** 2)     # Used in mv.py module           
+            kernel[x, y] = mass ** 2 / (k2 + mass ** 2)                             # kernel[x, y] = np.exp(-k2/mass**2)
+                                                                                    # kernel[x, y] = 1.0 / (k2 + mass ** 2)     # Used in mv.py module           
 
 
 
@@ -198,7 +208,9 @@ def compute_noise_kernel(x, mass, n, new_n, kernel):                            
 @mynonparjit                                                                                # Works
 #@myjit                                                                                     # Gives warnings
 def k2_latt(x, y, nt):
-    result = 1.0  #       4.0 * (math.sin((PI * x) / nt) ** 2 + math.sin((PI * y) / nt) ** 2)
+    result = 4.0 * (math.sin((PI * x) / nt) ** 2 + math.sin((PI * y) / nt) ** 2)
     return result
+
+
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

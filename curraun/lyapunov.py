@@ -253,8 +253,8 @@ def compute_noise_kernel(x, mass, n, new_n, kernel):                            
         
         if (x > 0 or y > 0):                                                    # if (x > 0 or y > 0) and k2 <= uv ** 2:    # Used in mv.py module
             
-            kernel[x, y] = 1.0 / (k2 + mass ** 2)                               # np.exp(-k2/mass**2)
-                                                                                # kernel[x, y] = 1.0 / (k2 + mass ** 2)     # Used in mv.py module           
+            kernel[x, y] = mass ** 2 / (k2 + mass ** 2)                             # kernel[x, y] = np.exp(-k2/mass**2)
+                                                                                    # kernel[x, y] = 1.0 / (k2 + mass ** 2)     # Used in mv.py module           
 
 
 
@@ -262,7 +262,7 @@ def compute_noise_kernel(x, mass, n, new_n, kernel):                            
 @mynonparjit                                                                                # Works
 #@myjit                                                                                     # Gives warnings
 def k2_latt(x, y, nt):
-    result = 1.0  #       4.0 * (math.sin((PI * x) / nt) ** 2 + math.sin((PI * y) / nt) ** 2)
+    result = 4.0 * (math.sin((PI * x) / nt) ** 2 + math.sin((PI * y) / nt) ** 2)
     return result
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
