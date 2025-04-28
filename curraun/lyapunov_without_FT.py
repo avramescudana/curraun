@@ -49,7 +49,7 @@ class Lyapunov():           # All classes have a function called __init__(), whi
         # This pulls the attribute n from the object self.s, which was set in the constructor.
         # n = lattice size
 
-        print("n = = self.s.n", n)
+        #print("n = = self.s.n", n)
 
         self.tr_sq_el = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
         self.tr_sq_dif = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
