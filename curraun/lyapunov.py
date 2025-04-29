@@ -47,149 +47,172 @@ class Lyapunov():
         self.ratio_dif = 0.0
 
 
-    #def change_el(self, alpha):                                            # Commented 23.04.2025
     def change_el(self, alpha, m_noise):                                    # Added 23.04.2025
-
+        
+        
         peta1 = self.sprime.d_peta1
         n = self.sprime.n
 
+
+        """
+        print(" ++++++++++++++++ In function change_el ++++++++++++++++ ")                  
+        print("m_noise        =", m_noise)                  
+        print("alpha          =", alpha)
+
+        print("GROUP_TYPE =", su.GROUP_TYPE)
+        print("GROUP_TYPE_REAL =", su.GROUP_TYPE_REAL)       
+
+        print("\nsu_group, SU(N)              = ", su.su_group)                                                                                         
+        print("su.GROUP_ELEMENTS, N x N       = ", su.GROUP_ELEMENTS)
+        print("su.ALGEBRA_ELEMENTS, a = N² -1 = ", su.ALGEBRA_ELEMENTS)
+        print("\n")
+        """
+
         # Add Gaussian noise with parameter alpha
 
-    #   field = random_np.normal(loc=0.0, scale=g ** 2 * mu / math.sqrt(num_sheets), size=(n ** 2 * su.ALGEBRA_ELEMENTS))           # In mv.py module
-    #   field = field.reshape((n * n, su.ALGEBRA_ELEMENTS))                                                                         # In mv.py module
-
-
-        eta = random_np.normal(loc=0.0, scale=alpha, size=(n ** 2 * su.GROUP_ELEMENTS))     
-        #print("\neta shape before reshaping:", eta.shape)
+        eta = random_np.normal(loc=0.0, scale=alpha, size=(n ** 2 * su.GROUP_ELEMENTS))  
+        """"
+        print("\n\n\n     eta = random_np.normal(loc=0.0, scale=alpha, size=(n ** 2 * su.GROUP_ELEMENTS)) ")
+        print("\neta shape before reshaping:", eta.shape)
+        print("eta: \n", eta)
+        """
 
         eta = eta.reshape((n * n, su.GROUP_ELEMENTS))
-        #print("eta shape after reshaping:", eta.shape)
+        """       
+        print("\n\n     eta = eta.reshape((n * n, su.GROUP_ELEMENTS)) ")
+        print("\neta shape after reshaping:", eta.shape)
+        print("eta: \n", eta)
+        """
 
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # Add Fourier transform   23.04.2025
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! Add Fourier transform !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!   
+        """
+                PARAMETERS USED TO CHECK FAST FOURIER TRANSFORM (FFT):
 
-        noise_n = (n // 2 + 1) if n % 2 == 0 else (n + 1) // 2          # If n is even (n % 2 == 0): new_n = n // 2 + 1
-                                                                        # If n is odd (n % 2 NE 0):  new_n = (n + 1) // 2 
-                                                                        # // is not the regular division operator, but a floor division operator
-                                                                        # a // b : Divides a by b and returns the largest whole number less than or equal to the result.
+        Length of the simulation box, L    =  23.678158175122032 fm
+        Number of lattice points, N        =  4
+        Lattice spacing, delta_x           =  5.919539543780508 fm 
 
-        noise_kernel = np.zeros((n, noise_n), dtype = su.GROUP_TYPE_REAL)       # np.zeros : Creates a 2D NumPy array named noise_kernel with shape (n, noise_n).
-                                                                                # n rows: corresponding to one spatial dimension of the lattice.
-                                                                                # noise_n columns: which is typically half the number of frequencies + 1, due to how the real FFT works (rfft2).
-                                                                                # dtype: Specifies the data type for each element in the array.
+        taumax                       =  30.0
+        Maximum proper time, tau_max =  5.91978 fm/c or fm
 
-                                                                                # noise_kernel will be filled with values like: 1/(k^2+m^2), which act as a low-pass filter in momentum space to control the shape of the added noise. 
-                                                                                # It's based on lattice momentum k^2 and a mass parameter m.
-                                                                                # This kernel will be multiplied in Fourier space to modify the Gaussian noise spectrum before transforming it back to real space.
+        'DTS':  8,
+        """
 
 
+        noise_n = (n // 2 + 1) if n % 2 == 0 else (n + 1) // 2      
+        """       
+        print("\n\n     noise_n = (n // 2 + 1) if n % 2 == 0 else (n + 1) // 2  ")
+        print("\nn =", n)
+        print("new_n = noise_n =", noise_n)
+        """       
+  
+
+        noise_kernel = np.zeros((n, noise_n), dtype = su.GROUP_TYPE_REAL)      
+        """
+        print("\n\n     noise_kernel = np.zeros((n, noise_n), dtype = su.GROUP_TYPE_REAL)  ")
+        print("\nnoise_kernel shape after generating it with all zeroes:", noise_kernel.shape)
+        print("noise_kernel: \n", noise_kernel)
+        """
+        
         my_parallel_loop(compute_noise_kernel, n, m_noise, n, noise_n, noise_kernel)                                           # Just for reference: def compute_noise_kernel(x, mass, n, new_n, kernel): 
-        # my_parallel_loop(wilson_compute_poisson_kernel, n, m, n, new_n, uv, d_kernel)                                         # In mv.py module. Just for reference: def wilson_compute_poisson_kernel(x, mass, n, new_n, uv, kernel):
+        """
+        print("\n\n     my_parallel_loop(compute_noise_kernel, n, m_noise, n, noise_n, noise_kernel)  ")
+        print("\nnoise_kernel shape after my_parallel_loop(compute_noise_kernel):", noise_kernel.shape)
+        print("noise_kernel: \n", noise_kernel)
+        """
+
+        """
+        eta = eta.reshape((n, n, su.GROUP_ELEMENTS))
+        print("\n\n     eta = eta.reshape((n, n, su.GROUP_ELEMENTS)) ")
+        print("\neta shape (For FT):", eta.shape)
+        print("eta before FT: \n", eta)
 
 
-
-    #    print("GROUP_TYPE =", su.GROUP_TYPE)
-     #   print("GROUP_TYPE_REAL =", su.GROUP_TYPE_REAL)       
-
-     #   print("\nsu_group, SU(N)              = ", su.su_group)                                                                                         
-    #    print("su.GROUP_ELEMENTS, N x N       = ", su.GROUP_ELEMENTS)
-    #    print("su.ALGEBRA_ELEMENTS, a = N² -1 = ", su.ALGEBRA_ELEMENTS)
-
-     #   print("\nmnoise =", m_noise)
-     #   print("n =", n)
-     #   print("new_n = noise_n =", noise_n, "\n")
-
-
-        #def compute_noise_kernel(x, mass, n, new_n, kernel):
-
-        #eta = irfft2(
-         #     rfft2(eta.reshape((n, n, su.ALGEBRA_ELEMENTS)), s=(n, n), axes=(0, 1)) * noise_kernel[:, :, na],
-          #    s=(n, n), axes=(0, 1)).reshape((n ** 2, su.ALGEBRA_ELEMENTS))
-
-       # eta = eta.reshape((n, n, su.ALGEBRA_ELEMENTS))
-       # eta = rfft2(eta, s=(n, n), axes=(0, 1))
-        #eta = eta* 0        #noise_kernel[:, :, na]  # * 0
-      #  eta = irfft2(eta,  s=(n, n), axes=(0, 1)) 
-      #  eta = eta.reshape((n ** 2, su.ALGEBRA_ELEMENTS))
-
-
-
-
-
-        #print(type(eta))
-        #eta = np.ones((n*n, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        #print("eta", eta)
-        #print("eta", eta)
-
-        #eta = eta.reshape((n,n, su.GROUP_ELEMENTS))       #Remove this, just to check the shape of eta
-        #print("eta shape after reshaping:", eta.shape)
+        eta = rfft2(eta, s=(n, n), axes=(0, 1))                                                              # Performing Fourier Transform on eta for x and y axis
+        print("\n\n     eta = rfft2(eta, s=(n, n), axes=(0, 1)) ")
+        print("\neta shape after FT:", eta.shape)
+        print("eta after FT: \n", eta)
         
-        #for i in range(n):
-         #   for j in range(n):  
-         #       for k in range(su.GROUP_ELEMENTS):          
-         #           eta[i][j][k] = i+1+ j+1 
-         #       print("eta", i+1, j+1, k+1, "    ",   eta[i][j][k])
+        NK = noise_kernel[:, :, na]                                                                                                                 # noise_kernel[:, :, na]  # * 0
+        print("\n\n     NK = noise_kernel[:, :, na]  ")
+        print("\nnoise_kernel shape after reshaping (For FT), NK:", NK.shape)
+        print("NK: \n", NK)
 
-       # for i in range(n):
-        #    for j in range(n):  
-         #       for k in range(su.GROUP_ELEMENTS):          
-         #           print("eta", i+1, j+1, k+1, "    ",   eta[i][j][k])
+        print("\n\neta shape before multiplying with noise kernel :", eta.shape)
 
-        
-        #print(type(eta))
-        #eta = eta.reshape((n*n, su.GROUP_ELEMENTS))       #Remove this, just to check the shape of eta        
-        #print("\n eta shape after reshaping:", eta.shape)
-
-
-
-
-
- # fourier transform charge density
-            # apply poisson kernel
-            # fourier transform back
-        eta = irfft2(  rfft2(eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1)) * noise_kernel[:, :, na],  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))
-        #eta = irfft2(  rfft2(eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1)) ,  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))
+        eta = eta * NK  
+        print("\n\n     eta = eta * NK  ") 
+        print("\neta shape after multiplying with noise kernel, eta * NK  :", eta.shape)
+        print("eta: \n", eta)
+            
+        eta = irfft2( eta,  s=(n, n), axes=(0, 1) )  # Performing Inverse Fourier Transform on eta for x and y axis
+        print("\n\n     eta = irfft2( eta,  s=(n, n), axes=(0, 1) ) ")
+        print("\neta shape after Inverse FT:", eta.shape)
+        print("eta after Inverse FT: \n", eta)
        
+        eta = eta.reshape((n ** 2, su.GROUP_ELEMENTS))
+        print("\n\n     eta = eta.reshape((n ** 2, su.GROUP_ELEMENTS)) ")
+        print("\neta shape after reshaping:", eta.shape)
+        print("eta after reshaping: \n", eta)
+        """
+
+
+
+        """
+        print("\n\n\n\n ============== Checking FT using a single line now ==============")
         
-        #eta = irfft2(
-         #       rfft2(eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1)) * noise_kernel[:, :, na],
-           #     s=(n, n), axes=(0, 1)
-          # ).reshape((n ** 2, su.GROUP_ELEMENTS))
+        print("\neta shape:", eta.shape)
+        print("eta:\n", eta)
+        """
 
-
-        #print("\n\n\n AFTER FOURIER TRANSFORM \n\n\n")
-
-        #eta = eta.reshape((n,n, su.GROUP_ELEMENTS))       #Remove this, just to check the shape of eta
-        #print("eta shape after reshaping:", eta.shape)
+        eta = irfft2(  rfft2( eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1) ) * noise_kernel[:, :, na],  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))
+        #eta = irfft2(  rfft2(eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1)) ,  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))      # Eliminating the noise kernel for now
+       
+        """
+        print("\neta shape:", eta.shape)
+        print("eta:\n", eta)
+        """
+       
+       
+        """
+        Input:
         
-        #for i in range(n):
-         #   for j in range(n):  
-         #       print("eta", i+1, j+1, "    ",   eta[i][j][k])
+        M = 2
+        N = 3
+        eta = np.zeros((M,N), dtype = su.GROUP_TYPE_REAL)  
+        eta[1][2] = 100.0
+        print("\n\n\neta shape:", eta.shape)
+        print("eta:\n", eta)
 
-       # for i in range(n):
-        #    for j in range(n):  
-         #       for k in range(su.GROUP_ELEMENTS):          
-         #          print("check eta", i+1, j+1, k+1, "    ",   eta[i][j][k])       
-        
-        #print(type(eta))
-        #eta = eta.reshape((n*n, su.GROUP_ELEMENTS))       #Remove this, just to check the shape of eta        
-        #print("\n eta shape after reshaping:", eta.shape)
+        eta = rfft2( eta, s=(M,N), axes=(0, 1) )
+        print("\neta shape:", eta.shape)
+        print("eta:\n", eta)
+       
+        eta = irfft2( eta, s=(M,N), axes=(0, 1) )
+        print("\neta shape:", eta.shape)
+        print("eta:\n", eta)
+        quit()
+
+        Output:
+
+        eta shape: (2, 3)
+        eta:
+        [[  0.   0.   0.]
+        [  0.   0. 100.]]
+
+        eta shape: (2, 2)
+        eta:
+        [[ 100. +0.j          -50.+86.60254038j]
+        [-100. +0.j           50.-86.60254038j]]
+
+        eta shape: (2, 3)
+        eta:
+        [[  0.   0.   0.]
+        [  0.   0. 100.]]
+        """
 
 
-
-
-
-
-
-
-
-
-
-
-
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
 
@@ -231,35 +254,22 @@ def compute_change_el_kernel(xi, peta1s, peta1sprime, tr_sq_el, tr_sq_dif):
 
 
 
-# ************************** Copied from mv.py module **************************
-# ******************************************************************************
-#@myjit
-#def wilson_compute_poisson_kernel(x, mass, n, new_n, uv, kernel):          # Just for reference: my_parallel_loop(wilson_compute_poisson_kernel, n, m, n, new_n, uv, d_kernel)     # In mv.py module
-#    # for y in range(new_n):                                               # Commented Already, use this with @mynonparjit
-#   for y in prange(new_n):
-#       k2 = k2_latt(x, y, n)
-#       if (x > 0 or y > 0) and k2 <= uv ** 2:
-#           kernel[x, y] = 1.0 / (k2 + mass ** 2)
 
-
-#@mynonparjit                                                # Works            # @mynonparjit for SERIAL Computations  
-@myjit                                                                          # @myjit for PARALLEL Computations 
-def compute_noise_kernel(x, mass, n, new_n, kernel):                            # Just for reference: my_parallel_loop(compute_noise_kernel, n, m_noise, n, noise_n, noise_kernel)                                                                       
+#@mynonparjit                                                          
+@myjit                                                                         
+def compute_noise_kernel(x, mass, n, new_n, kernel):    # Just for reference: my_parallel_loop(compute_noise_kernel, n, m_noise, n, noise_n, noise_kernel)                                                                       
     
-    for y in prange(new_n):                                                      # Use range with mynonparjit
-                                                                                # The range() function returns a sequence of numbers, starting from 0 by default, and increments by 1 (by default), and ends at a given specified number.
-                                                                                # Use prange with myjit (p stands for PARALLEL)    # for y in prange(new_n): 
-        k2 = k2_latt(x, y, n)
-        
-        if (x > 0 or y > 0):                                                    # if (x > 0 or y > 0) and k2 <= uv ** 2:    # Used in mv.py module
+    for y in prange(new_n):                                                     
+        k2 = k2_latt(x, y, n)                                                  
+        if (x > 0 or y > 0):                                                   
             
             kernel[x, y] = mass ** 2 / (k2 + mass ** 2)                             # kernel[x, y] = np.exp(-k2/mass**2)
-                                                                                    # kernel[x, y] = 1.0 / (k2 + mass ** 2)     # Used in mv.py module           
+                                                                                             
+    #kernel[:,:] = 1.0                                  # Remove this later on, just to check Fourier Transform
+                                                        # Set all elements of the array kernel to 1.0. 
 
 
-
-
-@mynonparjit                                                                                # Works
+@mynonparjit                                                                                
 #@myjit                                                                                     # Gives warnings
 def k2_latt(x, y, nt):
     result = 4.0 * (math.sin((PI * x) / nt) ** 2 + math.sin((PI * y) / nt) ** 2)

@@ -115,6 +115,60 @@ class Lyapunov():           # All classes have a function called __init__(), whi
 """
 
 
+""""
+        # NK = noise_kernel[:, :, na]     
+                                                                                                                    # noise_kernel[:, :, na]  # * 0
+        print("\n\n     NK = noise_kernel[:, :, na]  ")
+        print("\nnoise_kernel shape after reshaping (For FT), NK:", NK.shape)
+        print("NK: \n", NK)
+
+
+
+        print("\n\neta shape before multiplying with noise kernel :", eta.shape)
+
+
+        # eta = eta * NK  
+
+        print("\n\n     eta = eta * NK  ") 
+        print("\neta shape after multiplying with noise kernel, eta * NK  :", eta.shape)
+        print("eta: \n", eta)
+        
+        # Comments for         eta = eta * NK 
+
+        eta = NK * eta  is same as  eta = eta * NK  
+        This operation multiplies each corresponding element of two arrays. 
+        It is not same as matrix multiplication, which would require the use of the dot product or matmul functions.
+        It requires the arrays to have the same shape, or shapes that can be broadcast to match.
+        In this case, eta is a 3D array (n, n, su.GROUP_ELEMENTS) and NK is a 3D array (n, n, 1).
+        The broadcasting rules will expand the shape of NK to match that of eta, allowing the element-wise multiplication to proceed.
+        The result is a new array where each element is the product of the corresponding elements in eta and NK.
+        
+"""
+
+
+
+
+
+        """ Comments for the Fast Fourier Transform (FFT) and Inverse FFT
+
+        The FFT and IFFT are used to transform the data from real space to Fourier space and back.
+        The FFT is a fast algorithm for computing the discrete Fourier transform (DFT) and its inverse.
+        The FFT is used to speed up the computation of the convolution of two functions.
+
+        We are using real FFTs (rfft2) and inverse (irfft2).
+        They operate only on real inputs/outputs. 
+        If eta or noise_kernel contain complex data, this would raise errors.
+
+        Make sure:
+        eta is real-valued before rfft2.
+        noise_kernel is real.
+        """
+
+
+
+
+
+
 # Multiply the noise kernel with the Gaussian noise (eta) in Fourier space
 # Apply fourier transform 
 # Fourier transform back
@@ -195,7 +249,9 @@ def compute_noise_kernel(x, mass, n, new_n, kernel):                            
     for y in prange(new_n):                                                      # Use range with mynonparjit
                                                                                 # The range() function returns a sequence of numbers, starting from 0 by default, and increments by 1 (by default), and ends at a given specified number.
                                                                                 # Use prange with myjit (p stands for PARALLEL)    # for y in prange(new_n): 
-        k2 = k2_latt(x, y, n)
+        k2 = k2_latt(x, y, n)                                                   # This is k² in lattice units 
+                                                                                # Evident from the dimesnional analysis of this line: result = 4.0 * (math.sin((PI * x) / nt) ** 2 + math.sin((PI * y) / nt) ** 2)
+        
         
         if (x > 0 or y > 0):                                                    # if (x > 0 or y > 0) and k2 <= uv ** 2:    # Used in mv.py module
             
