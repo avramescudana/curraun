@@ -102,7 +102,8 @@ def compute_noise_kernel(x, mass, n, new_n, kernel):    # Just for reference: my
         k2 = k2_latt(x, y, n)                                                  
         if (x > 0 or y > 0):                                                   
             
-            kernel[x, y] = mass ** 2 / (k2 + mass ** 2)                             # kernel[x, y] = np.exp(-k2/mass**2)
+            kernel[x, y] = mass ** 2 / (k2 + mass ** 2) 
+            #kernel[x, y] = np.exp(-k2/mass**2)
                                                                                              
     
 

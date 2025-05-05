@@ -141,9 +141,9 @@ if p['formtype'] == 'fixed':
 ####################################################
 
 # Run on specific GPU, comment this at the end #TODO: remove this
-os.environ["CUDA_VISIBLE_DEVICES"]="4"
+#"os.environ["CUDA_VISIBLE_DEVICES"]="4"
 
-os.environ["MY_NUMBA_TARGET"] = "cuda"
+os.environ["MY_NUMBA_TARGET"] = "numba"
 os.environ["PRECISION"] = "double"
 os.environ["GAUGE_GROUP"] = su_group
 
