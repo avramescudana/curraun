@@ -85,7 +85,7 @@ class JetFieldsCorrelators:
 
         return self.d_B
     
-    def compute_corr(self):
+    def compute_corr(self, tstart):
         t = self.s.t
         dt = self.s.dt
         n = self.n
@@ -93,14 +93,14 @@ class JetFieldsCorrelators:
 
         tint = round(t/dt)
     
-        if tint==1:
+        if tint==tstart:
             compute_E(self.s, self.d_Eform)
             compute_FformF(self.s, self.d_Eform, self.d_Eform, self.d_EformE)
 
             compute_B(self.s, self.d_Bform) 
             compute_FformF(self.s, self.d_Bform, self.d_Bform, self.d_BformB)
 
-        else:
+        elif tint>tstart:
             compute_E(self.s, self.d_E)
             compute_B(self.s, self.d_B)
 
