@@ -47,10 +47,10 @@ class GlasmaFields:
         
     
     # We compute the Glasma fields at the given time step
-    def compute_fields(self, xplus, a):
+    def compute_fields(self, xplus, ap):
         compute_up(self.s.d_u1, self.d_up, self.n, xplus)
-        compute_ay(self.s.d_u1, self.d_ay, self.n, xplus, a)
-        compute_az(self.s.d_aeta1, self.d_az, self.n, xplus, a)
+        compute_ay(self.s.d_u1, self.d_ay, self.n, xplus, ap)
+        compute_az(self.s.d_aeta1, self.d_az, self.n, xplus, ap)
         
         # We copy back the results to the host
         if use_cuda:
@@ -65,32 +65,36 @@ def compute_up(u1, up, n, xplus):
 
 @myjit
 def compute_up_kernel(yi, u1, up, xplus, n):
+
+    if xplus == 0:
+        su.store(up[yi], su.unit())
     
-    # We get the transverse indices
-    yz = l.get_point(yi, n)
-    y, z = yz[0], yz[1]
+    else:
+        # We get the transverse indices 
+        yz = l.get_point(yi, n)
+        y, z = yz[0], yz[1]
     
-    # Construct the (x, y) index
-    xy = l.get_index(xplus, y, n)
+        # Construct the (x, y) index
+        xy = l.get_index(xplus, y, n)
     
-    # Compute the corresponding U_x link
-    ux_latt = u1[xy, 0, :]
+        # Compute the corresponding U_x link
+        ux_latt = u1[xy, 0, :]
     
-    # We take complex conjugation
-    res = su.dagger(ux_latt)
+        # We take complex conjugation
+        res = su.dagger(ux_latt)
     
-    su.store(up[yi], res)
+        su.store(up[yi], res)
     
 
 """
     Computes the g*Ay fields along x^+ axis at every time step
 """
-def compute_ay(u1, ay, n, xplus, a):
-    my_parallel_loop(compute_ay_kernel, n**2, u1, ay, xplus, n, a)
+def compute_ay(u1, ay, n, xplus, ap):
+    my_parallel_loop(compute_ay_kernel, n**2, u1, ay, xplus, n, ap)
 
 @myjit
-def compute_ay_kernel(yi, u1, ay, xplus, n, a):
-    
+def compute_ay_kernel(yi, u1, ay, xplus, n, ap):
+        
     # We get the transverse indices
     yz = l.get_point(yi, n)
     y, z = yz[0], yz[1]
@@ -105,7 +109,7 @@ def compute_ay_kernel(yi, u1, ay, xplus, n, a):
     luy = su.mlog(uy)
     
     # We extract the field
-    res  = su.mul_s(luy, 1j/a)
+    res  = su.mul_s(luy, 1/(ap*1j))
     
     su.store(ay[yi], res)
 
@@ -113,11 +117,11 @@ def compute_ay_kernel(yi, u1, ay, xplus, n, a):
 """
     Computes the g*Az fields along x^+ axis at every time step
 """
-def compute_az(aeta1, az, n, xplus, a):
-    my_parallel_loop(compute_az_kernel, n**2, aeta1, az, xplus, n, a)
+def compute_az(aeta1, az, n, xplus, ap):
+    my_parallel_loop(compute_az_kernel, n**2, aeta1, az, xplus, n, ap)
 
 @myjit
-def compute_az_kernel(yi, aeta1, az, xplus, n, a):
+def compute_az_kernel(yi, aeta1, az, xplus, n, ap):
     
     if xplus == 0:
         return
@@ -135,7 +139,7 @@ def compute_az_kernel(yi, aeta1, az, xplus, n, a):
         aeta_latt = aeta1[xy, :]
     
         # We get the Az field
-        res  = su.mul_s(aeta_latt, 1j/(xplus*a))
+        res  = su.mul_s(aeta_latt, 1/(1j*xplus*ap))
     
         su.store(az[yi], res)
 
