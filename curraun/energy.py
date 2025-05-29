@@ -73,11 +73,12 @@ class Energy():
         dth = dt / 2.0
         t = self.s.t
 
+
         EL = self.d_EL
         BL = self.d_BL
         ET = self.d_ET
         BT = self.d_BT
-        
+
 
         n = self.s.n
 
