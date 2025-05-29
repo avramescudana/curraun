@@ -58,6 +58,7 @@ class Energy():
         self.d_BL.copy_to_host(self.BL)
         self.d_ET.copy_to_host(self.ET)
         self.d_BT.copy_to_host(self.BT)
+        
 
     def compute(self):
         # compute contributions in 2d
@@ -76,6 +77,7 @@ class Energy():
         BL = self.d_BL
         ET = self.d_ET
         BT = self.d_BT
+        
 
         n = self.s.n
 
