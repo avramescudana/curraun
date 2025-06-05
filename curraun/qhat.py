@@ -82,7 +82,7 @@ class TransportedForce:
             compute_f(self.s, self.d_f, round(self.s.t - 10E-8), stream)
 
             # apply parallel transport
-            apply_v(self.d_f, self.d_v, self.s.n, stream)
+            # apply_v(self.d_f, self.d_v, self.s.n, stream)
 
             # integrate f
             integrate_f(self.d_f, self.d_fi, self.s.n, 1.0, stream)
@@ -93,9 +93,9 @@ class TransportedForce:
             # calculate mean
             compute_mean(self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.d_p_perp_mean, stream)
 
-        if tint % self.dtstep == self.dtstep / 2:
-            # update v
-            update_v(self.s, self.d_v, round(self.s.t - 10E-8), stream)
+        # if tint % self.dtstep == self.dtstep / 2:
+        #     # update v
+        #     update_v(self.s, self.d_v, round(self.s.t - 10E-8), stream)
 
 
 

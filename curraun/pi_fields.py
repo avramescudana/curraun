@@ -65,25 +65,27 @@ def compute_up(u1, up, n, xplus):
 
 @myjit
 def compute_up_kernel(yi, u1, up, xplus, n):
+    
+    su.store(up[yi], su.unit())
 
-    if xplus == 0:
-        su.store(up[yi], su.unit())
+    # if xplus == 0:
+    #     su.store(up[yi], su.unit())
     
-    else:
-        # We get the transverse indices 
-        yz = l.get_point(yi, n)
-        y, z = yz[0], yz[1]
+    # else:
+    #     # We get the transverse indices 
+    #     yz = l.get_point(yi, n)
+    #     y, z = yz[0], yz[1]
     
-        # Construct the (x, y) index
-        xy = l.get_index(xplus, y, n)
+    #     # Construct the (x, y) index
+    #     xy = l.get_index(xplus, y, n)
     
-        # Compute the corresponding U_x link
-        ux_latt = u1[xy, 0, :]
+    #     # Compute the corresponding U_x link
+    #     ux_latt = u1[xy, 0, :]
     
-        # We take complex conjugation
-        res = su.dagger(ux_latt)
+    #     # We take complex conjugation
+    #     res = su.dagger(ux_latt)
     
-        su.store(up[yi], res)
+    #     su.store(up[yi], res)
     
 
 """
