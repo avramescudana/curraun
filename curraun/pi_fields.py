@@ -48,7 +48,7 @@ class GlasmaFields:
     
     # We compute the Glasma fields at the given time step
     def compute_fields(self, xplus, ap):
-        compute_up(self.s.d_u1, self.d_up, self.n, xplus)
+        compute_up(self.s.d_u1, self.s.d_aeta1, self.d_up, self.n, xplus)
         compute_ay(self.s.d_u1, self.d_ay, self.n, xplus, ap)
         compute_az(self.s.d_aeta1, self.d_az, self.n, xplus, ap)
         
@@ -60,32 +60,41 @@ class GlasmaFields:
 """ 
     Computes the Ux links along x^+ axis at every time step
 """
-def compute_up(u1, up, n, xplus):
-    my_parallel_loop(compute_up_kernel, n**2, u1, up, xplus, n)
+def compute_up(u1, aeta1, up, n, xplus):
+    my_parallel_loop(compute_up_kernel, n**2, u1, aeta1, up, xplus, n)
 
 @myjit
-def compute_up_kernel(yi, u1, up, xplus, n):
-    
-    su.store(up[yi], su.unit())
+def compute_up_kernel(yi, u1, aeta1, up, xplus, n):
 
-    # if xplus == 0:
-    #     su.store(up[yi], su.unit())
+    if xplus == 0:
+        su.store(up[yi], su.unit())
     
-    # else:
-    #     # We get the transverse indices 
-    #     yz = l.get_point(yi, n)
-    #     y, z = yz[0], yz[1]
+    else:
+        # We get the transverse indices 
+        yz = l.get_point(yi, n)
+        y, z = yz[0], yz[1]
+        
+        # Rearrange the indices
+        if z>= n/2:
+            z = z - n
     
-    #     # Construct the (x, y) index
-    #     xy = l.get_index(xplus, y, n)
+        # Construct the (x, y) index
+        xy = l.get_index(xplus, y, n)
     
-    #     # Compute the corresponding U_x link
-    #     ux_latt = u1[xy, 0, :]
+        # Compute the corresponding U_x link
+        ux_latt = u1[xy, 0, :]
+        ux = su.dagger(ux_latt)
+        
+        # We get the U_t link
+        aeta_latt = aeta1[xy, :]
+        at = su.mul_s(aeta_latt, -z**2/xplus**2)
+        ut = su.mexp(at)
     
-    #     # We take complex conjugation
-    #     res = su.dagger(ux_latt)
-    
-    #     su.store(up[yi], res)
+        # We take complex conjugation
+        res = su.mul(ut, ux)
+
+        # We store the result
+        su.store(up[yi], res)
     
 
 """
@@ -111,7 +120,7 @@ def compute_ay_kernel(yi, u1, ay, xplus, n, ap):
     luy = su.mlog(uy)
     
     # We extract the field
-    res  = su.mul_s(luy, 1/(ap*1j))
+    res  = su.mul_s(luy, -1/(ap*1j))
     
     su.store(ay[yi], res)
 
@@ -141,7 +150,7 @@ def compute_az_kernel(yi, aeta1, az, xplus, n, ap):
         aeta_latt = aeta1[xy, :]
     
         # We get the Az field
-        res  = su.mul_s(aeta_latt, 1/(1j*xplus*ap))
+        res  = su.mul_s(aeta_latt, -1j/(xplus*ap))
     
         su.store(az[yi], res)
 
