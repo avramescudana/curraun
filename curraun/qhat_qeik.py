@@ -199,17 +199,21 @@ def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau)
     # dxay = l.add_mul(aypx1_transp, aymx1_transp, -1.0)
     # dxay_dyax = l.add_mul(dyax, dxay, -1.0)
 
-    # Gauge-covariant forward derivative
-    xspx1 = l.shift(xs, 0, 1, n)
-    aypx1 = su.mlog(u0[xspx1, 1])
-    aypx1_transp = l.act(u0[xs, 1], aypx1)
+    # # Gauge-covariant forward derivative
+    # xspx1 = l.shift(xs, 0, 1, n)
+    # aypx1 = su.mlog(u0[xspx1, 1])
+    # aypx1_transp = l.act(u0[xs, 1], aypx1)
 
-    ayx = su.mlog(u0[xs, 1])
+    # ayx = su.mlog(u0[xs, 1])
 
-    dxay = l.add_mul(aypx1_transp, ayx, -1.0)
-    dxay_dyax = l.add_mul(dyax, dxay, +1.0)
+    # dxay = l.add_mul(aypx1_transp, ayx, -1.0)
+    # dxay_dyax = l.add_mul(dyax, dxay, +1.0)
 
-    su.store(f[xi, 1], dxay_dyax)
+    # su.store(f[xi, 1], dxay_dyax)
+
+    # f_1 = E_z = 1/\tau^2 A_\eta in canonical momentum
+    bf1 = su.mul_s(aeta0[xs],  1.0 / (tau * tau))
+    su.store(f[xi, 1],bf1)
 
     # f_2 = -B_z in classical simulation
     # quadratically accurate -Bz
