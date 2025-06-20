@@ -34,8 +34,10 @@ class TransportedForce:
 
         # gauge field components squared
         self.az_sq = np.zeros(self.n ** 2, dtype=np.double)
+        self.ay_sq = np.zeros(self.n ** 2, dtype=np.double)
 
         self.az_sq_mean = 0.0
+        self.ay_sq_mean = 0.0
 
         # mean values
         self.p_perp_mean = np.zeros(3, dtype=np.double)
@@ -56,6 +58,7 @@ class TransportedForce:
         self.d_p_perp_z = self.p_perp_z
         self.d_p_perp_mean = self.p_perp_mean
         self.d_az_sq = self.az_sq
+        self.d_ay_sq = self.ay_sq
 
     def copy_to_device(self):
         self.d_v = cuda.to_device(self.v)
@@ -66,6 +69,7 @@ class TransportedForce:
         self.d_p_perp_z = cuda.to_device(self.p_perp_z)
         self.d_p_perp_mean = cuda.to_device(self.p_perp_mean)
         self.d_az_sq = cuda.to_device(self.az_sq)
+        self.d_ay_sq = cuda.to_device(self.ay_sq)
 
     def copy_to_host(self):
         self.d_v.copy_to_host(self.v)
@@ -76,6 +80,7 @@ class TransportedForce:
         self.d_p_perp_z.copy_to_host(self.p_perp_z)
         self.d_p_perp_mean.copy_to_host(self.p_perp_mean)
         self.d_az_sq.copy_to_host(self.az_sq)
+        self.d_ay_sq.copy_to_host(self.ay_sq)
 
     def copy_mean_to_device(self, stream=None):
         self.d_p_perp_mean = cuda.to_device(self.p_perp_mean, stream)
@@ -102,9 +107,10 @@ class TransportedForce:
             compute_mean(self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.d_p_perp_mean, stream)
 
             # compute asq
-            compute_asq(self.s, self.d_az_sq, round(self.s.t - 10E-8), stream)
+            compute_asq(self.s, self.d_ay_sq, self.d_az_sq, round(self.s.t - 10E-8), stream)
 
             self.az_sq_mean = np.mean(self.d_az_sq)
+            self.ay_sq_mean = np.mean(self.d_ay_sq)
 
         if tint % self.dtstep == self.dtstep / 2:
             # update v
@@ -225,8 +231,8 @@ def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau)
     # su.store(f[xi, 1], dxay_dyax)
 
     # f_1 = E_z = 1/\tau^2 A_\eta in canonical momentum
-    bf1 = su.mul_s(aeta0[xs],  1.0 / (tau * tau))
-    su.store(f[xi, 1],bf1)
+    bf1 = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
+    su.store(f[xi, 1], bf1)
 
     # f_2 = -B_z in classical simulation
     # quadratically accurate -Bz
@@ -302,15 +308,22 @@ def transport_act(f, u, x, i, o):
         result = l.act(u2, f[x])
     return result
 
-def compute_asq(s, az_sq, t, stream):
+def compute_asq(s, ay_sq, az_sq, t, stream):
+    u0 = s.d_u0
     aeta0 = s.d_aeta0
     n = s.n
 
-    my_parallel_loop(compute_asq_kernel, n * n, aeta0, az_sq, t, n, stream=stream)
+    my_parallel_loop(compute_asq_kernel, n * n, u0, aeta0, ay_sq, az_sq, t, n, stream=stream)
 
 @myjit
-def compute_asq_kernel(xi, aeta0, az_sq, t, n):
+def compute_asq_kernel(xi, u0, aeta0, ay_sq, az_sq, t, n):
     xs = l.shift(xi, 0, t, n)
+
+    # A_y^2
+    # ay = su.mul_s(su.mlog(u0[xi, 1]), 1j)
+    ay = su.mlog(u0[xs, 1])
+    # ay = su.mlog(u0[xi, 0])
+    ay_sq[xi] = su.sq(ay)
    
     # A_z^2
     az = su.mul_s(aeta0[xs], 1.0 / t)
