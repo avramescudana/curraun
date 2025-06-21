@@ -113,7 +113,7 @@ class JetFieldsCorrelators:
         
         if use_cuda:
             self.copy_to_host()
-    
+
         return self.d_EformE, self.d_BformB
 
     # def compute_elcorr(self):
