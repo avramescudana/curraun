@@ -32,12 +32,26 @@ class TransportedForce:
         self.p_perp_y = np.zeros(self.n ** 2, dtype=np.double)
         self.p_perp_z = np.zeros(self.n ** 2, dtype=np.double)
 
+        self.p_perp_A_x = np.zeros(self.n ** 2, dtype=np.double)
+        self.p_perp_A_y = np.zeros(self.n ** 2, dtype=np.double)
+        self.p_perp_A_z = np.zeros(self.n ** 2, dtype=np.double)
+
+        # gauge field components squared
+        self.az_sq = np.zeros(self.n ** 2, dtype=np.double)
+        self.ay_sq = np.zeros(self.n ** 2, dtype=np.double)
+
+        self.az_sq_mean = 0.0
+        self.ay_sq_mean = 0.0
+
         # mean values
         self.p_perp_mean = np.zeros(3, dtype=np.double)
+        self.p_perp_A_mean = np.zeros(2, dtype=np.double)
         if use_cuda:
             # use pinned memory for asynchronous data transfer
             self.p_perp_mean = cuda.pinned_array(3, dtype=np.double)
             self.p_perp_mean[0:3] = 0.0
+            self.p_perp_A_mean = cuda.pinned_array(3, dtype=np.double)
+            self.p_perp_A_mean[0:3] = 0.0
 
         # time counter
         self.t = 0
@@ -50,6 +64,13 @@ class TransportedForce:
         self.d_p_perp_y = self.p_perp_y
         self.d_p_perp_z = self.p_perp_z
         self.d_p_perp_mean = self.p_perp_mean
+        self.d_az_sq = self.az_sq
+        self.d_ay_sq = self.ay_sq
+
+        self.d_p_perp_A_x = self.p_perp_A_x
+        self.d_p_perp_A_y = self.p_perp_A_y
+        self.d_p_perp_A_z = self.p_perp_A_z
+        self.d_p_perp_A_mean = self.p_perp_A_mean
 
     def copy_to_device(self):
         self.d_v = cuda.to_device(self.v)
@@ -59,6 +80,13 @@ class TransportedForce:
         self.d_p_perp_y = cuda.to_device(self.p_perp_y)
         self.d_p_perp_z = cuda.to_device(self.p_perp_z)
         self.d_p_perp_mean = cuda.to_device(self.p_perp_mean)
+        self.d_az_sq = cuda.to_device(self.az_sq)
+        self.d_ay_sq = cuda.to_device(self.ay_sq)
+
+        self.d_p_perp_A_x = cuda.to_device(self.p_perp_A_x)
+        self.d_p_perp_A_y = cuda.to_device(self.p_perp_A_y)
+        self.d_p_perp_A_z = cuda.to_device(self.p_perp_A_z)
+        self.d_p_perp_A_mean = cuda.to_device(self.p_perp_A_mean)
 
     def copy_to_host(self):
         self.d_v.copy_to_host(self.v)
@@ -68,12 +96,21 @@ class TransportedForce:
         self.d_p_perp_y.copy_to_host(self.p_perp_y)
         self.d_p_perp_z.copy_to_host(self.p_perp_z)
         self.d_p_perp_mean.copy_to_host(self.p_perp_mean)
+        self.d_az_sq.copy_to_host(self.az_sq)
+        self.d_ay_sq.copy_to_host(self.ay_sq)
+        
+        self.d_p_perp_A_x.copy_to_host(self.p_perp_A_x)
+        self.d_p_perp_A_y.copy_to_host(self.p_perp_A_y)
+        self.d_p_perp_A_z.copy_to_host(self.p_perp_A_z)
+        self.d_p_perp_A_mean.copy_to_host(self.p_perp_A_mean)
 
     def copy_mean_to_device(self, stream=None):
         self.d_p_perp_mean = cuda.to_device(self.p_perp_mean, stream)
+        self.d_p_perp_A_mean = cuda.to_device(self.p_perp_A_mean, stream)
 
     def copy_mean_to_host(self, stream=None):
         self.d_p_perp_mean.copy_to_host(self.p_perp_mean, stream)
+        self.d_p_perp_A_mean.copy_to_host(self.p_perp_A_mean, stream)
 
     def compute(self,stream=None):
         tint = round(self.s.t / self.s.dt)
@@ -92,6 +129,18 @@ class TransportedForce:
 
             # calculate mean
             compute_mean(self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.d_p_perp_mean, stream)
+
+            # integrate perpendicular momentum
+            compute_p_perp_A(self.s, self.d_fi, self.d_p_perp_A_y, self.d_p_perp_A_z, self.s.n, stream)
+
+            # calculate mean
+            compute_mean(self.d_p_perp_A_x, self.d_p_perp_A_y, self.d_p_perp_A_z, self.d_p_perp_A_mean, stream)
+
+            # compute asq
+            compute_asq(self.s, self.d_ay_sq, self.d_az_sq, round(self.s.t - 10E-8), stream)
+
+            self.az_sq_mean = np.mean(self.d_az_sq)
+            self.ay_sq_mean = np.mean(self.d_ay_sq)
 
         if tint % self.dtstep == self.dtstep / 2:
             # update v
@@ -212,8 +261,8 @@ def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau)
     # su.store(f[xi, 1], dxay_dyax)
 
     # f_1 = E_z = 1/\tau^2 A_\eta in canonical momentum
-    bf1 = su.mul_s(aeta0[xs],  1.0 / (tau * tau))
-    su.store(f[xi, 1],bf1)
+    bf1 = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
+    su.store(f[xi, 1], bf1)
 
     # f_2 = -B_z in classical simulation
     # quadratically accurate -Bz
@@ -275,6 +324,26 @@ def integrate_f(f, fi, n, dt, stream):
 def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream):
     kappa.compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream)
 
+def compute_p_perp_A(s, fi, p_perp_A_y, p_perp_A_z, n, stream):
+    u0 = s.d_u0
+    aeta0 = s.d_aeta0
+    n = s.n
+    t = s.t
+
+    my_parallel_loop(compute_p_perp_A_kernel, n * n, u0, aeta0, t, fi, p_perp_A_y, p_perp_A_z, n, stream=stream)
+
+@myjit
+def compute_p_perp_A_kernel(xi, u0, aeta0, t, fi, p_perp_A_y, p_perp_A_z, n):
+    # A_y
+    ay = su.mlog(u0[xi, 1])
+    
+    # A_z
+    az = su.mul_s(aeta0[xi], 1.0 / t)
+    
+    #p_perp[xi] = 0
+    p_perp_A_y[xi] = su.tr(su.mul(fi[xi, 1], su.dagger(ay))).real
+    p_perp_A_z[xi] = su.tr(su.mul(fi[xi, 2], su.dagger(az))).real
+
 
 def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream):
     kappa.compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream)
@@ -288,3 +357,25 @@ def transport_act(f, u, x, i, o):
         u2 = su.dagger(u[x, i])  # tuple
         result = l.act(u2, f[x])
     return result
+
+def compute_asq(s, ay_sq, az_sq, t, stream):
+    u0 = s.d_u0
+    aeta0 = s.d_aeta0
+    n = s.n
+
+    my_parallel_loop(compute_asq_kernel, n * n, u0, aeta0, ay_sq, az_sq, t, n, stream=stream)
+
+@myjit
+def compute_asq_kernel(xi, u0, aeta0, ay_sq, az_sq, t, n):
+    xs = l.shift(xi, 0, t, n)
+
+    # A_y^2
+    # ay = su.mul_s(su.mlog(u0[xi, 1]), 1j)
+    ay = su.mlog(u0[xs, 1])
+    # ay = su.mlog(u0[xi, 0])
+    ay_sq[xi] = su.sq(ay)
+   
+    # A_z^2
+    az = su.mul_s(aeta0[xs], 1.0 / t)
+    # az = su.mul_s(aeta0[xi], 1.0 / t)
+    az_sq[xi] = su.sq(az)
