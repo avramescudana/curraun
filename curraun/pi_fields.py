@@ -120,7 +120,7 @@ def compute_ay_kernel(yi, u1, ay, xplus, n, ap):
     luy = su.mlog(uy)
     
     # We extract the field
-    res  = su.mul_s(luy, -1/(ap*1j))
+    res  = su.mul_s(luy, 1/(ap*1j))
     
     su.store(ay[yi], res)
 
@@ -150,7 +150,7 @@ def compute_az_kernel(yi, aeta1, az, xplus, n, ap):
         aeta_latt = aeta1[xy, :]
     
         # We get the Az field
-        res  = su.mul_s(aeta_latt, -1j/(xplus*ap))
+        res  = su.mul_s(aeta_latt, 1j/(xplus*ap))
     
         su.store(az[yi], res)
 
