@@ -271,6 +271,9 @@ class KineticCanonicCheck:
         self.v = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         my_parallel_loop(reset_wilsonfield, self.n ** 2, self.v)
 
+        # gauge field
+        self.a = np.zeros((self.n ** 2, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+
         # transported force
         self.fp = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.fpi = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
@@ -317,6 +320,7 @@ class KineticCanonicCheck:
         self.t = 0
 
         # Memory on the CUDA device:
+        self.d_a = self.a
         self.d_v = self.v
         self.d_fp = self.fp
         self.d_fpi = self.fpi
@@ -339,6 +343,7 @@ class KineticCanonicCheck:
 
 
     def copy_to_device(self):
+        self.d_a = cuda.to_device(self.a)
         self.d_v = cuda.to_device(self.v)
         self.d_fp = cuda.to_device(self.fp)
         self.d_fpi = cuda.to_device(self.fpi)
@@ -360,6 +365,7 @@ class KineticCanonicCheck:
         self.d_deltapdeltaa_mean = cuda.to_device(self.deltapdeltaa_mean)
         
     def copy_to_host(self):
+        self.d_a.copy_to_host(self.a)
         self.d_v.copy_to_host(self.v)
         self.d_fp.copy_to_host(self.fp)
         self.d_fpi.copy_to_host(self.fpi)
@@ -387,10 +393,13 @@ class KineticCanonicCheck:
             compute_ai(self.s, self.d_a0, round(self.s.t - 10E-8), stream)
 
         if tint % self.dtstep == 0 and tint >= tstart:
+            # compute gauge field
+            compute_a(self.s, self.d_a)
+
             # compute un-transported f
             compute_ftilde(self.s, self.d_fp, round(self.s.t - 10E-8), stream)
             compute_f(self.s, self.d_fpi, round(self.s.t - 10E-8), stream)
-            compute_fa(self.s, self.d_fa, round(self.s.t - 10E-8), stream)
+            compute_fa(self.s, self.d_fa, self.d_a, round(self.s.t - 10E-8), stream)
 
             # apply parallel transport
             apply_v(self.d_fp, self.d_v, self.s.n, stream)
@@ -428,6 +437,21 @@ class KineticCanonicCheck:
 @myjit
 def reset_wilsonfield(x, wilsonfield):
     su.store(wilsonfield[x], su.unit())
+
+def compute_a(s, a):
+    u0 = s.d_u0
+
+    n = s.n
+
+    my_parallel_loop(compute_a_kernel, n * n, u0, a)
+
+@myjit
+def compute_a_kernel(xi, u0, a):
+    ax = su.mlog(u0[xi, 0])
+    ay = su.mlog(u0[xi, 1])
+   
+    su.store(a[xi, 0], ax)
+    su.store(a[xi, 1], ay)
 
 
 """
@@ -720,7 +744,7 @@ def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t,
 
     # su.store(f[xi, 2], bf1)
 
-def compute_fa(s, f, t, stream):
+def compute_fa(s, f, a, t, stream):
     u0 = s.d_u0
     u1 = s.d_u1
     pt1 = s.d_pt1
@@ -732,14 +756,15 @@ def compute_fa(s, f, t, stream):
     n = s.n
     tau = s.t 
 
-    my_parallel_loop(compute_ftilde_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
+    my_parallel_loop(compute_fa_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau, stream=stream)
 
 @myjit
-def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, tau):
+def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau):
 
     xs = l.shift(xi, 0, t, n)
 
     # P^y / tau = Ey
+    bf1 = su.zero()
     xs2 = l.shift(xs, 1, -1, n)
     bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / tau)
     bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / tau)
@@ -751,9 +776,9 @@ def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, tau):
 
 
     # D_x A_y 
-    ay = su.mlog(u0[xs, 1])
-    b1 = l.transport(ay, u0, xs, 0, +1, n)
-    b2 = l.transport(ay, u0, xs, 0, -1, n)
+    bf2 = su.zero()
+    b1 = l.transport(a[:, 1], u0, xs, 0, +1, n)
+    b2 = l.transport(a[:, 1], u0, xs, 0, -1, n)
     b1 = l.add_mul(b1, b2, -1.0)
     dxay = l.add_mul(bf2, b1, 0.5)
 

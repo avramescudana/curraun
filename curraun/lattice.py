@@ -123,6 +123,7 @@ def transport(f, u, x, i, o, n):
         result = act(u2, f[xs])
     return result
 
+
 """
     Handy grid functions (optimized for square grids)
 """
