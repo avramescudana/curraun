@@ -261,6 +261,169 @@ class TransportedForce:
             update_v(self.s, self.d_v, round(self.s.t - 10E-8), stream)
 
 
+class KineticCanonicCheck:
+    def __init__(self, s):
+        self.s = s
+        self.n = s.n
+        self.dtstep = round(1.0 / s.dt)
+
+        # light-like wilson lines
+        self.v = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        my_parallel_loop(reset_wilsonfield, self.n ** 2, self.v)
+
+        # transported force
+        self.fp = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.fpi = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.fa = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+
+        # integrated force
+        self.intfp = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.intfpi = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.intfa = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+
+        # initial gauge field
+        self.a0 = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+
+        # paralel transported gauge field - initial gage field
+        self.deltaa = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+
+        self.deltapsq = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.deltapisq = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.deltaasq = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.deltapdeltaa = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.deltaasq_transp = np.zeros((self.n ** 2, 3), dtype=np.double)
+
+        # mean values
+        self.deltapsq_mean = np.zeros(3, dtype=np.double)
+        self.deltapisq_mean = np.zeros(3, dtype=np.double)
+        self.deltaasq_mean = np.zeros(3, dtype=np.double)
+        self.deltapdeltaa_mean = np.zeros(3, dtype=np.double)
+        self.deltaasq_transp_mean = np.zeros(3, dtype=np.double)
+
+        if use_cuda:
+            # use pinned memory for asynchronous data transfer
+            self.deltapsq_mean = cuda.pinned_array(3, dtype=np.double)
+            self.deltapsq_mean[0:3] = 0.0
+            self.deltapisq_mean = cuda.pinned_array(3, dtype=np.double)
+            self.deltapisq_mean[0:3] = 0.0
+            self.deltaasq_mean = cuda.pinned_array(3, dtype=np.double)
+            self.deltaasq_mean[0:3] = 0.0
+            self.deltapdeltaa_mean = cuda.pinned_array(3, dtype=np.double)
+            self.deltapdeltaa_mean[0:3] = 0.0
+            self.deltaasq_transp_mean = cuda.pinned_array(3, dtype=np.double)
+            self.deltaasq_transp_mean[0:3] = 0.0
+
+        # time counter
+        self.t = 0
+
+        # Memory on the CUDA device:
+        self.d_v = self.v
+        self.d_fp = self.fp
+        self.d_fpi = self.fpi
+        self.d_fa = self.fa
+        self.d_intfp = self.intfp
+        self.d_intfpi = self.intfpi
+        self.d_intfa = self.intfa
+        self.d_a0 = self.a0
+        self.d_deltaa = self.deltaa
+        self.d_deltapsq = self.deltapsq
+        self.d_deltapisq = self.deltapisq
+        self.d_deltaasq = self.deltaasq
+        self.d_deltaasq_transp = self.deltaasq_transp
+        self.d_deltapdeltaa = self.deltapdeltaa
+        self.d_deltapsq_mean = self.deltapsq_mean
+        self.d_deltapisq_mean = self.deltapisq_mean
+        self.d_deltaasq_mean = self.deltaasq_mean
+        self.d_deltaasq_transp_mean = self.deltaasq_transp_mean
+        self.d_deltapdeltaa_mean = self.deltapdeltaa_mean
+
+
+    def copy_to_device(self):
+        self.d_v = cuda.to_device(self.v)
+        self.d_fp = cuda.to_device(self.fp)
+        self.d_fpi = cuda.to_device(self.fpi)
+        self.d_fa = cuda.to_device(self.fa)
+        self.d_intfp = cuda.to_device(self.intfp)
+        self.d_intfpi = cuda.to_device(self.intfpi)
+        self.d_intfa = cuda.to_device(self.intfa)
+        self.d_a0 = cuda.to_device(self.a0)
+        self.d_deltaa = cuda.to_device(self.deltaa)
+        self.d_deltapsq = cuda.to_device(self.deltapsq)
+        self.d_deltapisq = cuda.to_device(self.deltapisq)
+        self.d_deltaasq = cuda.to_device(self.deltaasq)
+        self.d_deltaasq_transp = cuda.to_device(self.deltaasq_transp)
+        self.d_deltapdeltaa = cuda.to_device(self.deltapdeltaa)
+        self.d_deltapsq_mean = cuda.to_device(self.deltapsq_mean)
+        self.d_deltapisq_mean = cuda.to_device(self.deltapisq_mean)
+        self.d_deltaasq_mean = cuda.to_device(self.deltaasq_mean)
+        self.d_deltaasq_transp_mean = cuda.to_device(self.deltaasq_transp_mean)
+        self.d_deltapdeltaa_mean = cuda.to_device(self.deltapdeltaa_mean)
+        
+    def copy_to_host(self):
+        self.d_v.copy_to_host(self.v)
+        self.d_fp.copy_to_host(self.fp)
+        self.d_fpi.copy_to_host(self.fpi)
+        self.d_fa.copy_to_host(self.fa)
+        self.d_intfp.copy_to_host(self.intfp)
+        self.d_intfpi.copy_to_host(self.intfpi)
+        self.d_intfa.copy_to_host(self.intfa)
+        self.d_a0.copy_to_host(self.a0)
+        self.d_deltaa.copy_to_host(self.deltaa)
+        self.d_deltapsq.copy_to_host(self.deltapsq)
+        self.d_deltapisq.copy_to_host(self.deltapisq)
+        self.d_deltaasq.copy_to_host(self.deltaasq)
+        self.d_deltaasq_transp.copy_to_host(self.deltaasq_transp)
+        self.d_deltapdeltaa.copy_to_host(self.deltapdeltaa)
+        self.d_deltapsq_mean.copy_to_host(self.deltapsq_mean)
+        self.d_deltapisq_mean.copy_to_host(self.deltapisq_mean)
+        self.d_deltaasq_mean.copy_to_host(self.deltaasq_mean)
+        self.d_deltaasq_transp_mean.copy_to_host(self.deltaasq_transp_mean)
+        self.d_deltapdeltaa_mean.copy_to_host(self.deltapdeltaa_mean)
+
+    def compute(self,stream=None):
+        tint = round(self.s.t / self.s.dt)
+        tstart = round(1 / self.s.dt)
+        if tint == tstart:
+            compute_ai(self.s, self.d_a0, round(self.s.t - 10E-8), stream)
+
+        if tint % self.dtstep == 0 and tint >= tstart:
+            # compute un-transported f
+            compute_ftilde(self.s, self.d_fp, round(self.s.t - 10E-8), stream)
+            compute_f(self.s, self.d_fpi, round(self.s.t - 10E-8), stream)
+            compute_fa(self.s, self.d_fa, round(self.s.t - 10E-8), stream)
+
+            # apply parallel transport
+            apply_v(self.d_fp, self.d_v, self.s.n, stream)
+            apply_v(self.d_fpi, self.d_v, self.s.n, stream)
+            apply_v(self.d_fa, self.d_v, self.s.n, stream)
+
+            # integrate f
+            integrate_f(self.d_fp, self.d_intfp, self.s.n, 1.0, stream)
+            integrate_f(self.d_fpi, self.d_intfpi, self.s.n, 1.0, stream)
+            integrate_f(self.d_fa, self.d_intfa, self.s.n, 1.0, stream)
+
+            # integrate perpendicular momentum
+            compute_p_perp(self.d_intfp, self.d_deltapsq[:, 0], self.d_deltapsq[:, 1], self.d_deltapsq[:, 2], self.s.n, stream)
+            compute_p_perp(self.d_intfpi, self.d_deltapisq[:, 0], self.d_deltapisq[:, 1], self.d_deltapisq[:, 2], self.s.n, stream)
+            compute_p_perp(self.d_intfa, self.d_deltaasq[:, 0], self.d_deltaasq[:, 1], self.d_deltaasq[:, 2], self.s.n, stream)
+            compute_p_perp_A(self.d_intfp, self.d_deltaa, self.d_deltapdeltaa, self.s.n, stream)
+
+            # calculate mean
+            compute_mean(self.d_deltapsq[:, 0], self.d_deltapsq[:, 1], self.d_deltapsq[:, 2], self.d_deltapsq_mean, stream)
+            compute_mean(self.d_deltapisq[:, 0], self.d_deltapisq[:, 1], self.d_deltapisq[:, 2], self.d_deltapisq_mean, stream)
+            compute_mean(self.d_deltaasq[:, 0], self.d_deltaasq[:, 1], self.d_deltaasq[:, 2], self.d_deltaasq_mean, stream)
+            compute_mean(self.d_deltapdeltaa[:, 0], self.d_deltapdeltaa[:, 1], self.d_deltapdeltaa[:, 2], self.d_deltapdeltaa_mean, stream)
+
+
+            # compute asq
+            compute_asq(self.d_deltaa, self.d_deltaasq_transp, self.s.n, stream)
+            compute_mean(self.d_deltaasq_transp[:, 0], self.d_deltaasq_transp[:, 1], self.d_deltaasq_transp[:, 2], self.d_deltaasq_transp_mean, stream)
+
+        if tint % self.dtstep == self.dtstep / 2:
+            # update v
+            update_v(self.s, self.d_v, round(self.s.t - 10E-8), stream)
+
+
 
 @myjit
 def reset_wilsonfield(x, wilsonfield):
@@ -375,10 +538,7 @@ def compute_f(s, f, t, stream):
     peta0 = s.d_peta0
 
     n = s.n
-    dt = s.dt
-    dth = s.dt / 2.0
-    tau = s.t # TODO: use tau_inverse = 1/s.t to avoid division in kernel? (measurable effect?)
-    sign = +1.0 # TODO: can this constant be removed?
+    tau = s.t 
 
     my_parallel_loop(compute_f_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
 
@@ -463,10 +623,7 @@ def compute_ftilde(s, f, t, stream):
     peta0 = s.d_peta0
 
     n = s.n
-    dt = s.dt
-    dth = s.dt / 2.0
-    tau = s.t # TODO: use tau_inverse = 1/s.t to avoid division in kernel? (measurable effect?)
-    sign = +1.0 # TODO: can this constant be removed?
+    tau = s.t 
 
     my_parallel_loop(compute_ftilde_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
 
@@ -508,7 +665,8 @@ def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t,
     # axy = su.mlog(u0[xs, 0])
     # dyax = l.add_mul(axpy1, axy, -1.0)
 
-    su.store(f[xi, 0], dyax)
+    # su.store(f[xi, 0], dyax)
+    su.store(f[xi, 1], dyax)
 
     # f_2 = \partial_y A_x - D_x A_y in quantum eikonal approximation
     # Gauge-covariant symmetric derivative
@@ -538,29 +696,86 @@ def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t,
     # f_1 = E_z = 1/\tau^2 A_\eta in canonical momentum
     bf1 = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
     # bf1 = su.mul_s(aeta0[xs],  - 1j / (tau * tau))
-    su.store(f[xi, 1], bf1)
+    # su.store(f[xi, 1], bf1)
+    su.store(f[xi, 2], bf1)
 
     # f_2 = -B_z in classical simulation
     # quadratically accurate -Bz
-    bf1 = su.zero()
-    b1 = l.plaq(u0, xs, 0, 1, 1, 1, n)
-    b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, +0.25)
+    # bf1 = su.zero()
+    # b1 = l.plaq(u0, xs, 0, 1, 1, 1, n)
+    # b2 = su.ah(b1)
+    # bf1 = l.add_mul(bf1, b2, +0.25)
 
-    b1 = l.plaq(u0, xs, 0, 1, 1, -1, n)
-    b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, -0.25)
+    # b1 = l.plaq(u0, xs, 0, 1, 1, -1, n)
+    # b2 = su.ah(b1)
+    # bf1 = l.add_mul(bf1, b2, -0.25)
 
-    b1 = l.plaq(u0, xs, 1, 0, 1, -1, n)
-    b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, +0.25)
+    # b1 = l.plaq(u0, xs, 1, 0, 1, -1, n)
+    # b2 = su.ah(b1)
+    # bf1 = l.add_mul(bf1, b2, +0.25)
 
-    b1 = l.plaq(u0, xs, 1, 0, -1, -1, n)
-    b2 = su.ah(b1)
-    bf1 = l.add_mul(bf1, b2, -0.25)
+    # b1 = l.plaq(u0, xs, 1, 0, -1, -1, n)
+    # b2 = su.ah(b1)
+    # bf1 = l.add_mul(bf1, b2, -0.25)
 
-    su.store(f[xi, 2], bf1)
+    # su.store(f[xi, 2], bf1)
 
+def compute_fa(s, f, t, stream):
+    u0 = s.d_u0
+    u1 = s.d_u1
+    pt1 = s.d_pt1
+    aeta0 = s.d_aeta0
+    peta1 = s.d_peta1
+    pt0 = s.d_pt0
+    peta0 = s.d_peta0
+
+    n = s.n
+    tau = s.t 
+
+    my_parallel_loop(compute_ftilde_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
+
+@myjit
+def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, tau):
+
+    xs = l.shift(xi, 0, t, n)
+
+    # P^y / tau = Ey
+    xs2 = l.shift(xs, 1, -1, n)
+    bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / tau)
+    bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / tau)
+    xs3 = l.shift(xs, 1, -1, n)
+    b1 = l.act(su.dagger(u0[xs3, 1]), pt1[xs2, 1])
+    bf1 = l.add_mul(bf1, b1, 0.25 / tau)
+    b1 = l.act(su.dagger(u0[xs3, 1]), pt0[xs2, 1])
+    py = l.add_mul(bf1, b1, 0.25 / tau)
+
+
+    # D_x A_y 
+    ay = su.mlog(u0[xs, 1])
+    b1 = l.transport(ay, u0, xs, 0, +1, n)
+    b2 = l.transport(ay, u0, xs, 0, -1, n)
+    b1 = l.add_mul(b1, b2, -1.0)
+    dxay = l.add_mul(bf2, b1, 0.5)
+
+    fy = su.add(py, dxay)
+    su.store(f[xi, 1], fy)
+
+    # - A_eta / tau^2
+    aetatau = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
+
+    # P^eta = E_z
+    bf2 = su.zero()
+    bf2 = l.add_mul(bf2, peta1[xs], 0.5)
+    peta = l.add_mul(bf2, peta0[xs], 0.5)
+
+    # D_x A_eta / tau
+    b1 = l.transport(aeta0, u0, xs, 0, +1, n)
+    b2 = l.transport(aeta0, u0, xs, 0, -1, n)
+    b1 = l.add_mul(b1, b2, -1.0)
+    dxaetatau = l.add_mul(bf2, b1, 0.5 / tau)
+
+    fz = su.add(su.add(peta, dxaetatau), aetatau)
+    su.store(f[xi, 2], fz)
 
 
 """
