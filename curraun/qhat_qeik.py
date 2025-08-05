@@ -394,7 +394,10 @@ class KineticCanonicCheck:
 
         if tint % self.dtstep == 0 and tint >= tstart:
             # compute gauge field
-            compute_a(self.s, self.d_a)
+            # compute_a(self.s, self.d_a)
+            # compute_ai(self.s, self.d_a, round(self.s.t - 10E-8), stream)
+
+            compute_delta_ai(self.s, self.d_v, self.d_a0, round(self.s.t - 10E-8), self.d_deltaa, stream)
 
             # compute un-transported f
             compute_ftilde(self.s, self.d_fp, round(self.s.t - 10E-8), stream)
@@ -411,7 +414,7 @@ class KineticCanonicCheck:
             integrate_f(self.d_fpi, self.d_intfpi, self.s.n, 1.0, stream)
             integrate_f(self.d_fa, self.d_intfa, self.s.n, 1.0, stream)
 
-            # integrate perpendicular momentum
+            # integrate perpendicular momeoverntum
             compute_p_perp(self.d_intfp, self.d_deltapsq[:, 0], self.d_deltapsq[:, 1], self.d_deltapsq[:, 2], self.s.n, stream)
             compute_p_perp(self.d_intfpi, self.d_deltapisq[:, 0], self.d_deltapisq[:, 1], self.d_deltapisq[:, 2], self.s.n, stream)
             compute_p_perp(self.d_intfa, self.d_deltaasq[:, 0], self.d_deltaasq[:, 1], self.d_deltaasq[:, 2], self.s.n, stream)
@@ -438,20 +441,27 @@ class KineticCanonicCheck:
 def reset_wilsonfield(x, wilsonfield):
     su.store(wilsonfield[x], su.unit())
 
-def compute_a(s, a):
-    u0 = s.d_u0
+# def compute_a(s, a):
+# def compute_a(s, a, t, stream=None):
+#     u0 = s.d_u0
 
-    n = s.n
+#     n = s.n
+#     # t = s.t
 
-    my_parallel_loop(compute_a_kernel, n * n, u0, a)
+#     my_parallel_loop(compute_a_kernel, n * n, u0, a, t, n)
 
-@myjit
-def compute_a_kernel(xi, u0, a):
-    ax = su.mlog(u0[xi, 0])
-    ay = su.mlog(u0[xi, 1])
+# @myjit
+# def compute_a_kernel(xi, u0, a, t, n):
+#     xs = l.shift(xi, 0, t, n) 
+
+#     ax = su.mlog(u0[xs, 0])
+#     ay = su.mlog(u0[xs, 1])
+
+#     # ax = su.mlog(u0[xi, 0])
+#     # ay = su.mlog(u0[xi, 1])
    
-    su.store(a[xi, 0], ax)
-    su.store(a[xi, 1], ay)
+#     su.store(a[xi, 0], ax)
+#     su.store(a[xi, 1], ay)
 
 
 """
@@ -496,13 +506,15 @@ def compute_ai(s, ai, t, stream):
 
     n = s.n
 
-    my_parallel_loop(compute_ai_kernel, n * n, u0, aeta0, t, ai, stream=stream)
+    my_parallel_loop(compute_ai_kernel, n * n, u0, aeta0, t, n, ai, stream=stream)
 
 @myjit
-def compute_ai_kernel(xi, u0, aeta0, t, ai):
-    ax = su.mlog(u0[xi, 0])
-    ay = su.mlog(u0[xi, 1])
-    az = su.mul_s(aeta0[xi], 1.0 / t)
+def compute_ai_kernel(xi, u0, aeta0, t, n, ai):
+    xs = l.shift(xi, 0, t, n)  
+
+    ax = su.mlog(u0[xs, 0])
+    ay = su.mlog(u0[xs, 1])
+    az = su.mul_s(aeta0[xs], 1.0 / t)
     # ax = su.mul_s(su.mlog(u0[xi, 0]), 1j)
     # ay = su.mul_s(su.mlog(u0[xi, 1]), 1j)
     # az = su.mul_s(aeta0[xi], 1j / t)
@@ -530,18 +542,18 @@ def compute_delta_ai_kernel(xi, v, u0, aeta0, t, ai, delta_ai, n):
     # ay = su.mul_s(su.mlog(u0[xs, 1]), 1j)
     # az = su.mul_s(aeta0[xs], 1j / t)
 
-    # axtransp = su.ah(l.act(v[xs], ax))
-    axtransp = l.act(v[xs], ax)
+    axtransp = su.ah(l.act(v[xs], ax))
+    # axtransp = l.act(v[xs], ax)
     bufx = l.add_mul(axtransp, ai[xi, 0], -1)
     su.store(delta_ai[xi, 0], bufx)
 
-    # aytransp = su.ah(l.act(v[xs], ay))
-    aytransp = l.act(v[xs], ay)
+    aytransp = su.ah(l.act(v[xs], ay))
+    # aytransp = l.act(v[xs], ay)
     bufy = l.add_mul(aytransp, ai[xi, 1], -1)
     su.store(delta_ai[xi, 1], bufy)
 
-    # aztransp = su.ah(l.act(v[xs], az))
-    aztransp = l.act(v[xs], az)
+    aztransp = su.ah(l.act(v[xs], az))
+    # aztransp = l.act(v[xs], az)
     bufz = l.add_mul(aztransp, ai[xi, 2], -1)
     su.store(delta_ai[xi, 2], bufz)
 
