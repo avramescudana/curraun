@@ -294,6 +294,7 @@ class KineticCanonicCheck:
         self.deltapisq = np.zeros((self.n ** 2, 3), dtype=np.double)
         self.deltaasq = np.zeros((self.n ** 2, 3), dtype=np.double)
         self.deltapdeltaa = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.deltapdeltaa_transp = np.zeros((self.n ** 2, 3), dtype=np.double)
         self.deltaasq_transp = np.zeros((self.n ** 2, 3), dtype=np.double)
 
         # mean values
@@ -301,6 +302,7 @@ class KineticCanonicCheck:
         self.deltapisq_mean = np.zeros(3, dtype=np.double)
         self.deltaasq_mean = np.zeros(3, dtype=np.double)
         self.deltapdeltaa_mean = np.zeros(3, dtype=np.double)
+        self.deltapdeltaa_transp_mean = np.zeros(3, dtype=np.double)
         self.deltaasq_transp_mean = np.zeros(3, dtype=np.double)
 
         if use_cuda:
@@ -313,6 +315,8 @@ class KineticCanonicCheck:
             self.deltaasq_mean[0:3] = 0.0
             self.deltapdeltaa_mean = cuda.pinned_array(3, dtype=np.double)
             self.deltapdeltaa_mean[0:3] = 0.0
+            self.deltapdeltaa_transp_mean = cuda.pinned_array(3, dtype=np.double)
+            self.deltapdeltaa_transp_mean[0:3] = 0.0
             self.deltaasq_transp_mean = cuda.pinned_array(3, dtype=np.double)
             self.deltaasq_transp_mean[0:3] = 0.0
 
@@ -335,11 +339,13 @@ class KineticCanonicCheck:
         self.d_deltaasq = self.deltaasq
         self.d_deltaasq_transp = self.deltaasq_transp
         self.d_deltapdeltaa = self.deltapdeltaa
+        self.d_deltapdeltaa_transp = self.deltapdeltaa_transp
         self.d_deltapsq_mean = self.deltapsq_mean
         self.d_deltapisq_mean = self.deltapisq_mean
         self.d_deltaasq_mean = self.deltaasq_mean
         self.d_deltaasq_transp_mean = self.deltaasq_transp_mean
         self.d_deltapdeltaa_mean = self.deltapdeltaa_mean
+        self.d_deltapdeltaa_transp_mean = self.deltapdeltaa_transp_mean
 
 
     def copy_to_device(self):
@@ -358,11 +364,13 @@ class KineticCanonicCheck:
         self.d_deltaasq = cuda.to_device(self.deltaasq)
         self.d_deltaasq_transp = cuda.to_device(self.deltaasq_transp)
         self.d_deltapdeltaa = cuda.to_device(self.deltapdeltaa)
+        self.d_deltapdeltaa_transp = cuda.to_device(self.deltapdeltaa_transp)
         self.d_deltapsq_mean = cuda.to_device(self.deltapsq_mean)
         self.d_deltapisq_mean = cuda.to_device(self.deltapisq_mean)
         self.d_deltaasq_mean = cuda.to_device(self.deltaasq_mean)
         self.d_deltaasq_transp_mean = cuda.to_device(self.deltaasq_transp_mean)
         self.d_deltapdeltaa_mean = cuda.to_device(self.deltapdeltaa_mean)
+        self.d_deltapdeltaa_transp_mean = cuda.to_device(self.deltapdeltaa_transp_mean)
         
     def copy_to_host(self):
         self.d_a.copy_to_host(self.a)
@@ -380,11 +388,13 @@ class KineticCanonicCheck:
         self.d_deltaasq.copy_to_host(self.deltaasq)
         self.d_deltaasq_transp.copy_to_host(self.deltaasq_transp)
         self.d_deltapdeltaa.copy_to_host(self.deltapdeltaa)
+        self.d_deltapdeltaa_transp.copy_to_host(self.deltapdeltaa_transp)
         self.d_deltapsq_mean.copy_to_host(self.deltapsq_mean)
         self.d_deltapisq_mean.copy_to_host(self.deltapisq_mean)
         self.d_deltaasq_mean.copy_to_host(self.deltaasq_mean)
         self.d_deltaasq_transp_mean.copy_to_host(self.deltaasq_transp_mean)
         self.d_deltapdeltaa_mean.copy_to_host(self.deltapdeltaa_mean)
+        self.d_deltapdeltaa_transp_mean.copy_to_host(self.deltapdeltaa_transp_mean)
 
     def compute(self,stream=None):
         tint = round(self.s.t / self.s.dt)
@@ -418,13 +428,15 @@ class KineticCanonicCheck:
             compute_p_perp(self.d_intfp, self.d_deltapsq[:, 0], self.d_deltapsq[:, 1], self.d_deltapsq[:, 2], self.s.n, stream)
             compute_p_perp(self.d_intfpi, self.d_deltapisq[:, 0], self.d_deltapisq[:, 1], self.d_deltapisq[:, 2], self.s.n, stream)
             compute_p_perp(self.d_intfa, self.d_deltaasq[:, 0], self.d_deltaasq[:, 1], self.d_deltaasq[:, 2], self.s.n, stream)
-            compute_p_perp_A(self.d_intfp, self.d_deltaa, self.d_deltapdeltaa, self.s.n, stream)
+            compute_p_perp_A(self.d_intfp, self.d_deltaa, self.d_deltapdeltaa_transp, self.s.n, stream)
+            compute_p_perp_A(self.d_intfp, self.d_intfa, self.d_deltapdeltaa, self.s.n, stream)
 
             # calculate mean
             compute_mean(self.d_deltapsq[:, 0], self.d_deltapsq[:, 1], self.d_deltapsq[:, 2], self.d_deltapsq_mean, stream)
             compute_mean(self.d_deltapisq[:, 0], self.d_deltapisq[:, 1], self.d_deltapisq[:, 2], self.d_deltapisq_mean, stream)
             compute_mean(self.d_deltaasq[:, 0], self.d_deltaasq[:, 1], self.d_deltaasq[:, 2], self.d_deltaasq_mean, stream)
             compute_mean(self.d_deltapdeltaa[:, 0], self.d_deltapdeltaa[:, 1], self.d_deltapdeltaa[:, 2], self.d_deltapdeltaa_mean, stream)
+            compute_mean(self.d_deltapdeltaa_transp[:, 0], self.d_deltapdeltaa_transp[:, 1], self.d_deltapdeltaa_transp[:, 2], self.d_deltapdeltaa_transp_mean, stream)
 
 
             # compute asq
@@ -683,13 +695,13 @@ def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t,
 
     # Naive symmetric partial derivative
     xspy1 = l.shift(xs, 1, 1, n)
-    # axpy1 = su.mlog(u0[xspy1, 0])
-    axpy1 = su.mul_s(su.mlog(u0[xspy1, 0]), 1j)
+    axpy1 = su.mlog(u0[xspy1, 0])
+    # axpy1 = su.mul_s(su.mlog(u0[xspy1, 0]), 1j)
 
 
     xsmx1 = l.shift(xs, 1, -1, n)
-    # axmy1 = su.mlog(u0[xsmx1, 0])
-    axmy1 = su.mul_s(su.mlog(u0[xsmx1, 0]), 1j)
+    axmy1 = su.mlog(u0[xsmx1, 0])
+    # axmy1 = su.mul_s(su.mlog(u0[xsmx1, 0]), 1j)
 
     dif = l.add_mul(axpy1, axmy1, -1.0)
     dyax = su.mul_s(dif, 0.5)
