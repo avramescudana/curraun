@@ -12,10 +12,11 @@ if use_cuda:
 
 
 class TransportedForce:
-    def __init__(self, s):
+    def __init__(self, s, E0):
         self.s = s
         self.n = s.n
         self.dtstep = round(1.0 / s.dt)
+        self.E0 = E0
 
         # light-like wilson lines
         self.v = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
@@ -26,11 +27,18 @@ class TransportedForce:
 
         # integrated force
         self.fi = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        
+        # physical squared integrated force
+        self.fi2 = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # single components
         self.p_perp_x = np.zeros(self.n ** 2, dtype=np.double)
         self.p_perp_y = np.zeros(self.n ** 2, dtype=np.double)
         self.p_perp_z = np.zeros(self.n ** 2, dtype=np.double)
+        
+        # create the unitary gauge links
+        self.up = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        my_parallel_loop(reset_wilsonfield, self.n ** 2, self.up)
 
         # mean values
         self.p_perp_mean = np.zeros(3, dtype=np.double)
@@ -50,6 +58,8 @@ class TransportedForce:
         self.d_p_perp_y = self.p_perp_y
         self.d_p_perp_z = self.p_perp_z
         self.d_p_perp_mean = self.p_perp_mean
+        self.d_up = self.up
+        self.d_fi2 = self.fi2
 
     def copy_to_device(self):
         self.d_v = cuda.to_device(self.v)
@@ -59,6 +69,8 @@ class TransportedForce:
         self.d_p_perp_y = cuda.to_device(self.p_perp_y)
         self.d_p_perp_z = cuda.to_device(self.p_perp_z)
         self.d_p_perp_mean = cuda.to_device(self.p_perp_mean)
+        self.d_up = cuda.to_device(self.up)
+        self.d_fi2 = cuda.to_device(self.fi2)
 
     def copy_to_host(self):
         self.d_v.copy_to_host(self.v)
@@ -68,9 +80,19 @@ class TransportedForce:
         self.d_p_perp_y.copy_to_host(self.p_perp_y)
         self.d_p_perp_z.copy_to_host(self.p_perp_z)
         self.d_p_perp_mean.copy_to_host(self.p_perp_mean)
+        self.d_up.copy_to_host(self.up)
+        self.d_fi2.copy_to_host(self.fi2)
+        
+    def copy_Lorentz_to_host(self, stream=None):
+        self.d_fi2.copy_to_host(self.fi2, stream)
+        self.d_up.copy_to_host(self.up, stream)
+        
+        # copy mean values
+        self.d_p_perp_mean.copy_to_host(self.p_perp_mean, stream)
 
     def copy_mean_to_device(self, stream=None):
         self.d_p_perp_mean = cuda.to_device(self.p_perp_mean, stream)
+    
 
     def copy_mean_to_host(self, stream=None):
         self.d_p_perp_mean.copy_to_host(self.p_perp_mean, stream)
@@ -92,6 +114,10 @@ class TransportedForce:
 
             # calculate mean
             compute_mean(self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.d_p_perp_mean, stream)
+            
+            # square Lorentz force
+            square_fi(self.d_fi, self.d_fi2, self.n, self.E0)
+            
 
         if tint % self.dtstep == self.dtstep / 2:
             # update v
@@ -147,8 +173,7 @@ def compute_f(s, f, t, stream):
     tau = s.t # TODO: use tau_inverse = 1/s.t to avoid division in kernel? (measurable effect?)
     sign = +1.0 # TODO: can this constant be removed?
 
-    my_parallel_loop(compute_f_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau,
-                     stream=stream)
+    my_parallel_loop(compute_f_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
 
 @myjit
 def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
@@ -261,3 +286,18 @@ def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream):
 
 def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream):
     kappa.compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream)
+
+
+""" 
+Squares the Lorentz force and gives its value in GeV
+"""
+
+def square_fi(fi, fi2, n, E0):
+    my_parallel_loop(square_fi_kernel, n * n, fi, fi2, E0)
+
+@myjit
+def square_fi_kernel(xi, fi, fi2, E0):
+    for d in range(3):
+        b1 = su.mul(fi[xi, d], fi[xi, d])
+        b2 = su.mul_s(b1, -E0**2)
+        su.store(fi2[xi, d], b2)
