@@ -453,29 +453,6 @@ class KineticCanonicCheck:
 def reset_wilsonfield(x, wilsonfield):
     su.store(wilsonfield[x], su.unit())
 
-# def compute_a(s, a):
-# def compute_a(s, a, t, stream=None):
-#     u0 = s.d_u0
-
-#     n = s.n
-#     # t = s.t
-
-#     my_parallel_loop(compute_a_kernel, n * n, u0, a, t, n)
-
-# @myjit
-# def compute_a_kernel(xi, u0, a, t, n):
-#     xs = l.shift(xi, 0, t, n) 
-
-#     ax = su.mlog(u0[xs, 0])
-#     ay = su.mlog(u0[xs, 1])
-
-#     # ax = su.mlog(u0[xi, 0])
-#     # ay = su.mlog(u0[xi, 1])
-   
-#     su.store(a[xi, 0], ax)
-#     su.store(a[xi, 1], ay)
-
-
 """
     "Update" the light-like Wilson line.
     Adds a single link to the Wilson line.
@@ -504,12 +481,9 @@ def compute_delta(fi, ftildei, delta_ai, deltapi, deltap, deltaA, n, stream):
 def compute_delta_kernel(xi, fi, ftildei, delta_ai, deltapi, deltap, deltaA):
     t1 = su.mul_s(s1, 0.5)
     for i in range(3):
-        # deltapi[xi, i] = su.tr(su.mul(fi[xi, i], t1)).real
-        # deltap[xi, i] = su.tr(su.mul(ftildei[xi, i], t1)).real
-        # deltaA[xi, i] = su.tr(su.mul(delta_ai[xi, i], t1)).real
-        deltapi[xi, i] = su.tr(su.mul(fi[xi, i], t1)).imag
-        deltap[xi, i] = su.tr(su.mul(ftildei[xi, i], t1)).imag
-        deltaA[xi, i] = su.tr(su.mul(delta_ai[xi, i], t1)).imag
+        deltapi[xi, i] = su.tr(su.mul(fi[xi, i], t1)).real
+        deltap[xi, i] = su.tr(su.mul(ftildei[xi, i], t1)).real
+        deltaA[xi, i] = su.tr(su.mul(delta_ai[xi, i], t1)).real
 
 
 def compute_ai(s, ai, t, stream):
@@ -527,9 +501,6 @@ def compute_ai_kernel(xi, u0, aeta0, t, n, ai):
     ax = su.mlog(u0[xs, 0])
     ay = su.mlog(u0[xs, 1])
     az = su.mul_s(aeta0[xs], 1.0 / t)
-    # ax = su.mul_s(su.mlog(u0[xi, 0]), 1j)
-    # ay = su.mul_s(su.mlog(u0[xi, 1]), 1j)
-    # az = su.mul_s(aeta0[xi], 1j / t)
 
     su.store(ai[xi, 0], ax)
     su.store(ai[xi, 1], ay)
@@ -550,9 +521,6 @@ def compute_delta_ai_kernel(xi, v, u0, aeta0, t, ai, delta_ai, n):
     ax = su.mlog(u0[xs, 0])
     ay = su.mlog(u0[xs, 1])
     az = su.mul_s(aeta0[xs], 1.0 / t)
-    # ax = su.mul_s(su.mlog(u0[xs, 0]), 1j)
-    # ay = su.mul_s(su.mlog(u0[xs, 1]), 1j)
-    # az = su.mul_s(aeta0[xs], 1j / t)
 
     axtransp = su.ah(l.act(v[xs], ax))
     # axtransp = l.act(v[xs], ax)
@@ -594,7 +562,6 @@ def compute_f(s, f, t, stream):
 def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
 
     # f_1 = E_1 (index 0)
-
     xs = l.shift(xi, 0, t, n)
 
     bf0 = su.zero()
@@ -611,7 +578,6 @@ def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau)
     su.store(f[xi, 0], bf0)
 
     # f_2 = E_2 - B_3 (index 1)
-
     xs = l.shift(xi, 0, t, n)
     xs2 = l.shift(xs, 1, -1, n)
 
@@ -696,12 +662,10 @@ def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t,
     # Naive symmetric partial derivative
     xspy1 = l.shift(xs, 1, 1, n)
     axpy1 = su.mlog(u0[xspy1, 0])
-    # axpy1 = su.mul_s(su.mlog(u0[xspy1, 0]), 1j)
 
 
     xsmx1 = l.shift(xs, 1, -1, n)
     axmy1 = su.mlog(u0[xsmx1, 0])
-    # axmy1 = su.mul_s(su.mlog(u0[xsmx1, 0]), 1j)
 
     dif = l.add_mul(axpy1, axmy1, -1.0)
     dyax = su.mul_s(dif, 0.5)
@@ -713,8 +677,7 @@ def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t,
     # axy = su.mlog(u0[xs, 0])
     # dyax = l.add_mul(axpy1, axy, -1.0)
 
-    # su.store(f[xi, 0], dyax)
-    su.store(f[xi, 1], dyax)
+    su.store(f[xi, 1], su.mul_s(dyax, -1.0))
 
     # f_2 = \partial_y A_x - D_x A_y in quantum eikonal approximation
     # Gauge-covariant symmetric derivative
@@ -743,30 +706,7 @@ def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t,
 
     # f_1 = E_z = 1/\tau^2 A_\eta in canonical momentum
     bf1 = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
-    # bf1 = su.mul_s(aeta0[xs],  - 1j / (tau * tau))
-    # su.store(f[xi, 1], bf1)
     su.store(f[xi, 2], bf1)
-
-    # f_2 = -B_z in classical simulation
-    # quadratically accurate -Bz
-    # bf1 = su.zero()
-    # b1 = l.plaq(u0, xs, 0, 1, 1, 1, n)
-    # b2 = su.ah(b1)
-    # bf1 = l.add_mul(bf1, b2, +0.25)
-
-    # b1 = l.plaq(u0, xs, 0, 1, 1, -1, n)
-    # b2 = su.ah(b1)
-    # bf1 = l.add_mul(bf1, b2, -0.25)
-
-    # b1 = l.plaq(u0, xs, 1, 0, 1, -1, n)
-    # b2 = su.ah(b1)
-    # bf1 = l.add_mul(bf1, b2, +0.25)
-
-    # b1 = l.plaq(u0, xs, 1, 0, -1, -1, n)
-    # b2 = su.ah(b1)
-    # bf1 = l.add_mul(bf1, b2, -0.25)
-
-    # su.store(f[xi, 2], bf1)
 
 def compute_fa(s, f, a, t, stream):
     u0 = s.d_u0
@@ -807,7 +747,7 @@ def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau):
     dxay = l.add_mul(bf2, b1, 0.5)
 
     fy = su.add(py, dxay)
-    su.store(f[xi, 1], fy)
+    su.store(f[xi, 1], su.mul_s(fy, -1.0))
 
     # - A_eta / tau^2
     aetatau = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
@@ -824,7 +764,8 @@ def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau):
     dxaetatau = l.add_mul(bf2, b1, 0.5 / tau)
 
     fz = su.add(su.add(peta, dxaetatau), aetatau)
-    su.store(f[xi, 2], fz)
+
+    su.store(f[xi, 2], su.mul_s(fz, -1.0))
 
 
 """
@@ -864,24 +805,11 @@ def integrate_f(f, fi, n, dt, stream):
 def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream):
     kappa.compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream)
 
-# def compute_p_perp_A(s, fi, p_perp_A_y, p_perp_A_z, n, stream):
 def compute_p_perp_A(fi, delta_ai, p_perp_A, n, stream):
-
-    # my_parallel_loop(compute_p_perp_A_kernel, n * n, u0, aeta0, t, fi, p_perp_A_y, p_perp_A_z, n, stream=stream)
     my_parallel_loop(compute_p_perp_A_kernel, n * n, fi, delta_ai, p_perp_A, n, stream=stream)
 
 @myjit
-# def compute_p_perp_A_kernel(xi, u0, aeta0, t, fi, p_perp_A_y, p_perp_A_z, n):
 def compute_p_perp_A_kernel(xi, fi, delta_ai, p_perp_A, n):
-    # A_y
-    # ay = su.mlog(u0[xi, 1])
-    
-    # A_z
-    # az = su.mul_s(aeta0[xi], 1.0 / t)
-    
-    #p_perp[xi] = 0
-    # p_perp_A_y[xi] = su.tr(su.mul(fi[xi, 1], su.dagger(ay))).real
-    # p_perp_A_z[xi] = su.tr(su.mul(fi[xi, 2], su.dagger(az))).real
     for i in range(3):
         p_perp_A[xi, i] = su.tr(su.mul(fi[xi, i], su.dagger(delta_ai[xi, i]))).real
 
@@ -892,33 +820,17 @@ def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream):
 @myjit
 def transport_act(f, u, x, i, o):
     if o > 0:
-        u1 = u[x, i]  # np-array
+        u1 = u[x, i]  
         result = l.act(u1, f[x])
     else:
-        u2 = su.dagger(u[x, i])  # tuple
+        u2 = su.dagger(u[x, i])  
         result = l.act(u2, f[x])
     return result
 
-# def compute_asq(s, ay_sq, az_sq, t, stream):
 def compute_asq(delta_ai, ai_sq, n, stream):
-
     my_parallel_loop(compute_asq_kernel, n * n, delta_ai, ai_sq, stream=stream)
 
 @myjit
-# def compute_asq_kernel(xi, u0, aeta0, ay_sq, az_sq, t, n):
 def compute_asq_kernel(xi, delta_ai, ai_sq):
-    # xs = l.shift(xi, 0, t, n)
-
-    # A_y^2
-    # ay = su.mul_s(su.mlog(u0[xi, 1]), 1j)
-    # ay = su.mlog(u0[xs, 1])
-    # ay = su.mlog(u0[xi, 0])
-    # ay_sq[xi] = su.sq(ay)
-   
-    # A_z^2
-    # az = su.mul_s(aeta0[xs], 1.0 / t)
-    # az = su.mul_s(aeta0[xi], 1.0 / t)
-    # az_sq[xi] = su.sq(az)
-
     for i in range(3):
         ai_sq[xi, i]= su.sq(delta_ai[xi, i])
