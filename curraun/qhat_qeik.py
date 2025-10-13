@@ -206,12 +206,12 @@ class TransportedForce:
         tint = round(self.s.t / self.s.dt)
         tstart = round(1 / self.s.dt)
         if tint == tstart:
-            compute_ai(self.s, self.d_ai, round(self.s.t - 10E-8), stream)
+            compute_ai(self.s, self.d_ai, round(self.s.t - 1e-8), stream)
 
         if tint % self.dtstep == 0 and tint >= tstart:
             # compute un-transported f
-            compute_ftilde(self.s, self.d_ftilde, round(self.s.t - 10E-8), stream)
-            compute_f(self.s, self.d_f, round(self.s.t - 10E-8), stream)
+            compute_ftilde(self.s, self.d_ftilde, round(self.s.t - 1e-8), stream)
+            compute_f(self.s, self.d_f, round(self.s.t - 1e-8), stream)
 
             # apply parallel transport
             apply_v(self.d_f, self.d_v, self.s.n, stream)
@@ -228,7 +228,7 @@ class TransportedForce:
             compute_mean(self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.d_p_perp_mean, stream)
 
             # calculate parallel transported gauge field minus the initial field
-            compute_delta_ai(self.s, self.d_v, self.d_ai, round(self.s.t - 10E-8), self.d_delta_ai, stream)
+            compute_delta_ai(self.s, self.d_v, self.d_ai, round(self.s.t - 1e-8), self.d_delta_ai, stream)
 
             # integrate perpendicular momentum
             # compute_p_perp_A(self.s, self.d_fi, self.d_p_perp_A_y, self.d_p_perp_A_z, self.s.n, stream)
@@ -240,7 +240,7 @@ class TransportedForce:
 
 
             # compute asq
-            # compute_asq(self.s, self.d_ay_sq, self.d_az_sq, round(self.s.t - 10E-8), stream)
+            # compute_asq(self.s, self.d_ay_sq, self.d_az_sq, round(self.s.t - 1e-8), stream)
             compute_asq(self.d_delta_ai, self.d_ai_sq, self.s.n, stream)
 
             # self.az_sq_mean = np.mean(self.d_az_sq)
@@ -258,7 +258,7 @@ class TransportedForce:
 
         if tint % self.dtstep == self.dtstep / 2:
             # update v
-            update_v(self.s, self.d_v, round(self.s.t - 10E-8), stream)
+            update_v(self.s, self.d_v, round(self.s.t - 1e-8), stream)
 
 
 class KineticCanonicCheck:
@@ -272,7 +272,7 @@ class KineticCanonicCheck:
         my_parallel_loop(reset_wilsonfield, self.n ** 2, self.v)
 
         # gauge field
-        self.a = np.zeros((self.n ** 2, 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.a = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # transported force
         self.fp = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
@@ -400,19 +400,21 @@ class KineticCanonicCheck:
         tint = round(self.s.t / self.s.dt)
         tstart = round(1 / self.s.dt)
         if tint == tstart:
-            compute_ai(self.s, self.d_a0, round(self.s.t - 10E-8), stream)
+            compute_ai(self.s, self.d_a0, round(self.s.t - 1e-8), stream)
 
         if tint % self.dtstep == 0 and tint >= tstart:
             # compute gauge field
             # compute_a(self.s, self.d_a)
-            # compute_ai(self.s, self.d_a, round(self.s.t - 10E-8), stream)
+            # compute_ai(self.s, self.d_a, round(self.s.t - 1e-8), stream)
 
-            compute_delta_ai(self.s, self.d_v, self.d_a0, round(self.s.t - 10E-8), self.d_deltaa, stream)
+            compute_delta_ai(self.s, self.d_v, self.d_a0, round(self.s.t - 1e-8), self.d_deltaa, stream)
 
             # compute un-transported f
-            compute_ftilde(self.s, self.d_fp, round(self.s.t - 10E-8), stream)
-            compute_f(self.s, self.d_fpi, round(self.s.t - 10E-8), stream)
-            compute_fa(self.s, self.d_fa, self.d_a, round(self.s.t - 10E-8), stream)
+            compute_ftilde(self.s, self.d_fp, round(self.s.t - 1e-8), stream)
+            compute_f(self.s, self.d_fpi, round(self.s.t - 1e-8), stream)
+
+            compute_ai(self.s, self.d_a, round(self.s.t - 1e-8), stream)
+            compute_fa(self.s, self.d_fa, self.d_a, round(self.s.t - 1e-8), stream)
 
             # apply parallel transport
             apply_v(self.d_fp, self.d_v, self.s.n, stream)
@@ -424,7 +426,7 @@ class KineticCanonicCheck:
             integrate_f(self.d_fpi, self.d_intfpi, self.s.n, 1.0, stream)
             integrate_f(self.d_fa, self.d_intfa, self.s.n, 1.0, stream)
 
-            # integrate perpendicular momeoverntum
+            # integrate perpendicular momentum
             compute_p_perp(self.d_intfp, self.d_deltapsq[:, 0], self.d_deltapsq[:, 1], self.d_deltapsq[:, 2], self.s.n, stream)
             compute_p_perp(self.d_intfpi, self.d_deltapisq[:, 0], self.d_deltapisq[:, 1], self.d_deltapisq[:, 2], self.s.n, stream)
             compute_p_perp(self.d_intfa, self.d_deltaasq[:, 0], self.d_deltaasq[:, 1], self.d_deltaasq[:, 2], self.s.n, stream)
@@ -445,7 +447,7 @@ class KineticCanonicCheck:
 
         if tint % self.dtstep == self.dtstep / 2:
             # update v
-            update_v(self.s, self.d_v, round(self.s.t - 10E-8), stream)
+            update_v(self.s, self.d_v, round(self.s.t - 1e-8), stream)
 
 
 
@@ -496,11 +498,18 @@ def compute_ai(s, ai, t, stream):
 
 @myjit
 def compute_ai_kernel(xi, u0, aeta0, t, n, ai):
-    xs = l.shift(xi, 0, t, n)  
+    # xs = l.shift(xi, 0, t, n)  
 
-    ax = su.mlog(u0[xs, 0])
-    ay = su.mlog(u0[xs, 1])
-    az = su.mul_s(aeta0[xs], 1.0 / t)
+    # ax = su.mlog(u0[xs, 0])
+    # ay = su.mlog(u0[xs, 1])
+    # az = su.mul_s(aeta0[xs], 1.0 / t)
+
+    ax = su.mlog(u0[xi, 0])
+    ay = su.mlog(u0[xi, 1])
+    # ax = su.mul_s(su.mlog(u0[xi, 0]), -1j)
+    # ay = su.mul_s(su.mlog(u0[xi, 1]), -1j)
+    az = su.mul_s(aeta0[xi], 1.0 / t)
+    # az = su.mul_s(aeta0[xi], t)
 
     su.store(ai[xi, 0], ax)
     su.store(ai[xi, 1], ay)
@@ -520,7 +529,10 @@ def compute_delta_ai_kernel(xi, v, u0, aeta0, t, ai, delta_ai, n):
 
     ax = su.mlog(u0[xs, 0])
     ay = su.mlog(u0[xs, 1])
-    az = su.mul_s(aeta0[xs], 1.0 / t)
+    # ax = su.mul_s(su.mlog(u0[xs, 0]), -1j)
+    # ay = su.mul_s(su.mlog(u0[xs, 1]), -1j)
+    az = su.mul_s(aeta0[xi], 1.0 / t)
+    # az = su.mul_s(aeta0[xi], t)
 
     axtransp = su.ah(l.act(v[xs], ax))
     # axtransp = l.act(v[xs], ax)
@@ -765,7 +777,8 @@ def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau):
 
     fz = su.add(su.add(peta, dxaetatau), aetatau)
 
-    su.store(f[xi, 2], su.mul_s(fz, -1.0))
+    # su.store(f[xi, 2], su.mul_s(fz, -1.0))
+    su.store(f[xi, 2], fz)
 
 
 """
