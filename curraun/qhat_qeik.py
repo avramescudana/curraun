@@ -15,6 +15,7 @@ def complex_tuple(*t):
 s1 = complex_tuple(0, 1, 0, 1, 0, 0, 0, 0, 0)
 # s1 = complex_tuple(0, 0, -1j, 0, 0, 0, 1j, 0, 0)
 
+#TODO: remove this class
 class TransportedForce:
     def __init__(self, s):
         self.s = s
@@ -396,30 +397,29 @@ class KineticCanonicCheck:
         self.d_deltapdeltaa_mean.copy_to_host(self.deltapdeltaa_mean)
         self.d_deltapdeltaa_transp_mean.copy_to_host(self.deltapdeltaa_transp_mean)
 
-    def compute(self,stream=None):
+    def compute(self, quark, stream=None):
         tint = round(self.s.t / self.s.dt)
         tstart = round(1 / self.s.dt)
         if tint == tstart:
-            compute_ai(self.s, self.d_a0, round(self.s.t - 1e-8), stream)
+            compute_ai(self.s, self.d_a0, round(self.s.t), stream)
 
         if tint % self.dtstep == 0 and tint >= tstart:
-            # compute gauge field
-            # compute_a(self.s, self.d_a)
-            # compute_ai(self.s, self.d_a, round(self.s.t - 1e-8), stream)
+            # compute un-transported f and ftilde
+            compute_ftilde(self.s, self.d_fp, round(self.s.t), quark, stream)
+            compute_f(self.s, self.d_fpi, round(self.s.t), quark, stream)
 
-            compute_delta_ai(self.s, self.d_v, self.d_a0, round(self.s.t - 1e-8), self.d_deltaa, stream)
+            # compute gauge field, delta gauge field
+            compute_ai(self.s, self.d_a, round(self.s.t), stream)
+            compute_delta_ai(self.d_a0, self.d_v, self.d_a, round(self.s.t), self.d_deltaa, self.s.n, quark, stream)
 
-            # compute un-transported f
-            compute_ftilde(self.s, self.d_fp, round(self.s.t - 1e-8), stream)
-            compute_f(self.s, self.d_fpi, round(self.s.t - 1e-8), stream)
-
-            compute_ai(self.s, self.d_a, round(self.s.t - 1e-8), stream)
-            compute_fa(self.s, self.d_fa, self.d_a, round(self.s.t - 1e-8), stream)
+            # compute un-transported fa
+            compute_fa(self.d_fp, self.d_fpi, self.d_fa, round(self.s.t), self.s.n, stream)
 
             # apply parallel transport
-            apply_v(self.d_fp, self.d_v, self.s.n, stream)
-            apply_v(self.d_fpi, self.d_v, self.s.n, stream)
-            apply_v(self.d_fa, self.d_v, self.s.n, stream)
+            if quark=='jet':
+                apply_v(self.d_fp, self.d_v, self.s.n, stream)
+                apply_v(self.d_fpi, self.d_v, self.s.n, stream)
+                apply_v(self.d_fa, self.d_v, self.s.n, stream)
 
             # integrate f
             integrate_f(self.d_fp, self.d_intfp, self.s.n, 1.0, stream)
@@ -440,14 +440,13 @@ class KineticCanonicCheck:
             compute_mean(self.d_deltapdeltaa[:, 0], self.d_deltapdeltaa[:, 1], self.d_deltapdeltaa[:, 2], self.d_deltapdeltaa_mean, stream)
             compute_mean(self.d_deltapdeltaa_transp[:, 0], self.d_deltapdeltaa_transp[:, 1], self.d_deltapdeltaa_transp[:, 2], self.d_deltapdeltaa_transp_mean, stream)
 
-
             # compute asq
             compute_asq(self.d_deltaa, self.d_deltaasq_transp, self.s.n, stream)
             compute_mean(self.d_deltaasq_transp[:, 0], self.d_deltaasq_transp[:, 1], self.d_deltaasq_transp[:, 2], self.d_deltaasq_transp_mean, stream)
 
         if tint % self.dtstep == self.dtstep / 2:
             # update v
-            update_v(self.s, self.d_v, round(self.s.t - 1e-8), stream)
+            update_v(self.s, self.d_v, round(self.s.t), stream)
 
 
 
@@ -498,16 +497,10 @@ def compute_ai(s, ai, t, stream):
 
 @myjit
 def compute_ai_kernel(xi, u0, aeta0, t, n, ai):
-    # xs = l.shift(xi, 0, t, n)  
-
-    # ax = su.mlog(u0[xs, 0])
-    # ay = su.mlog(u0[xs, 1])
-    # az = su.mul_s(aeta0[xs], 1.0 / t)
-
     ax = su.mlog(u0[xi, 0])
     ay = su.mlog(u0[xi, 1])
-    # ax = su.mul_s(su.mlog(u0[xi, 0]), -1j)
-    # ay = su.mul_s(su.mlog(u0[xi, 1]), -1j)
+    # ax = su.mul_s(su.mlog(u0[xi, 0]), -1)
+    # ay = su.mul_s(su.mlog(u0[xi, 1]), -1)
     az = su.mul_s(aeta0[xi], 1.0 / t)
     # az = su.mul_s(aeta0[xi], t)
 
@@ -515,39 +508,28 @@ def compute_ai_kernel(xi, u0, aeta0, t, n, ai):
     su.store(ai[xi, 1], ay)
     su.store(ai[xi, 2], az)
 
-def compute_delta_ai(s, v, ai, t, delta_ai, stream):
-    u0 = s.d_u0
-    aeta0 = s.d_aeta0
+def compute_delta_ai(a0, v, a, t, delta_ai, n, quark, stream):
 
-    n = s.n
-
-    my_parallel_loop(compute_delta_ai_kernel, n * n, v, u0, aeta0, t, ai, delta_ai, n, stream=stream)  
+    if quark=='jet':
+        my_parallel_loop(compute_delta_ai_jet_kernel, n * n, a0, v, a, t, delta_ai, n, stream=stream)  
+    elif quark=='hq':
+        my_parallel_loop(compute_delta_ai_hq_kernel, n * n, a0, v, a, t, delta_ai, n, stream=stream)
 
 @myjit
-def compute_delta_ai_kernel(xi, v, u0, aeta0, t, ai, delta_ai, n):
-    xs = l.shift(xi, 0, t, n)
+def compute_delta_ai_jet_kernel(xi, a0, v, a, t, delta_ai, n):
+    for i in range(3):
+        xs = l.shift(xi, 0, t, n)
+        aitransp = l.act(v[xs], a[xs, i])
+        bufi = l.add_mul(aitransp, a0[xi, i], -1)
 
-    ax = su.mlog(u0[xs, 0])
-    ay = su.mlog(u0[xs, 1])
-    # ax = su.mul_s(su.mlog(u0[xs, 0]), -1j)
-    # ay = su.mul_s(su.mlog(u0[xs, 1]), -1j)
-    az = su.mul_s(aeta0[xi], 1.0 / t)
-    # az = su.mul_s(aeta0[xi], t)
+        su.store(delta_ai[xi, i], bufi)
 
-    axtransp = su.ah(l.act(v[xs], ax))
-    # axtransp = l.act(v[xs], ax)
-    bufx = l.add_mul(axtransp, ai[xi, 0], -1)
-    su.store(delta_ai[xi, 0], bufx)
+@myjit
+def compute_delta_ai_hq_kernel(xi, a0, v, a, t, delta_ai, n):
+    for i in range(3):
+        bufi = l.add_mul(a[xi, i], a0[xi, i], -1)
 
-    aytransp = su.ah(l.act(v[xs], ay))
-    # aytransp = l.act(v[xs], ay)
-    bufy = l.add_mul(aytransp, ai[xi, 1], -1)
-    su.store(delta_ai[xi, 1], bufy)
-
-    aztransp = su.ah(l.act(v[xs], az))
-    # aztransp = l.act(v[xs], az)
-    bufz = l.add_mul(aztransp, ai[xi, 2], -1)
-    su.store(delta_ai[xi, 2], bufz)
+        su.store(delta_ai[xi, i], bufi)
 
 
 """
@@ -555,7 +537,7 @@ def compute_delta_ai_kernel(xi, v, u0, aeta0, t, ai, delta_ai, n):
     sites) force acting on a light-like trajectory particle.
 """
 
-def compute_f(s, f, t, stream):
+def compute_f(s, f, t, quark, stream):
     u0 = s.d_u0
     u1 = s.d_u1
     pt1 = s.d_pt1
@@ -568,14 +550,62 @@ def compute_f(s, f, t, stream):
     n = s.n
     tau = s.t 
 
-    my_parallel_loop(compute_f_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
+    if quark=='jet':
+        my_parallel_loop(compute_f_jet_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
+    elif quark=='hq':
+        my_parallel_loop(compute_f_hq_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
 
 @myjit
-def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
+def compute_f_hq_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
+
+    # f_1 = E_1 (index 0)
+    xs = xi
+
+    bf0 = su.zero()
+
+    bf0 = su.add(bf0, pt1[xs, 0])
+    bf0 = su.add(bf0, pt0[xs, 0])
+
+    xs2 = l.shift(xs, 0, -1, n)
+    b1 = l.act(su.dagger(u0[xs2, 0]), pt1[xs2, 0])
+    bf0 = su.add(bf0, b1)
+    b1 = l.act(su.dagger(u0[xs2, 0]), pt0[xs2, 0])
+    bf0 = su.add(bf0, b1)
+    bf0 = su.mul_s(bf0, 0.25 / tau)
+    su.store(f[xi, 0], bf0)
+
+    # f_2 = E_2 - B_3 (index 1)
+    xs = l.shift(xi, 0, t, n)
+    xs2 = l.shift(xs, 1, -1, n)
+
+    bf1 = su.zero()
+
+    # quadratically accurate +Ey
+    bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / tau)
+    bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / tau)
+    xs3 = l.shift(xs, 1, -1, n)
+    b1 = l.act(su.dagger(u0[xs3, 1]), pt1[xs2, 1])
+    bf1 = l.add_mul(bf1, b1, 0.25 / tau)
+    b1 = l.act(su.dagger(u0[xs3, 1]), pt0[xs2, 1])
+    bf1 = l.add_mul(bf1, b1, 0.25 / tau)
+
+    su.store(f[xi, 1], bf1)
+
+    # f_3 = E_3 + B_2 (index 2)
+    bf2 = su.zero()
+
+    # Accurate +E_z
+    bf2 = l.add_mul(bf2, peta1[xs], 0.5)
+    bf2 = l.add_mul(bf2, peta0[xs], 0.5)
+
+    su.store(f[xi, 2], bf2)
+
+@myjit
+def compute_f_jet_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
 
     # f_1 = E_1 (index 0)
     xs = l.shift(xi, 0, t, n)
-
+    
     bf0 = su.zero()
 
     bf0 = su.add(bf0, pt1[xs, 0])
@@ -638,9 +668,8 @@ def compute_f_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau)
 
     su.store(f[xi, 2], bf2)
 
-def compute_ftilde(s, f, t, stream):
+def compute_ftilde(s, f, t, quark, stream):
     u0 = s.d_u0
-    u1 = s.d_u1
     pt1 = s.d_pt1
     aeta0 = s.d_aeta0
     aeta1 = s.d_aeta1
@@ -651,13 +680,16 @@ def compute_ftilde(s, f, t, stream):
     n = s.n
     tau = s.t 
 
-    my_parallel_loop(compute_ftilde_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
+    if quark=='jet':
+        my_parallel_loop(compute_ftilde_jet_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
+    elif quark=='hq':
+        my_parallel_loop(compute_ftilde_hq_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
 
 @myjit
-def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
+def compute_ftilde_jet_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
 
     xs = l.shift(xi, 0, t, n)
-
+    
     # f_1 = \partial_y A_x in quantum eikonal approximation
 
     # Gauge-covariant symmetric derivative
@@ -689,6 +721,8 @@ def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t,
     # axy = su.mlog(u0[xs, 0])
     # dyax = l.add_mul(axpy1, axy, -1.0)
 
+    # su.store(f[xi, 1], su.mul_s(dyax, -1.0))
+    # su.store(f[xi, 1], dyax)
     su.store(f[xi, 1], su.mul_s(dyax, -1.0))
 
     # f_2 = \partial_y A_x - D_x A_y in quantum eikonal approximation
@@ -717,68 +751,92 @@ def compute_ftilde_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t,
     # su.store(f[xi, 1], dxay_dyax)
 
     # f_1 = E_z = 1/\tau^2 A_\eta in canonical momentum
-    bf1 = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
+    # bf1 = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
+    bf1 = su.mul_s(aeta0[xs], - 1.0 / (tau * tau))
     su.store(f[xi, 2], bf1)
 
-def compute_fa(s, f, a, t, stream):
-    u0 = s.d_u0
-    u1 = s.d_u1
-    pt1 = s.d_pt1
-    aeta0 = s.d_aeta0
-    peta1 = s.d_peta1
-    pt0 = s.d_pt0
-    peta0 = s.d_peta0
+@myjit
+def compute_ftilde_hq_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
+    su.store(f[xi, 1], su.zero())
 
-    n = s.n
-    tau = s.t 
+    bf1 = su.mul_s(aeta0[xi], - 1.0 / (tau * tau))
+    su.store(f[xi, 2], bf1)
 
-    my_parallel_loop(compute_fa_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau, stream=stream)
+
+# def compute_fa(s, f, a, t, stream):
+#     u0 = s.d_u0
+#     u1 = s.d_u1
+#     pt1 = s.d_pt1
+#     aeta0 = s.d_aeta0
+#     peta1 = s.d_peta1
+#     pt0 = s.d_pt0
+#     peta0 = s.d_peta0
+
+#     n = s.n
+#     tau = s.t 
+
+#     my_parallel_loop(compute_fa_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau, stream=stream)
+
+# @myjit
+# def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau):
+
+#     xs = l.shift(xi, 0, t, n)
+
+#     # P^y / tau = Ey
+#     bf1 = su.zero()
+#     xs2 = l.shift(xs, 1, -1, n)
+#     bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / tau)
+#     bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / tau)
+#     xs3 = l.shift(xs, 1, -1, n)
+#     b1 = l.act(su.dagger(u0[xs3, 1]), pt1[xs2, 1])
+#     bf1 = l.add_mul(bf1, b1, 0.25 / tau)
+#     b1 = l.act(su.dagger(u0[xs3, 1]), pt0[xs2, 1])
+#     py = l.add_mul(bf1, b1, 0.25 / tau)
+
+
+#     # D_x A_y 
+#     bf2 = su.zero()
+#     b1 = l.transport(a[:, 1], u0, xs, 0, +1, n)
+#     b2 = l.transport(a[:, 1], u0, xs, 0, -1, n)
+#     b1 = l.add_mul(b1, b2, -1.0)
+#     dxay = l.add_mul(bf2, b1, 0.5)
+
+#     fy = su.add(py, dxay)
+#     # su.store(f[xi, 1], su.mul_s(fy, -1.0))
+#     su.store(f[xi, 1], fy)
+
+#     # - A_eta / tau^2
+#     aetatau = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
+
+#     # P^eta = E_z
+#     bf2 = su.zero()
+#     bf2 = l.add_mul(bf2, peta1[xs], 0.5)
+#     peta = l.add_mul(bf2, peta0[xs], 0.5)
+
+#     # D_x A_eta / tau
+#     b1 = l.transport(aeta0, u0, xs, 0, +1, n)
+#     b2 = l.transport(aeta0, u0, xs, 0, -1, n)
+#     b1 = l.add_mul(b1, b2, -1.0)
+#     dxaetatau = l.add_mul(bf2, b1, 0.5 / tau)
+
+#     fz = su.add(su.add(peta, dxaetatau), aetatau)
+
+#     # su.store(f[xi, 2], su.mul_s(fz, -1.0))
+#     su.store(f[xi, 2], fz)
+
+def compute_fa(fp, fpi, fa, t, n, stream):
+    my_parallel_loop(compute_fa_kernel, n * n, fp, fpi, fa, t, n, stream=stream)
 
 @myjit
-def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau):
+def compute_fa_kernel(xi, fp, fpi, fa, t, n):
 
     xs = l.shift(xi, 0, t, n)
 
-    # P^y / tau = Ey
-    bf1 = su.zero()
-    xs2 = l.shift(xs, 1, -1, n)
-    bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / tau)
-    bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / tau)
-    xs3 = l.shift(xs, 1, -1, n)
-    b1 = l.act(su.dagger(u0[xs3, 1]), pt1[xs2, 1])
-    bf1 = l.add_mul(bf1, b1, 0.25 / tau)
-    b1 = l.act(su.dagger(u0[xs3, 1]), pt0[xs2, 1])
-    py = l.add_mul(bf1, b1, 0.25 / tau)
-
-
-    # D_x A_y 
-    bf2 = su.zero()
-    b1 = l.transport(a[:, 1], u0, xs, 0, +1, n)
-    b2 = l.transport(a[:, 1], u0, xs, 0, -1, n)
-    b1 = l.add_mul(b1, b2, -1.0)
-    dxay = l.add_mul(bf2, b1, 0.5)
-
-    fy = su.add(py, dxay)
-    su.store(f[xi, 1], su.mul_s(fy, -1.0))
-
-    # - A_eta / tau^2
-    aetatau = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
-
-    # P^eta = E_z
-    bf2 = su.zero()
-    bf2 = l.add_mul(bf2, peta1[xs], 0.5)
-    peta = l.add_mul(bf2, peta0[xs], 0.5)
-
-    # D_x A_eta / tau
-    b1 = l.transport(aeta0, u0, xs, 0, +1, n)
-    b2 = l.transport(aeta0, u0, xs, 0, -1, n)
-    b1 = l.add_mul(b1, b2, -1.0)
-    dxaetatau = l.add_mul(bf2, b1, 0.5 / tau)
-
-    fz = su.add(su.add(peta, dxaetatau), aetatau)
-
-    # su.store(f[xi, 2], su.mul_s(fz, -1.0))
-    su.store(f[xi, 2], fz)
+    for i in range(3):
+        # delta A = fpi - fp convention Alatt = -igaA
+        buf = l.add_mul(fpi[xs, i], fp[xs, i], -1)
+        # buf = l.add_mul(fp[xs, i], fpi[xs, i], -1)
+        su.store(fa[xs, i], buf)
 
 
 """
