@@ -1,9 +1,12 @@
-from curraun.numba_target import myjit, my_parallel_loop, use_cuda, mynonparjit
-import numpy as np
-import curraun.lattice as l
-import curraun.su as su
+from Modules.numba_target import myjit, my_parallel_loop, use_cuda, mynonparjit
+import Modules.lattice as l
+import Modules.su as su
+
+
 import os
 import math
+import numpy as np
+
 
 from numpy.fft import rfft2, irfft2
 from numpy import newaxis as na
@@ -25,7 +28,7 @@ elif su_precision == 'double':
     DTYPE = np.float64
 
 
-class Lyapunov():
+class Lyapunov_CLASS():
     def __init__(self, s, sprime):
         self.s = s
         self.sprime = sprime
@@ -37,10 +40,11 @@ class Lyapunov():
         self.d_tr_sq_el = self.tr_sq_el
         self.d_tr_sq_dif = self.tr_sq_dif
 
-        self.ratio_dif = 0.0
+        self.EL_Ratio_Diff        = 0.0
+        self.EL_Ratio_Diff_alpha2 = 0.0
 
 
-    def change_el(self, alpha, m_noise):                                    # Added 23.04.2025        
+    def change_EL(self, alpha, m_noise):                                    # Added 23.04.2025        
         
         peta1 = self.sprime.d_peta1
         n = self.sprime.n
@@ -58,34 +62,34 @@ class Lyapunov():
         eta = irfft2(  rfft2( eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1) ) * noise_kernel[:, :, na],  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))
         #eta = irfft2(  rfft2(eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1)) ,  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))      # Eliminating the noise kernel for now
        
-        my_parallel_loop(change_el_kernel, n ** 2, peta1, eta)
+        my_parallel_loop(change_EL_kernel, n ** 2, peta1, eta)
 
 
 
-    def compute_change_el(self):
+    def compute_change_EL(self, alpha):
         peta1s = self.s.d_peta1
         peta1sprime = self.sprime.d_peta1
 
         n = self.s.n
 
-        my_parallel_loop(compute_change_el_kernel, n ** 2, peta1s, peta1sprime, self.d_tr_sq_el, self.d_tr_sq_dif)
+        my_parallel_loop(compute_change_EL_kernel, n ** 2, peta1s, peta1sprime, self.d_tr_sq_el, self.d_tr_sq_dif)
 
         dif_avg = np.mean(self.d_tr_sq_dif)
         el_avg = np.mean(self.d_tr_sq_el)
 
-        self.ratio_dif = dif_avg
-
+        self.EL_Ratio_Diff        = dif_avg
+        self.EL_Ratio_Diff_alpha2 = dif_avg/(alpha**2.0)
 
 
 @mynonparjit
-def change_el_kernel(xi, peta1, eta):
+def change_EL_kernel(xi, peta1, eta):
     buf1 = su.add(peta1[xi], eta[xi])
     peta1[xi] = buf1
 
 
 
 @mynonparjit
-def compute_change_el_kernel(xi, peta1s, peta1sprime, tr_sq_el, tr_sq_dif):
+def compute_change_EL_kernel(xi, peta1s, peta1sprime, tr_sq_el, tr_sq_dif):
     buf1 = l.add_mul(peta1sprime[xi], peta1s[xi], -1)
     tr_sq_dif[xi] = su.sq(buf1) 
 
@@ -104,20 +108,6 @@ def compute_noise_kernel(x, mass, n, new_n, kernel):    # Just for reference: my
             
             kernel[x, y] = mass ** 2 / (k2 + mass ** 2) 
             #kernel[x, y] = np.exp(-k2/mass**2)
-
-            """
-            #K_centre      = 0.024543692606170262
-            #dk            = 0.049087385212340524
-            
-            k_lower_limit = K_centre - dk/2
-            k_upper_limit = K_centre + dk/2
-            k  = np.sqrt(k2)
-
-            if (k_lower_limit <= k <= k_upper_limit):
-                kernel[x, y] = 1.0
-            else:
-                kernel[x, y] = 0.0
-            """
                                                                                              
     
 
