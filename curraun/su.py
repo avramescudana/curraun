@@ -7,7 +7,8 @@ su_group = os.environ.get('GAUGE_GROUP', 'su2').lower()
 
 if su_group == 'su2':
     print("Using SU(2)")
-    from curraun.su2 import *
+    from curraun.su2 import *               # Imports everything (*) from Python module curraun.su2
+                                            # curraun.su2: A file/python module that defines SU(2) matrix algebra operations
     NC = 2
 elif su_group == 'su2_complex':
     print("Using SU(2) complex")

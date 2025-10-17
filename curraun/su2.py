@@ -20,6 +20,8 @@ CASIMIRS = 1
 
 su_precision = os.environ.get('PRECISION', 'double')
 
+
+
 if su_precision == 'single':
     # TODO: convert all input variables to float32 before compiled functions are called
     #       (check this using compiled_function.inspect_types())
@@ -32,6 +34,9 @@ elif su_precision == 'double':
     GROUP_TYPE_REAL = np.float64
 else:
     print("Unsupported precision: " + su_precision)
+
+
+
 
 # @myjit
 @mynonparjit
@@ -163,11 +168,15 @@ def load(g):
 def tr(a):
     return 2 * a[0]
 
+
+
 # trace of square - return real part
 # @myjit
 @mynonparjit
 def sq(a): # tr(mul(a,a)) - valid only for traceless matrices a.
     return 2 * (a[1] ** 2 + a[2] ** 2 + a[3] ** 2)
+
+
 
 # algebra dot product
 # @myjit
@@ -203,6 +212,10 @@ def casimir_fundamental(Q):
     C = tr(mul(Q, dagger(Q))) / T_R
     
     return C
+
+
+
+
 
 @myjit
 def casimir_adjoint(Q):
