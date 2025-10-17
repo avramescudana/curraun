@@ -25,6 +25,9 @@ def evolve(s, stream=None):
     my_parallel_loop(evolve_kernel, n * n, u0, u1, pt1, pt0, aeta0, aeta1, peta1, peta0, dt, dth, t, n, stream=stream)
 
 
+
+
+
 # @myjit
 @mynonparjit
 def evolve_kernel(xi, u0, u1, pt1, pt0, aeta0, aeta1, peta1, peta0, dt, dth, t, n):
@@ -36,6 +39,23 @@ def evolve_kernel(xi, u0, u1, pt1, pt0, aeta0, aeta1, peta1, peta0, dt, dth, t, 
     # Output:
     #   t+dt/2: pt1, peta1
     #   t+dt: u1, aeta1
+
+    """
+    xi: lattice site index
+    u0, u1: transverse link variables at time t and t+dt
+
+    pt1, pt0: transverse momenta at time t+dt/2 and t-dt/2
+    peta1, peta0: longitudinal momenta at time t+dt/2 and t-dt/2
+
+    aeta0, aeta1: longitudinal gauge fields at time t and t+dt
+
+    dt: time step size
+    dth: half time step (dt/2)
+    t: current time
+    n: No. of lattice points in transverse direction, N_T
+    """
+
+    #print("Leapfrog: xi = ", xi, " n = ", n)
 
     peta_local = su.load(peta0[xi])
 
@@ -55,7 +75,7 @@ def evolve_kernel(xi, u0, u1, pt1, pt0, aeta0, aeta1, peta1, peta0, dt, dth, t, 
         buffer1 = l.add_mul(buffer1, aeta0[xi], -2)
         peta_local = l.add_mul(peta_local, buffer1, + dt / t)
 
-    su.store(peta1[xi], peta_local)
+    su.store(peta1[xi], peta_local) # Stores the updated lngitudinal electric field at t+dt/2 in peta1.
 
     # Coordinate update
     for d in range(2):

@@ -40,6 +40,17 @@ class Lyapunov():
         self.ratio_dif = 0.0
 
 
+        """ Start: For BL"""
+        self.tr_sq_bl = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
+        self.tr_sq_bl_dif = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
+        self.d_tr_sq_bl = self.tr_sq_bl
+        self.d_tr_sq_bl_dif = self.tr_sq_bl_dif
+
+        self.ratio_bl_dif = 0.0
+        """ End: For BL"""
+
+
+
     def change_el(self, alpha, m_noise):                                    # Added 23.04.2025        
         
         peta1 = self.sprime.d_peta1
@@ -76,6 +87,31 @@ class Lyapunov():
         self.ratio_dif = dif_avg
 
 
+    def change_Ui(self, alpha_lattice):                                    # Added 23.04.2025        
+        # alpha = alpha_lattice
+        u1 = self.sprime.u1
+        n = self.sprime.n
+
+        # Add Gaussian noise with parameter alpha
+        eta = random_np.normal(loc=0.0, scale=alpha_lattice, size=(n ** 2 * su.GROUP_ELEMENTS))  
+        eta = eta.reshape((n * n, su.GROUP_ELEMENTS))
+        
+        my_parallel_loop(change_Ui_kernel, n ** 2, u1, eta)
+
+
+
+    def compute_change_BL(self):
+        u1_s = self.s.d_u1
+        u1_sprime = self.sprime.d_u1
+
+        n = self.s.n
+
+        my_parallel_loop(compute_change_bl_kernel, n ** 2, n, u1_s, u1_sprime, self.d_tr_sq_bl, self.d_tr_sq_bl_dif)
+
+        dif_bl_avg = np.mean(self.d_tr_sq_bl_dif)
+        bl_avg = np.mean(self.d_tr_sq_bl)
+
+        self.ratio_bl_dif = dif_bl_avg
 
 @mynonparjit
 def change_el_kernel(xi, peta1, eta):
@@ -94,32 +130,70 @@ def compute_change_el_kernel(xi, peta1s, peta1sprime, tr_sq_el, tr_sq_dif):
 
 
 
+@mynonparjit
+def change_Ui_kernel(xi, u1, eta):
+    buf1 = su.mexp(eta[xi])
+    buf2 = su.mul(u1[xi], buf1)
+    u1[xi] = buf2
+
+
+
+
+@mynonparjit
+def compute_change_bl_kernel(xi, n, u1_s, u1_sprime, tr_sq_bl, tr_sq_bl_dif):
+
+    #    BL[xi] = 0.5 * (su.sq(su.ah(l.plaq_pos(u0, xi, 0, 1, n))) * t + su.sq(su.ah(l.plaq_pos(u1, xi, 0, 1, n))) * (t+dt))  : IN FILE energy.py
+    #    BL[xi] = (NC - su.tr(l.plaq_pos(u0, xi, 0, 1, n)).real) * t + (NC - su.tr(l.plaq_pos(u1, xi, 0, 1, n)).real) * (t + dt)
+
+
+    bl       = su.ah( l.plaq_pos(u1_s,      xi, 0, 1, n) )
+    bl_prime = su.ah( l.plaq_pos(u1_sprime, xi, 0, 1, n) ) 
+    
+    """
+    # Bz (Beta)
+    bf1 = su.zero()
+    b1 = l.plaq(u1_s, xi, 0, 1, 1, 1, n)		    #  plaq(u, x, i, j, oi, oj, n): Just for reference
+    b2 = su.ah(b1)
+    bf1 = l.add_mul(bf1, b2, -0.25)
+
+    b1 = l.plaq(u0, ngp_index, 0, 1, 1, -1, n)
+    b2 = su.ah(b1)
+    bf1 = l.add_mul(bf1, b2, +0.25)
+
+    b1 = l.plaq(u0, ngp_index, 1, 0, 1, -1, n)
+    b2 = su.ah(b1)
+    bf1 = l.add_mul(bf1, b2, -0.25)
+
+    b1 = l.plaq(u0, ngp_index, 1, 0, -1, -1, n)
+    b2 = su.ah(b1)
+    Beta = l.add_mul(bf1, b2, +0.25)
+    """
+
+    buf1 = l.add_mul(bl_prime, bl, -1)
+    tr_sq_bl_dif[xi] = su.sq(buf1)
+
+    buf2 = bl[xi]
+    tr_sq_bl[xi] = su.sq(buf2)
+
+
+
+
+
+
+
+
 #@mynonparjit                                                          
 @myjit                                                                         
 def compute_noise_kernel(x, mass, n, new_n, kernel):    # Just for reference: my_parallel_loop(compute_noise_kernel, n, m_noise, n, noise_n, noise_kernel)                                                                       
     
     for y in prange(new_n):                                                     
         k2 = k2_latt(x, y, n)                                                  
-        if (x > 0 or y > 0):                                                   
+        
+        if (x > 0 or y > 0): 
+            #kernel[x, y] = mass ** 2 / (k2 + mass ** 2) 
+            kernel[x, y] = np.exp(-k2/mass**2)
             
-            kernel[x, y] = mass ** 2 / (k2 + mass ** 2) 
-            #kernel[x, y] = np.exp(-k2/mass**2)
 
-            """
-            #K_centre      = 0.024543692606170262
-            #dk            = 0.049087385212340524
-            
-            k_lower_limit = K_centre - dk/2
-            k_upper_limit = K_centre + dk/2
-            k  = np.sqrt(k2)
-
-            if (k_lower_limit <= k <= k_upper_limit):
-                kernel[x, y] = 1.0
-            else:
-                kernel[x, y] = 0.0
-            """
-                                                                                             
-    
 
 @mynonparjit                                                                                
 #@myjit                                                                                     # Gives warnings
