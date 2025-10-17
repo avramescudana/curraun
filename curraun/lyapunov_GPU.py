@@ -62,7 +62,7 @@ class Lyapunov():
         self.d_tr_sq_el.copy_to_host(self.tr_sq_el)
         self.d_tr_sq_dif.copy_to_host(self.tr_sq_dif)
 
-    def change_el(self, alpha, m_noise):
+    def change_EL(self, alpha, m_noise):
         peta1 = self.sprime.d_peta1
         n = self.sprime.n
         noise_n = (n // 2 + 1) if n % 2 == 0 else (n + 1) // 2
@@ -92,14 +92,14 @@ class Lyapunov():
 
             eta = eta.reshape((n ** 2, su.GROUP_ELEMENTS))
 
-        my_parallel_loop(change_el_kernel, n ** 2, peta1, eta)
+        my_parallel_loop(change_EL_kernel, n ** 2, peta1, eta)
 
-    def compute_change_el(self):
+    def compute_change_EL(self):
         peta1s = self.s.d_peta1
         peta1sprime = self.sprime.d_peta1
         n = self.s.n
 
-        my_parallel_loop(compute_change_el_kernel, n ** 2, peta1s, peta1sprime, self.d_tr_sq_el, self.d_tr_sq_dif)
+        my_parallel_loop(compute_change_EL_kernel, n ** 2, peta1s, peta1sprime, self.d_tr_sq_el, self.d_tr_sq_dif)
 
         if use_cuda:
             self.copy_to_host()
@@ -112,7 +112,7 @@ class Lyapunov():
 
 
 @mynonparjit
-def compute_change_el_kernel(xi, peta1s, peta1sprime, tr_sq_el, tr_sq_dif):
+def compute_change_EL_kernel(xi, peta1s, peta1sprime, tr_sq_el, tr_sq_dif):
     buf1 = l.add_mul(peta1sprime[xi], peta1s[xi], -1)
     tr_sq_dif[xi] = su.sq(buf1)
     tr_sq_el[xi] = su.sq(peta1s[xi])
@@ -134,6 +134,6 @@ def k2_latt(x, y, nt):
 
 
 @mynonparjit
-def change_el_kernel(xi, peta1, eta):
+def change_EL_kernel(xi, peta1, eta):
     buf1 = su.add(peta1[xi], eta[xi])
     peta1[xi] = buf1

@@ -14,7 +14,31 @@ PI = np.pi
 random_np = np.random.RandomState()
 
 if use_cuda:
+    print("\nuse_cuda =", use_cuda, "\nGo ahead and import CuPy.")
+    use_cupy = True
     import numba.cuda as cuda
+    import cupy
+
+    random_cupy = cupy.random.RandomState()
+
+    print("\nuse_cupy =", use_cupy)
+    print("\nCuPy has been imported successfully.")
+    print("\nCuPy random number generator initialized.\n")
+
+else:
+    print("\nuse_cuda =", use_cuda, "\nCuPy will not be imported.")
+    use_cupy = False
+    print("use_cupy =", use_cupy, "\nCuPy is not imported.\n")
+    random_np = np.random.RandomState()
+    print("\nNumPy random number generator initialized.\n")
+
+# Set precision
+su_precision = os.environ.get('PRECISION', 'double')
+if use_cupy:
+    DTYPE = cupy.float32 if su_precision == 'single' else cupy.float64
+else:
+    DTYPE = np.float32 if su_precision == 'single' else np.float64
+
 
 
 # set precision of variable
@@ -54,6 +78,17 @@ class Lyapunov():
         self.ratio_BL_dif = 0.0
         """ End: For B_eta"""
 
+        if use_cuda:
+            self.copy_to_device()
+
+    def copy_to_device(self):
+        self.d_tr_sq_EL = cuda.to_device(self.tr_sq_EL)
+        self.d_tr_sq_EL_dif = cuda.to_device(self.tr_sq_EL_dif)
+
+    def copy_to_host(self):
+        self.d_tr_sq_EL.copy_to_host(self.tr_sq_EL)
+        self.d_tr_sq_EL_dif.copy_to_host(self.tr_sq_EL_dif)
+
 
 
 
@@ -74,14 +109,39 @@ class Lyapunov():
         n = self.sprime.n
 
         # Add Gaussian noise with parameter alpha
-        eta = random_np.normal(loc=0.0, scale=alpha, size=(n ** 2 * su.GROUP_ELEMENTS))  
-        eta = eta.reshape((n * n, su.GROUP_ELEMENTS))
+        # eta = random_np.normal(loc=0.0, scale=alpha, size=(n ** 2 * su.GROUP_ELEMENTS))  
+        # eta = eta.reshape((n * n, su.GROUP_ELEMENTS))
         
         noise_n = (n // 2 + 1) if n % 2 == 0 else (n + 1) // 2             
-        noise_kernel = np.zeros((n, noise_n), dtype = su.GROUP_TYPE_REAL)  
+        # noise_kernel = np.zeros((n, noise_n), dtype = su.GROUP_TYPE_REAL)  
+        if use_cupy:
+            eta = random_cupy.normal(loc=0.0, scale=alpha, size=(n, n, su.GROUP_ELEMENTS)).astype(DTYPE)
+            noise_kernel = cupy.zeros((n, noise_n), dtype=su.GROUP_TYPE_REAL)
+            my_parallel_loop(compute_noise_kernel, n, Option_noise_type, n, noise_n, noise_kernel, m_noise, K, dk)
+
+            for i in range(su.GROUP_ELEMENTS):
+                fft_eta = cupy.fft.rfft2(eta[:, :, i])
+                fft_eta *= noise_kernel
+                eta[:, :, i] = cupy.fft.irfft2(fft_eta, s=(n, n))
+
+            eta = cupy.reshape(eta, (n ** 2, su.GROUP_ELEMENTS))
+            eta = cupy.asnumpy(eta)  # convert back to host for CPU kernel
+
+        else:
+            eta = random_np.normal(loc=0.0, scale=alpha, size=(n, n, su.GROUP_ELEMENTS)).astype(DTYPE)
+            noise_kernel = np.zeros((n, noise_n), dtype=su.GROUP_TYPE_REAL)
+            my_parallel_loop(compute_noise_kernel, n, Option_noise_type, n, noise_n, noise_kernel, m_noise, K, dk)
+
+            for i in range(su.GROUP_ELEMENTS):
+                fft_eta = rfft2(eta[:, :, i])
+                fft_eta *= noise_kernel
+                eta[:, :, i] = irfft2(fft_eta, s=(n, n))
+
+            eta = eta.reshape((n ** 2, su.GROUP_ELEMENTS))
+
         
 
-        my_parallel_loop(compute_noise_kernel, n, Option_noise_type, n, noise_n, noise_kernel, m_noise, K, dk)      # Just for reference: def compute_noise_kernel(x, Option_noise_type, n, new_n, kernel, m_noise, K, dk): # Added 11.09.2025
+        # my_parallel_loop(compute_noise_kernel, n, Option_noise_type, n, noise_n, noise_kernel, m_noise, K, dk)      # Just for reference: def compute_noise_kernel(x, Option_noise_type, n, new_n, kernel, m_noise, K, dk): # Added 11.09.2025
         #my_parallel_loop(compute_noise_kernel, n, m_noise, n, noise_n, noise_kernel)                               # Just for reference: def compute_noise_kernel(x, m_noise, n, new_n, kernel):                           # Commented 10.09.2025
 
         """
@@ -93,7 +153,7 @@ class Lyapunov():
            *args are the extra arguments you pass in my_parallel_loop(kernel, N, arg1, arg2, ...)
         """
         
-        eta = irfft2(  rfft2( eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1) ) * noise_kernel[:, :, na],  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))
+        # eta = irfft2(  rfft2( eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1) ) * noise_kernel[:, :, na],  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))
         #eta = irfft2(  rfft2(eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1)) ,  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))  # Eliminating the noise kernel for now
 
         my_parallel_loop(change_EL_kernel, n ** 2, peta1, eta)
@@ -164,8 +224,9 @@ class Lyapunov():
 
 @mynonparjit
 def change_EL_kernel(xi, peta1, eta):
-    buf1 = su.add(peta1[xi], eta[xi])
-    peta1[xi] = buf1
+    #buf1 = su.add(peta1[xi], eta[xi])
+    #peta1[xi] = buf1
+    su.store(peta1[xi], su.add(peta1[xi], eta[xi]))
 
 
 
@@ -294,7 +355,7 @@ def compute_noise_kernel(x, Option_noise_type, n, new_n, kernel, m_noise, K, dk)
 
         elif Option_noise_type == 1:                                        # Exponential noise
             #print("Option_noise_type = 1: Exponential noise")
-            kernel[x, y] = np.exp(-k2/m_noise**2)
+            kernel[x, y] = math.exp(-k2/m_noise**2)
 
         elif Option_noise_type == 2:                                        # Power-law noise
             #print("Option_noise_type = 2: Power-law noise")
@@ -303,7 +364,7 @@ def compute_noise_kernel(x, Option_noise_type, n, new_n, kernel, m_noise, K, dk)
         elif Option_noise_type == 3:                                        # Independent noise, Theta function
 
             #print("Option_noise_type = 3: Independent noise, Theta function")
-            k  = np.sqrt(k2)
+            k  = math.sqrt(k2)
             k_lower_limit = K - dk/2
             k_upper_limit = K + dk/2
 
