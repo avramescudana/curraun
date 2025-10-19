@@ -6,7 +6,7 @@ import os
 # from curraun import su as su
 from curraun.numba_target import myjit, mynonparjit
 
-import math
+import math, cmath
 import numpy as np
 
 # from numba import prange
@@ -48,6 +48,8 @@ else:
 EXP_MIN_TERMS = -1 # minimum number of terms in Taylor series
 EXP_MAX_TERMS = 100 # maximum number of terms in Taylor series
 EXP_ACCURACY_SQUARED = 1.e-40 # 1.e-32 # accuracy
+
+SQRT3 = math.sqrt(3)  # Square root of 3 for Cayley-Hamilton method
 
 def complex_tuple(*t):
     return tuple(map(GROUP_TYPE, t))
@@ -156,7 +158,7 @@ def mul(a, b):
 # exponential map
 # @myjit
 @mynonparjit
-def mexp(a):
+def mexp(a, EXP_MAX_TERMS=100, EXP_ACCURACY_SQUARED=1.e-40):
     """ Calculate exponential using Taylor series
 
     mexp(a) = 1 + a + a^2 / 2 + a^3 / 6 + ...
@@ -178,8 +180,124 @@ def mexp(a):
     else:
         # print("Exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
         print("Exponential did not reach desired accuracy")  # TODO: remove debugging code
+        print("Accuracy squared of last term: {}".format(n.real))  # TODO: remove debugging code
     return res
 
+@mynonparjit
+def mexp_improved(a, exp_quality=1e2, min_n=4, reunitarize=False):
+    """ Calculate exponential using improved Taylor series
+
+    exp(a) ≈ (1 + a/K)^K  where K ≈ exp_quality * |a|^2
+
+    Approximates exp(a) by (1 + a/K)^K where K is chosen based on the norm of a
+    and is rounded up to the nearest power of 2 for efficient squaring.
+    
+    >>> a = id0  
+    >>> mexp_improved(a)
+    ((2.7176184823368357+0j), 0j, 0j, 0j, (2.7176184823368357+0j), 0j, 0j, 0j, (2.7176184823368357+0j))
+
+    """
+    norm = math.sqrt(sq(a))
+    
+    max_int = 2**31 - 100
+    if exp_quality * norm > max_int:
+        K = max_int
+    else:
+        K = int(exp_quality * norm) + 1
+    
+    KK = 2
+    n = 1  
+    
+    while K > 1:
+        n += 1
+        KK *= 2
+        K >>= 1  
+    
+    if n < min_n:
+        n = min_n
+        KK = 2 ** n
+    
+    factor = 1.0 / GROUP_TYPE_REAL(KK)
+    scaled_a = mul_s(a, factor)
+    U = add(id0, scaled_a)
+    
+    for i in range(n):
+        U = mul(U, U)
+    
+    if reunitarize:
+        # U_new = (3U - U U† U) / 2
+        U_dag_U = mul(dagger(U), U)
+        U_dag_U_U = mul(U_dag_U, U)
+        U_temp = add(mul_s(U, 3.0), mul_s(U_dag_U_U, -1.0))
+        U = mul_s(U_temp, 0.5)
+        
+        d = det(U)
+        if abs(d) > 1e-18:
+            phase = d / abs(d)  
+            abs_det = abs(d)
+            det_norm = abs_det ** (1.0 / N_C)
+            det_factor = det_norm * phase ** (1.0 / N_C)
+            U = mul_s(U, 1.0 / det_factor)
+    return U
+
+@mynonparjit
+def mexp_cayham(g):
+    # ONLY WORKS FOR ANTI-HERMITIAN, TRACE-ZERO MATRICES!
+    # -> g = ah(g)
+    # this function implements the matrix exponential
+    # according to: https://arxiv.org/abs/2207.02167
+
+    # function assumes input exp(i t^a v^a)
+    # and computes exp(i t^a v^a) = exp(0.5 i l^a v^a)
+
+    # calc |v|
+    abs_v = math.sqrt(-0.5 * tr(mul(g, g)).real)
+
+    # calc sigma = t^a v^a / |v|
+    sigma = mul_s(g, -1.0j / abs_v)
+
+    # calc sigma^2
+    sigma_sqr = mul(sigma, sigma)
+
+    # calc eta = det(sigma), sigma is hermitian!
+    eta = det(sigma).real
+
+    # calc roots of z^3 - z - eta = 0
+    phi = math.acos(1.5 * SQRT3 * eta) / 3.0
+    sin_phi = math.sin(phi)
+    cos_phi_over_sqrt3 = math.cos(phi) / SQRT3
+    z1 = 2.0 * cos_phi_over_sqrt3
+    z2 = -sin_phi - cos_phi_over_sqrt3
+    z3 = sin_phi - cos_phi_over_sqrt3
+
+    res = zero()
+    tmp = zero()
+
+    # z_1 term
+    tmp = mul_s(unit(), z1 * z1 - 1.0)
+    tmp = add(tmp, mul_s(sigma, z1))
+    tmp = add(tmp, sigma_sqr)
+
+    tmp = mul_s(tmp, cmath.exp(1.0j * z1 * abs_v) / (3.0 * z1 * z1 - 1.0))
+    res = add(res, tmp)
+
+    # z_2 term
+    tmp = mul_s(unit(), z2 * z2 - 1.0)
+    tmp = add(tmp, mul_s(sigma, z2))
+    tmp = add(tmp, sigma_sqr)
+
+    tmp = mul_s(tmp, cmath.exp(1.0j * z2 * abs_v) / (3.0 * z2 * z2 - 1.0))
+    res = add(res, tmp)
+
+    # z_3 term
+    tmp = mul_s(unit(), z3 * z3 - 1.0)
+    tmp = add(tmp, mul_s(sigma, z3))
+    tmp = add(tmp, sigma_sqr)
+
+    tmp = mul_s(tmp, cmath.exp(1.0j * z3 * abs_v) / (3.0 * z3 * z3 - 1.0))
+    res = add(res, tmp)
+
+    return res
 
 # derivative of exponential map
 # @myjit
@@ -216,6 +334,8 @@ def dmexp(a, da):
         # print("Derivative of exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
         print("Derivative of exponential did not reach desired accuracy")  # TODO: remove debugging code
     return res
+
+
 
 # inverse
 # @myjit
