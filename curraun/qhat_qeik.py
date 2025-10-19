@@ -6,262 +6,6 @@ import curraun.kappa as kappa
 if use_cuda:
     import numba.cuda as cuda
 
-"""
-    A module for various calculations related to momentum broadening and the \hat{q} parameter.
-"""
-def complex_tuple(*t):
-    return tuple(map(su.GROUP_TYPE, t))
-
-s1 = complex_tuple(0, 1, 0, 1, 0, 0, 0, 0, 0)
-# s1 = complex_tuple(0, 0, -1j, 0, 0, 0, 1j, 0, 0)
-
-#TODO: remove this class
-class TransportedForce:
-    def __init__(self, s):
-        self.s = s
-        self.n = s.n
-        self.dtstep = round(1.0 / s.dt)
-
-        # light-like wilson lines
-        self.v = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        my_parallel_loop(reset_wilsonfield, self.n ** 2, self.v)
-
-        # transported force
-        self.f = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        self.ftilde = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-
-        # integrated force
-        self.fi = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        self.ftildei = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-
-        # initial gauge field
-        self.ai = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-
-        # paralel transported gauge field - initial gage field
-        self.delta_ai = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-
-        # single components
-        self.p_perp_x = np.zeros(self.n ** 2, dtype=np.double)
-        self.p_perp_y = np.zeros(self.n ** 2, dtype=np.double)
-        self.p_perp_z = np.zeros(self.n ** 2, dtype=np.double)
-
-        # self.p_perp_A_x = np.zeros(self.n ** 2, dtype=np.double)
-        # self.p_perp_A_y = np.zeros(self.n ** 2, dtype=np.double)
-        # self.p_perp_A_z = np.zeros(self.n ** 2, dtype=np.double)
-        self.p_perp_A = np.zeros((self.n ** 2, 3), dtype=np.double)
-
-        # gauge field components squared
-        # self.az_sq = np.zeros(self.n ** 2, dtype=np.double)
-        # self.ay_sq = np.zeros(self.n ** 2, dtype=np.double)
-        # self.ax_sq = np.zeros(self.n ** 2, dtype=np.double) 
-        self.ai_sq = np.zeros((self.n ** 2, 3), dtype=np.double)
-
-        # self.az_sq_mean = 0.0
-        # self.ay_sq_mean = 0.0
-        # self.ax_sq_mean = 0.0
-        self.ai_sq_mean = np.zeros(3, dtype=np.double)
-
-        self.deltapi = np.zeros((self.n ** 2, 3), dtype=np.double)
-        self.deltap = np.zeros((self.n ** 2, 3), dtype=np.double)
-        self.deltaA = np.zeros((self.n ** 2, 3), dtype=np.double)
-
-        self.deltapi_mean = np.zeros(3, dtype=np.double)
-        self.deltap_mean = np.zeros(3, dtype=np.double)
-        self.deltaA_mean = np.zeros(3, dtype=np.double)
-
-        # mean values
-        self.p_perp_mean = np.zeros(3, dtype=np.double)
-        self.p_perp_A_mean = np.zeros(3, dtype=np.double)
-        if use_cuda:
-            # use pinned memory for asynchronous data transfer
-            self.p_perp_mean = cuda.pinned_array(3, dtype=np.double)
-            self.p_perp_mean[0:3] = 0.0
-            self.p_perp_A_mean = cuda.pinned_array(3, dtype=np.double)
-            self.p_perp_A_mean[0:3] = 0.0
-            self.ai_sq_mean = cuda.pinned_array(3, dtype=np.double)
-            self.ai_sq_mean[0:3] = 0.0
-
-            self.deltapi_mean = cuda.pinned_array(3, dtype=np.double)
-            self.deltapi_mean[0:3] = 0.0
-            self.deltap_mean = cuda.pinned_array(3, dtype=np.double)
-            self.deltap_mean[0:3] = 0.0
-            self.deltaA_mean = cuda.pinned_array(3, dtype=np.double)
-            self.deltaA_mean[0:3] = 0.0
-
-        # time counter
-        self.t = 0
-
-        # Memory on the CUDA device:
-        self.d_v = self.v
-        self.d_f = self.f
-        self.d_fi = self.fi
-        self.d_ftilde = self.ftilde
-        self.d_ftildei = self.ftildei
-        self.d_p_perp_x = self.p_perp_x
-        self.d_p_perp_y = self.p_perp_y
-        self.d_p_perp_z = self.p_perp_z
-        self.d_p_perp_mean = self.p_perp_mean
-        # self.d_az_sq = self.az_sq
-        # self.d_ay_sq = self.ay_sq
-        # self.d_ax_sq = self.ax_sq
-        self.d_ai_sq = self.ai_sq
-
-        self.d_ai = self.ai
-        self.d_delta_ai = self.delta_ai
-
-        # self.d_p_perp_A_x = self.p_perp_A_x
-        # self.d_p_perp_A_y = self.p_perp_A_y
-        # self.d_p_perp_A_z = self.p_perp_A_z
-        self.d_p_perp_A = self.p_perp_A
-        self.d_p_perp_A_mean = self.p_perp_A_mean
-
-        self.d_deltapi = self.deltapi
-        self.d_deltap = self.deltap
-        self.d_deltaA = self.deltaA
-
-        self.d_deltapi_mean = self.deltapi_mean
-        self.d_deltap_mean = self.deltap_mean
-        self.d_deltaA_mean = self.deltaA_mean
-
-
-
-    def copy_to_device(self):
-        self.d_v = cuda.to_device(self.v)
-
-        self.d_f = cuda.to_device(self.f)
-        self.d_fi = cuda.to_device(self.fi)
-        self.d_ftilde = cuda.to_device(self.ftilde)
-        self.d_ftildei = cuda.to_device(self.ftildei)
-
-        self.d_p_perp_x = cuda.to_device(self.p_perp_x)
-        self.d_p_perp_y = cuda.to_device(self.p_perp_y)
-        self.d_p_perp_z = cuda.to_device(self.p_perp_z)
-        self.d_p_perp_mean = cuda.to_device(self.p_perp_mean)
-        # self.d_az_sq = cuda.to_device(self.az_sq)
-        # self.d_ay_sq = cuda.to_device(self.ay_sq)
-        # self.d_ax_sq = cuda.to_device(self.ax_sq)
-        self.d_ai_sq = cuda.to_device(self.ai_sq)
-        self.d_ai_sq_mean = cuda.to_device(self.ai_sq_mean)
-
-        self.d_ai = cuda.to_device(self.ai)
-        self.d_delta_ai = cuda.to_device(self.delta_ai)
-
-        # self.d_p_perp_A_x = cuda.to_device(self.p_perp_A_x)
-        # self.d_p_perp_A_y = cuda.to_device(self.p_perp_A_y)
-        # self.d_p_perp_A_z = cuda.to_device(self.p_perp_A_z)
-        self.d_p_perp_A = cuda.to_device(self.p_perp_A)
-        self.d_p_perp_A_mean = cuda.to_device(self.p_perp_A_mean)
-
-        self.d_deltapi = cuda.to_device(self.deltapi)
-        self.d_deltap = cuda.to_device(self.deltap)
-        self.d_deltaA = cuda.to_device(self.deltaA)
-
-        self.d_deltapi_mean = cuda.to_device(self.deltapi_mean)
-        self.d_deltap_mean = cuda.to_device(self.deltap_mean)
-        self.d_deltaA_mean = cuda.to_device(self.deltaA_mean)
-
-    def copy_to_host(self):
-        self.d_v.copy_to_host(self.v)
-
-        self.d_f.copy_to_host(self.f)
-        self.d_fi.copy_to_host(self.fi)
-        self.d_ftilde.copy_to_host(self.ftilde)
-        self.d_ftildei.copy_to_host(self.ftildei)
-
-        self.d_p_perp_x.copy_to_host(self.p_perp_x)
-        self.d_p_perp_y.copy_to_host(self.p_perp_y)
-        self.d_p_perp_z.copy_to_host(self.p_perp_z)
-        self.d_p_perp_mean.copy_to_host(self.p_perp_mean)
-        # self.d_az_sq.copy_to_host(self.az_sq)
-        # self.d_ay_sq.copy_to_host(self.ay_sq)
-        # self.d_ax_sq.copy_to_host(self.ax_sq)
-        self.d_ai_sq.copy_to_host(self.ai_sq)
-        self.d_ai_sq_mean.copy_to_host(self.ai_sq_mean)
-
-        self.d_ai.copy_to_host(self.ai)
-        self.d_delta_ai.copy_to_host(self.delta_ai)
-        
-        # self.d_p_perp_A_x.copy_to_host(self.p_perp_A_x)
-        # self.d_p_perp_A_y.copy_to_host(self.p_perp_A_y)
-        # self.d_p_perp_A_z.copy_to_host(self.p_perp_A_z)
-        self.d_p_perp_A.copy_to_host(self.p_perp_A)
-        self.d_p_perp_A_mean.copy_to_host(self.p_perp_A_mean)
-
-        self.d_deltapi.copy_to_host(self.deltapi)
-        self.d_deltap.copy_to_host(self.deltap)
-        self.d_deltaA.copy_to_host(self.deltaA)
-
-        self.d_deltapi_mean.copy_to_host(self.deltapi_mean)
-        self.d_deltap_mean.copy_to_host(self.deltap_mean)
-        self.d_deltaA_mean.copy_to_host(self.deltaA_mean)
-
-    def copy_mean_to_device(self, stream=None):
-        self.d_p_perp_mean = cuda.to_device(self.p_perp_mean, stream)
-        self.d_p_perp_A_mean = cuda.to_device(self.p_perp_A_mean, stream)
-
-    def copy_mean_to_host(self, stream=None):
-        self.d_p_perp_mean.copy_to_host(self.p_perp_mean, stream)
-        self.d_p_perp_A_mean.copy_to_host(self.p_perp_A_mean, stream)
-
-    def compute(self,stream=None):
-        tint = round(self.s.t / self.s.dt)
-        tstart = round(1 / self.s.dt)
-        if tint == tstart:
-            compute_ai(self.s, self.d_ai, round(self.s.t - 1e-8), stream)
-
-        if tint % self.dtstep == 0 and tint >= tstart:
-            # compute un-transported f
-            compute_ftilde(self.s, self.d_ftilde, round(self.s.t - 1e-8), stream)
-            compute_f(self.s, self.d_f, round(self.s.t - 1e-8), stream)
-
-            # apply parallel transport
-            apply_v(self.d_f, self.d_v, self.s.n, stream)
-            apply_v(self.d_ftilde, self.d_v, self.s.n, stream)
-
-            # integrate f
-            integrate_f(self.d_ftilde, self.d_ftildei, self.s.n, 1.0, stream)
-            integrate_f(self.d_f, self.d_fi, self.s.n, 1.0, stream)
-
-            # integrate perpendicular momentum
-            compute_p_perp(self.d_ftildei, self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.s.n, stream)
-
-            # calculate mean
-            compute_mean(self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.d_p_perp_mean, stream)
-
-            # calculate parallel transported gauge field minus the initial field
-            compute_delta_ai(self.s, self.d_v, self.d_ai, round(self.s.t - 1e-8), self.d_delta_ai, stream)
-
-            # integrate perpendicular momentum
-            # compute_p_perp_A(self.s, self.d_fi, self.d_p_perp_A_y, self.d_p_perp_A_z, self.s.n, stream)
-            compute_p_perp_A(self.d_ftildei, self.d_delta_ai, self.d_p_perp_A, self.s.n, stream)
-
-            # calculate mean
-            # compute_mean(self.d_p_perp_A_x, self.d_p_perp_A_y, self.d_p_perp_A_z, self.d_p_perp_A_mean, stream)
-            compute_mean(self.d_p_perp_A[:, 0], self.d_p_perp_A[:, 1], self.d_p_perp_A[:, 2], self.d_p_perp_A_mean, stream)
-
-
-            # compute asq
-            # compute_asq(self.s, self.d_ay_sq, self.d_az_sq, round(self.s.t - 1e-8), stream)
-            compute_asq(self.d_delta_ai, self.d_ai_sq, self.s.n, stream)
-
-            # self.az_sq_mean = np.mean(self.d_az_sq)
-            # self.ay_sq_mean = np.mean(self.d_ay_sq)
-
-            compute_mean(self.d_ai_sq[:, 0], self.d_ai_sq[:, 1], self.d_ai_sq[:, 2], self.d_ai_sq_mean, stream)
-
-            compute_delta(self.d_fi, self.d_ftildei, self.d_delta_ai, self.d_deltapi, self.d_deltap, self.d_deltaA, self.s.n, stream)
-
-            compute_mean(self.d_deltapi[:, 0], self.d_deltapi[:, 1], self.d_deltapi[:, 2], self.d_deltapi_mean, stream)
-
-            compute_mean(self.d_deltap[:, 0], self.d_deltap[:, 1], self.d_deltap[:, 2], self.d_deltap_mean, stream)
-
-            compute_mean(self.d_deltaA[:, 0], self.d_deltaA[:, 1], self.d_deltaA[:, 2], self.d_deltaA_mean, stream)
-
-        if tint % self.dtstep == self.dtstep / 2:
-            # update v
-            update_v(self.s, self.d_v, round(self.s.t - 1e-8), stream)
-
-
 class KineticCanonicCheck:
     def __init__(self, s):
         self.s = s
@@ -272,54 +16,53 @@ class KineticCanonicCheck:
         self.v = np.zeros((self.n ** 2, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         my_parallel_loop(reset_wilsonfield, self.n ** 2, self.v)
 
+        # initial gauge field
+        self.a0 = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         # gauge field
         self.a = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # transported force
-        self.fp = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        self.fpi = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.fcan = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.fkin = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.fa = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # integrated force
-        self.intfp = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        self.intfpi = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.intfcan = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.intfkin = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.intfa = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
-        # initial gauge field
-        self.a0 = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-
         # paralel transported gauge field - initial gage field
-        self.deltaa = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
+        self.da = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
-        self.deltapsq = np.zeros((self.n ** 2, 3), dtype=np.double)
-        self.deltapisq = np.zeros((self.n ** 2, 3), dtype=np.double)
-        self.deltaasq = np.zeros((self.n ** 2, 3), dtype=np.double)
-        self.deltapdeltaa = np.zeros((self.n ** 2, 3), dtype=np.double)
-        self.deltapdeltaa_transp = np.zeros((self.n ** 2, 3), dtype=np.double)
-        self.deltaasq_transp = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.dpcan_sq = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.dpkin_sq = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.da_sq = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.dpcanda = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.dpcanda_transp = np.zeros((self.n ** 2, 3), dtype=np.double)
+        self.da_transp_sq = np.zeros((self.n ** 2, 3), dtype=np.double)
 
         # mean values
-        self.deltapsq_mean = np.zeros(3, dtype=np.double)
-        self.deltapisq_mean = np.zeros(3, dtype=np.double)
-        self.deltaasq_mean = np.zeros(3, dtype=np.double)
-        self.deltapdeltaa_mean = np.zeros(3, dtype=np.double)
-        self.deltapdeltaa_transp_mean = np.zeros(3, dtype=np.double)
-        self.deltaasq_transp_mean = np.zeros(3, dtype=np.double)
+        self.dpcan_sq_mean = np.zeros(3, dtype=np.double)
+        self.dpkin_sq_mean = np.zeros(3, dtype=np.double)
+        self.da_sq_mean = np.zeros(3, dtype=np.double)
+        self.dpcanda_mean = np.zeros(3, dtype=np.double)
+        self.dpcanda_transp_mean = np.zeros(3, dtype=np.double)
+        self.da_transp_sq_mean = np.zeros(3, dtype=np.double)
 
         if use_cuda:
             # use pinned memory for asynchronous data transfer
-            self.deltapsq_mean = cuda.pinned_array(3, dtype=np.double)
-            self.deltapsq_mean[0:3] = 0.0
-            self.deltapisq_mean = cuda.pinned_array(3, dtype=np.double)
-            self.deltapisq_mean[0:3] = 0.0
-            self.deltaasq_mean = cuda.pinned_array(3, dtype=np.double)
-            self.deltaasq_mean[0:3] = 0.0
-            self.deltapdeltaa_mean = cuda.pinned_array(3, dtype=np.double)
-            self.deltapdeltaa_mean[0:3] = 0.0
-            self.deltapdeltaa_transp_mean = cuda.pinned_array(3, dtype=np.double)
-            self.deltapdeltaa_transp_mean[0:3] = 0.0
-            self.deltaasq_transp_mean = cuda.pinned_array(3, dtype=np.double)
-            self.deltaasq_transp_mean[0:3] = 0.0
+            self.dpcan_sq_mean = cuda.pinned_array(3, dtype=np.double)
+            self.dpcan_sq_mean[0:3] = 0.0
+            self.dpkin_sq_mean = cuda.pinned_array(3, dtype=np.double)
+            self.dpkin_sq_mean[0:3] = 0.0
+            self.da_sq_mean = cuda.pinned_array(3, dtype=np.double)
+            self.da_sq_mean[0:3] = 0.0
+            self.dpcanda_mean = cuda.pinned_array(3, dtype=np.double)
+            self.dpcanda_mean[0:3] = 0.0
+            self.dpcanda_transp_mean = cuda.pinned_array(3, dtype=np.double)
+            self.dpcanda_transp_mean[0:3] = 0.0
+            self.da_transp_sq_mean = cuda.pinned_array(3, dtype=np.double)
+            self.da_transp_sq_mean[0:3] = 0.0
 
         # time counter
         self.t = 0
@@ -327,126 +70,138 @@ class KineticCanonicCheck:
         # Memory on the CUDA device:
         self.d_a = self.a
         self.d_v = self.v
-        self.d_fp = self.fp
-        self.d_fpi = self.fpi
+        self.d_fcan = self.fcan
+        self.d_fkin = self.fkin
         self.d_fa = self.fa
-        self.d_intfp = self.intfp
-        self.d_intfpi = self.intfpi
+        self.d_intfcan = self.intfcan
+        self.d_intfkin = self.intfkin
         self.d_intfa = self.intfa
         self.d_a0 = self.a0
-        self.d_deltaa = self.deltaa
-        self.d_deltapsq = self.deltapsq
-        self.d_deltapisq = self.deltapisq
-        self.d_deltaasq = self.deltaasq
-        self.d_deltaasq_transp = self.deltaasq_transp
-        self.d_deltapdeltaa = self.deltapdeltaa
-        self.d_deltapdeltaa_transp = self.deltapdeltaa_transp
-        self.d_deltapsq_mean = self.deltapsq_mean
-        self.d_deltapisq_mean = self.deltapisq_mean
-        self.d_deltaasq_mean = self.deltaasq_mean
-        self.d_deltaasq_transp_mean = self.deltaasq_transp_mean
-        self.d_deltapdeltaa_mean = self.deltapdeltaa_mean
-        self.d_deltapdeltaa_transp_mean = self.deltapdeltaa_transp_mean
+        self.d_da = self.da
+        self.d_dpcan_sq = self.dpcan_sq
+        self.d_dpkin_sq = self.dpkin_sq
+        self.d_da_sq = self.da_sq
+        self.d_da_transp_sq = self.da_transp_sq
+        self.d_dpcanda = self.dpcanda
+        self.d_dpcanda_transp = self.dpcanda_transp
+        self.d_dpcan_sq_mean = self.dpcan_sq_mean
+        self.d_dpkin_sq_mean = self.dpkin_sq_mean
+        self.d_da_sq_mean = self.da_sq_mean
+        self.d_da_transp_sq_mean = self.da_transp_sq_mean
+        self.d_dpcanda_mean = self.dpcanda_mean
+        self.d_dpcanda_transp_mean = self.dpcanda_transp_mean
 
 
     def copy_to_device(self):
         self.d_a = cuda.to_device(self.a)
         self.d_v = cuda.to_device(self.v)
-        self.d_fp = cuda.to_device(self.fp)
-        self.d_fpi = cuda.to_device(self.fpi)
+        self.d_fcan = cuda.to_device(self.fcan)
+        self.d_fkin = cuda.to_device(self.fkin)
         self.d_fa = cuda.to_device(self.fa)
-        self.d_intfp = cuda.to_device(self.intfp)
-        self.d_intfpi = cuda.to_device(self.intfpi)
+        self.d_intfcan = cuda.to_device(self.intfcan)
+        self.d_intfkin = cuda.to_device(self.intfkin)
         self.d_intfa = cuda.to_device(self.intfa)
         self.d_a0 = cuda.to_device(self.a0)
-        self.d_deltaa = cuda.to_device(self.deltaa)
-        self.d_deltapsq = cuda.to_device(self.deltapsq)
-        self.d_deltapisq = cuda.to_device(self.deltapisq)
-        self.d_deltaasq = cuda.to_device(self.deltaasq)
-        self.d_deltaasq_transp = cuda.to_device(self.deltaasq_transp)
-        self.d_deltapdeltaa = cuda.to_device(self.deltapdeltaa)
-        self.d_deltapdeltaa_transp = cuda.to_device(self.deltapdeltaa_transp)
-        self.d_deltapsq_mean = cuda.to_device(self.deltapsq_mean)
-        self.d_deltapisq_mean = cuda.to_device(self.deltapisq_mean)
-        self.d_deltaasq_mean = cuda.to_device(self.deltaasq_mean)
-        self.d_deltaasq_transp_mean = cuda.to_device(self.deltaasq_transp_mean)
-        self.d_deltapdeltaa_mean = cuda.to_device(self.deltapdeltaa_mean)
-        self.d_deltapdeltaa_transp_mean = cuda.to_device(self.deltapdeltaa_transp_mean)
+        self.d_da = cuda.to_device(self.da)
+        self.d_dpcan_sq = cuda.to_device(self.dpcan_sq)
+        self.d_dpkin_sq = cuda.to_device(self.dpkin_sq)
+        self.d_da_sq = cuda.to_device(self.da_sq)
+        self.d_da_transp_sq = cuda.to_device(self.da_transp_sq)
+        self.d_dpcanda = cuda.to_device(self.dpcanda)
+        self.d_dpcanda_transp = cuda.to_device(self.dpcanda_transp)
+        self.d_dpcan_sq_mean = cuda.to_device(self.dpcan_sq_mean)
+        self.d_dpkin_sq_mean = cuda.to_device(self.dpkin_sq_mean)
+        self.d_da_sq_mean = cuda.to_device(self.da_sq_mean)
+        self.d_da_transp_sq_mean = cuda.to_device(self.da_transp_sq_mean)
+        self.d_dpcanda_mean = cuda.to_device(self.dpcanda_mean)
+        self.d_dpcanda_transp_mean = cuda.to_device(self.dpcanda_transp_mean)
         
     def copy_to_host(self):
         self.d_a.copy_to_host(self.a)
         self.d_v.copy_to_host(self.v)
-        self.d_fp.copy_to_host(self.fp)
-        self.d_fpi.copy_to_host(self.fpi)
+        self.d_fcan.copy_to_host(self.fcan)
+        self.d_fkin.copy_to_host(self.fkin)
         self.d_fa.copy_to_host(self.fa)
-        self.d_intfp.copy_to_host(self.intfp)
-        self.d_intfpi.copy_to_host(self.intfpi)
+        self.d_intfcan.copy_to_host(self.intfcan)
+        self.d_intfkin.copy_to_host(self.intfkin)
         self.d_intfa.copy_to_host(self.intfa)
         self.d_a0.copy_to_host(self.a0)
-        self.d_deltaa.copy_to_host(self.deltaa)
-        self.d_deltapsq.copy_to_host(self.deltapsq)
-        self.d_deltapisq.copy_to_host(self.deltapisq)
-        self.d_deltaasq.copy_to_host(self.deltaasq)
-        self.d_deltaasq_transp.copy_to_host(self.deltaasq_transp)
-        self.d_deltapdeltaa.copy_to_host(self.deltapdeltaa)
-        self.d_deltapdeltaa_transp.copy_to_host(self.deltapdeltaa_transp)
-        self.d_deltapsq_mean.copy_to_host(self.deltapsq_mean)
-        self.d_deltapisq_mean.copy_to_host(self.deltapisq_mean)
-        self.d_deltaasq_mean.copy_to_host(self.deltaasq_mean)
-        self.d_deltaasq_transp_mean.copy_to_host(self.deltaasq_transp_mean)
-        self.d_deltapdeltaa_mean.copy_to_host(self.deltapdeltaa_mean)
-        self.d_deltapdeltaa_transp_mean.copy_to_host(self.deltapdeltaa_transp_mean)
+        self.d_da.copy_to_host(self.da)
+        self.d_dpcan_sq.copy_to_host(self.dpcan_sq)
+        self.d_dpkin_sq.copy_to_host(self.dpkin_sq)
+        self.d_da_sq.copy_to_host(self.da_sq)
+        self.d_da_transp_sq.copy_to_host(self.da_transp_sq)
+        self.d_dpcanda.copy_to_host(self.dpcanda)
+        self.d_dpcanda_transp.copy_to_host(self.dpcanda_transp)
+        self.d_dpcan_sq_mean.copy_to_host(self.dpcan_sq_mean)
+        self.d_dpkin_sq_mean.copy_to_host(self.dpkin_sq_mean)
+        self.d_da_sq_mean.copy_to_host(self.da_sq_mean)
+        self.d_da_transp_sq_mean.copy_to_host(self.da_transp_sq_mean)
+        self.d_dpcanda_mean.copy_to_host(self.dpcanda_mean)
+        self.d_dpcanda_transp_mean.copy_to_host(self.dpcanda_transp_mean)
 
-    def compute(self, quark, stream=None):
+    def compute(self):
         tint = round(self.s.t / self.s.dt)
         tstart = round(1 / self.s.dt)
+        # tstart = 0
+
+        t = round(self.s.t)
+        n = self.s.n
+
+        v = self.d_v
+        fcan = self.d_fcan
+        fkin = self.d_fkin
+        fa = self.d_fa
+
+        a0 = self.d_a0
+        a = self.d_a
+
         if tint == tstart:
-            compute_ai(self.s, self.d_a0, round(self.s.t), stream)
+            compute_ai(self.s, a0, t)
 
         if tint % self.dtstep == 0 and tint >= tstart:
             # compute un-transported f and ftilde
-            compute_ftilde(self.s, self.d_fp, round(self.s.t), quark, stream)
-            compute_f(self.s, self.d_fpi, round(self.s.t), quark, stream)
+            compute_fcan(self.s, fcan, t)
+            compute_fkin(self.s, fkin, t)
 
-            # compute gauge field, delta gauge field
-            compute_ai(self.s, self.d_a, round(self.s.t), stream)
-            compute_delta_ai(self.d_a0, self.d_v, self.d_a, round(self.s.t), self.d_deltaa, self.s.n, quark, stream)
+            # compute gauge field, d gauge field
+            compute_ai(self.s, a, t)
+            compute_dai(a0, v, a, t, self.d_da, n)
 
             # compute un-transported fa
-            compute_fa(self.d_fp, self.d_fpi, self.d_fa, round(self.s.t), self.s.n, stream)
+            compute_fa(fcan, fkin, fa, t, n)
 
             # apply parallel transport
-            if quark=='jet':
-                apply_v(self.d_fp, self.d_v, self.s.n, stream)
-                apply_v(self.d_fpi, self.d_v, self.s.n, stream)
-                apply_v(self.d_fa, self.d_v, self.s.n, stream)
+            apply_v(fcan, v, n)
+            apply_v(fkin, v, n)
+            apply_v(fa, v, n)
 
             # integrate f
-            integrate_f(self.d_fp, self.d_intfp, self.s.n, 1.0, stream)
-            integrate_f(self.d_fpi, self.d_intfpi, self.s.n, 1.0, stream)
-            integrate_f(self.d_fa, self.d_intfa, self.s.n, 1.0, stream)
+            integrate_f(fcan, self.d_intfcan, n, 1.0)
+            integrate_f(fkin, self.d_intfkin, n, 1.0)
+            integrate_f(fa, self.d_intfa, n, 1.0)
 
             # integrate perpendicular momentum
-            compute_p_perp(self.d_intfp, self.d_deltapsq[:, 0], self.d_deltapsq[:, 1], self.d_deltapsq[:, 2], self.s.n, stream)
-            compute_p_perp(self.d_intfpi, self.d_deltapisq[:, 0], self.d_deltapisq[:, 1], self.d_deltapisq[:, 2], self.s.n, stream)
-            compute_p_perp(self.d_intfa, self.d_deltaasq[:, 0], self.d_deltaasq[:, 1], self.d_deltaasq[:, 2], self.s.n, stream)
-            compute_p_perp_A(self.d_intfp, self.d_deltaa, self.d_deltapdeltaa_transp, self.s.n, stream)
-            compute_p_perp_A(self.d_intfp, self.d_intfa, self.d_deltapdeltaa, self.s.n, stream)
+            compute_p_perp(self.d_intfcan, self.d_dpcan_sq[:, 0], self.d_dpcan_sq[:, 1], self.d_dpcan_sq[:, 2], n)
+            compute_p_perp(self.d_intfkin, self.d_dpkin_sq[:, 0], self.d_dpkin_sq[:, 1], self.d_dpkin_sq[:, 2], n)
+            compute_p_perp(self.d_intfa, self.d_da_sq[:, 0], self.d_da_sq[:, 1], self.d_da_sq[:, 2], n)
+            compute_p_perp_A(self.d_intfcan, self.d_da, self.d_dpcanda_transp, n)
+            compute_p_perp_A(self.d_intfcan, self.d_intfa, self.d_dpcanda, n)
 
             # calculate mean
-            compute_mean(self.d_deltapsq[:, 0], self.d_deltapsq[:, 1], self.d_deltapsq[:, 2], self.d_deltapsq_mean, stream)
-            compute_mean(self.d_deltapisq[:, 0], self.d_deltapisq[:, 1], self.d_deltapisq[:, 2], self.d_deltapisq_mean, stream)
-            compute_mean(self.d_deltaasq[:, 0], self.d_deltaasq[:, 1], self.d_deltaasq[:, 2], self.d_deltaasq_mean, stream)
-            compute_mean(self.d_deltapdeltaa[:, 0], self.d_deltapdeltaa[:, 1], self.d_deltapdeltaa[:, 2], self.d_deltapdeltaa_mean, stream)
-            compute_mean(self.d_deltapdeltaa_transp[:, 0], self.d_deltapdeltaa_transp[:, 1], self.d_deltapdeltaa_transp[:, 2], self.d_deltapdeltaa_transp_mean, stream)
+            compute_mean(self.d_dpcan_sq[:, 0], self.d_dpcan_sq[:, 1], self.d_dpcan_sq[:, 2], self.d_dpcan_sq_mean)
+            compute_mean(self.d_dpkin_sq[:, 0], self.d_dpkin_sq[:, 1], self.d_dpkin_sq[:, 2], self.d_dpkin_sq_mean)
+            compute_mean(self.d_da_sq[:, 0], self.d_da_sq[:, 1], self.d_da_sq[:, 2], self.d_da_sq_mean)
+            compute_mean(self.d_dpcanda[:, 0], self.d_dpcanda[:, 1], self.d_dpcanda[:, 2], self.d_dpcanda_mean)
+            compute_mean(self.d_dpcanda_transp[:, 0], self.d_dpcanda_transp[:, 1], self.d_dpcanda_transp[:, 2], self.d_dpcanda_transp_mean)
 
             # compute asq
-            compute_asq(self.d_deltaa, self.d_deltaasq_transp, self.s.n, stream)
-            compute_mean(self.d_deltaasq_transp[:, 0], self.d_deltaasq_transp[:, 1], self.d_deltaasq_transp[:, 2], self.d_deltaasq_transp_mean, stream)
+            compute_asq(self.d_da, self.d_da_transp_sq, n)
+            compute_mean(self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], self.d_da_transp_sq_mean)
 
         if tint % self.dtstep == self.dtstep / 2:
             # update v
-            update_v(self.s, self.d_v, round(self.s.t), stream)
+            update_v(self.s, v, t)
 
 
 
@@ -460,11 +215,11 @@ def reset_wilsonfield(x, wilsonfield):
 """
 
 
-def update_v(s, v, t, stream):
+def update_v(s, v, t):
     u = s.d_u0
     n = s.n
 
-    my_parallel_loop(update_v_kernel, n * n, u, v, t, n, stream=stream)
+    my_parallel_loop(update_v_kernel, n * n, u, v, t, n)
 
 @myjit
 def update_v_kernel(xi, u, v, t, n):
@@ -472,64 +227,41 @@ def update_v_kernel(xi, u, v, t, n):
 
     b1 = su.mul(v[xi], u[xs, 0])
     su.store(v[xi], b1)
-    #l.normalize(v[xi])
 
-def compute_delta(fi, ftildei, delta_ai, deltapi, deltap, deltaA, n, stream):
-
-    my_parallel_loop(compute_delta_kernel, n * n, fi, ftildei, delta_ai, deltapi, deltap, deltaA, stream=stream)
-
-@myjit 
-def compute_delta_kernel(xi, fi, ftildei, delta_ai, deltapi, deltap, deltaA):
-    t1 = su.mul_s(s1, 0.5)
-    for i in range(3):
-        deltapi[xi, i] = su.tr(su.mul(fi[xi, i], t1)).real
-        deltap[xi, i] = su.tr(su.mul(ftildei[xi, i], t1)).real
-        deltaA[xi, i] = su.tr(su.mul(delta_ai[xi, i], t1)).real
-
-
-def compute_ai(s, ai, t, stream):
+def compute_ai(s, ai, t):
     u0 = s.d_u0
     aeta0 = s.d_aeta0
 
     n = s.n
 
-    my_parallel_loop(compute_ai_kernel, n * n, u0, aeta0, t, n, ai, stream=stream)
+    my_parallel_loop(compute_ai_kernel, n * n, u0, aeta0, t, ai)
 
 @myjit
-def compute_ai_kernel(xi, u0, aeta0, t, n, ai):
+def compute_ai_kernel(xi, u0, aeta0, t, ai):
     ax = su.mlog(u0[xi, 0])
     ay = su.mlog(u0[xi, 1])
     # ax = su.mul_s(su.mlog(u0[xi, 0]), -1)
     # ay = su.mul_s(su.mlog(u0[xi, 1]), -1)
     az = su.mul_s(aeta0[xi], 1.0 / t)
-    # az = su.mul_s(aeta0[xi], t)
 
     su.store(ai[xi, 0], ax)
     su.store(ai[xi, 1], ay)
     su.store(ai[xi, 2], az)
 
-def compute_delta_ai(a0, v, a, t, delta_ai, n, quark, stream):
+def compute_dai(a0, v, a, t, dai, n):
 
-    if quark=='jet':
-        my_parallel_loop(compute_delta_ai_jet_kernel, n * n, a0, v, a, t, delta_ai, n, stream=stream)  
-    elif quark=='hq':
-        my_parallel_loop(compute_delta_ai_hq_kernel, n * n, a0, v, a, t, delta_ai, n, stream=stream)
+    my_parallel_loop(compute_dai_kernel, n * n, a0, v, a, t, dai, n)  
 
 @myjit
-def compute_delta_ai_jet_kernel(xi, a0, v, a, t, delta_ai, n):
+def compute_dai_kernel(xi, a0, v, a, t, dai, n):
+    xs = l.shift(xi, 0, t, n)
+
     for i in range(3):
-        xs = l.shift(xi, 0, t, n)
         aitransp = l.act(v[xs], a[xs, i])
         bufi = l.add_mul(aitransp, a0[xi, i], -1)
+        # bufi = l.add_mul(a0[xi, i], aitransp, -1)
 
-        su.store(delta_ai[xi, i], bufi)
-
-@myjit
-def compute_delta_ai_hq_kernel(xi, a0, v, a, t, delta_ai, n):
-    for i in range(3):
-        bufi = l.add_mul(a[xi, i], a0[xi, i], -1)
-
-        su.store(delta_ai[xi, i], bufi)
+        su.store(dai[xi, i], bufi)
 
 
 """
@@ -537,12 +269,10 @@ def compute_delta_ai_hq_kernel(xi, a0, v, a, t, delta_ai, n):
     sites) force acting on a light-like trajectory particle.
 """
 
-def compute_f(s, f, t, quark, stream):
+def compute_fkin(s, f, t):
     u0 = s.d_u0
-    u1 = s.d_u1
     pt1 = s.d_pt1
     aeta0 = s.d_aeta0
-    aeta1 = s.d_aeta1
     peta1 = s.d_peta1
     pt0 = s.d_pt0
     peta0 = s.d_peta0
@@ -550,17 +280,13 @@ def compute_f(s, f, t, quark, stream):
     n = s.n
     tau = s.t 
 
-    if quark=='jet':
-        my_parallel_loop(compute_f_jet_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
-    elif quark=='hq':
-        my_parallel_loop(compute_f_hq_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
+    my_parallel_loop(compute_fkin_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, tau)
 
 @myjit
-def compute_f_hq_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
+def compute_fkin_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, tau):
+    xs = l.shift(xi, 0, t, n)
 
     # f_1 = E_1 (index 0)
-    xs = xi
-
     bf0 = su.zero()
 
     bf0 = su.add(bf0, pt1[xs, 0])
@@ -575,52 +301,6 @@ def compute_f_hq_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, t
     su.store(f[xi, 0], bf0)
 
     # f_2 = E_2 - B_3 (index 1)
-    xs = l.shift(xi, 0, t, n)
-    xs2 = l.shift(xs, 1, -1, n)
-
-    bf1 = su.zero()
-
-    # quadratically accurate +Ey
-    bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / tau)
-    bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / tau)
-    xs3 = l.shift(xs, 1, -1, n)
-    b1 = l.act(su.dagger(u0[xs3, 1]), pt1[xs2, 1])
-    bf1 = l.add_mul(bf1, b1, 0.25 / tau)
-    b1 = l.act(su.dagger(u0[xs3, 1]), pt0[xs2, 1])
-    bf1 = l.add_mul(bf1, b1, 0.25 / tau)
-
-    su.store(f[xi, 1], bf1)
-
-    # f_3 = E_3 + B_2 (index 2)
-    bf2 = su.zero()
-
-    # Accurate +E_z
-    bf2 = l.add_mul(bf2, peta1[xs], 0.5)
-    bf2 = l.add_mul(bf2, peta0[xs], 0.5)
-
-    su.store(f[xi, 2], bf2)
-
-@myjit
-def compute_f_jet_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
-
-    # f_1 = E_1 (index 0)
-    xs = l.shift(xi, 0, t, n)
-    
-    bf0 = su.zero()
-
-    bf0 = su.add(bf0, pt1[xs, 0])
-    bf0 = su.add(bf0, pt0[xs, 0])
-
-    xs2 = l.shift(xs, 0, -1, n)
-    b1 = l.act(su.dagger(u0[xs2, 0]), pt1[xs2, 0])
-    bf0 = su.add(bf0, b1)
-    b1 = l.act(su.dagger(u0[xs2, 0]), pt0[xs2, 0])
-    bf0 = su.add(bf0, b1)
-    bf0 = su.mul_s(bf0, 0.25 / tau)
-    su.store(f[xi, 0], bf0)
-
-    # f_2 = E_2 - B_3 (index 1)
-    xs = l.shift(xi, 0, t, n)
     xs2 = l.shift(xs, 1, -1, n)
 
     bf1 = su.zero()
@@ -668,45 +348,22 @@ def compute_f_jet_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, 
 
     su.store(f[xi, 2], bf2)
 
-def compute_ftilde(s, f, t, quark, stream):
+def compute_fcan(s, f, t):
     u0 = s.d_u0
-    pt1 = s.d_pt1
     aeta0 = s.d_aeta0
-    aeta1 = s.d_aeta1
-    peta1 = s.d_peta1
-    pt0 = s.d_pt0
-    peta0 = s.d_peta0
 
     n = s.n
     tau = s.t 
 
-    if quark=='jet':
-        my_parallel_loop(compute_ftilde_jet_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
-    elif quark=='hq':
-        my_parallel_loop(compute_ftilde_hq_kernel, n * n, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau, stream=stream)
+    my_parallel_loop(compute_fcan_kernel, n * n, n, u0, aeta0, f, t, tau)
 
 @myjit
-def compute_ftilde_jet_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
-
+def compute_fcan_kernel(xi, n, u0, aeta0, f, t, tau):
     xs = l.shift(xi, 0, t, n)
-    
-    # f_1 = \partial_y A_x in quantum eikonal approximation
-
-    # Gauge-covariant symmetric derivative
-    # xspy1 = l.shift(xs, 1, 1, n)
-    # axpy1 = su.mlog(u0[xspy1, 0])
-    # axpy1_transp = l.act(u0[xs, 0], axpy1)
-
-    # xsmy1 = l.shift(xs, 1, -1, n)
-    # axmy1 = su.mlog(u0[xsmy1, 0])
-    # axmy1_transp = l.act(su.dagger(u0[xsmy1, 0]), axmy1)
-
-    # dyax = l.add_mul(axpy1_transp, axmy1_transp, -1.0)
 
     # Naive symmetric partial derivative
     xspy1 = l.shift(xs, 1, 1, n)
     axpy1 = su.mlog(u0[xspy1, 0])
-
 
     xsmx1 = l.shift(xs, 1, -1, n)
     axmy1 = su.mlog(u0[xsmx1, 0])
@@ -714,129 +371,26 @@ def compute_ftilde_jet_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f
     dif = l.add_mul(axpy1, axmy1, -1.0)
     dyax = su.mul_s(dif, 0.5)
 
-    # Naive forwaard partial derivative
-    # xspy1 = l.shift(xs, 1, 1, n)
-    # axpy1 = su.mlog(u0[xspy1, 0])
-
-    # axy = su.mlog(u0[xs, 0])
-    # dyax = l.add_mul(axpy1, axy, -1.0)
-
-    # su.store(f[xi, 1], su.mul_s(dyax, -1.0))
+    bf0 = su.mul_s(dyax, -1.0)
+    su.store(f[xi, 1], bf0)
     # su.store(f[xi, 1], dyax)
-    su.store(f[xi, 1], su.mul_s(dyax, -1.0))
-
-    # f_2 = \partial_y A_x - D_x A_y in quantum eikonal approximation
-    # Gauge-covariant symmetric derivative
-    # xspx1 = l.shift(xs, 0, 1, n)
-    # aypx1 = su.mlog(u0[xspx1, 1])
-    # aypx1_transp = l.act(u0[xs, 1], aypx1)
-
-    # xsmx1 = l.shift(xs, 0, -1, n)
-    # aymx1 = su.mlog(u0[xsmx1, 1])
-    # aymx1_transp = l.act(su.dagger(u0[xsmx1, 0]), aymx1)
-
-    # dxay = l.add_mul(aypx1_transp, aymx1_transp, -1.0)
-    # dxay_dyax = l.add_mul(dyax, dxay, -1.0)
-
-    # # Gauge-covariant forward derivative
-    # xspx1 = l.shift(xs, 0, 1, n)
-    # aypx1 = su.mlog(u0[xspx1, 1])
-    # aypx1_transp = l.act(u0[xs, 1], aypx1)
-
-    # ayx = su.mlog(u0[xs, 1])
-
-    # dxay = l.add_mul(aypx1_transp, ayx, -1.0)
-    # dxay_dyax = l.add_mul(dyax, dxay, +1.0)
-
-    # su.store(f[xi, 1], dxay_dyax)
 
     # f_1 = E_z = 1/\tau^2 A_\eta in canonical momentum
-    # bf1 = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
     bf1 = su.mul_s(aeta0[xs], - 1.0 / (tau * tau))
     su.store(f[xi, 2], bf1)
 
-@myjit
-def compute_ftilde_hq_kernel(xi, n, u0, aeta0, aeta1, peta1, peta0, pt1, pt0, f, t, tau):
-    su.store(f[xi, 1], su.zero())
-
-    bf1 = su.mul_s(aeta0[xi], - 1.0 / (tau * tau))
-    su.store(f[xi, 2], bf1)
-
-
-# def compute_fa(s, f, a, t, stream):
-#     u0 = s.d_u0
-#     u1 = s.d_u1
-#     pt1 = s.d_pt1
-#     aeta0 = s.d_aeta0
-#     peta1 = s.d_peta1
-#     pt0 = s.d_pt0
-#     peta0 = s.d_peta0
-
-#     n = s.n
-#     tau = s.t 
-
-#     my_parallel_loop(compute_fa_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau, stream=stream)
-
-# @myjit
-# def compute_fa_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, a, t, tau):
-
-#     xs = l.shift(xi, 0, t, n)
-
-#     # P^y / tau = Ey
-#     bf1 = su.zero()
-#     xs2 = l.shift(xs, 1, -1, n)
-#     bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / tau)
-#     bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / tau)
-#     xs3 = l.shift(xs, 1, -1, n)
-#     b1 = l.act(su.dagger(u0[xs3, 1]), pt1[xs2, 1])
-#     bf1 = l.add_mul(bf1, b1, 0.25 / tau)
-#     b1 = l.act(su.dagger(u0[xs3, 1]), pt0[xs2, 1])
-#     py = l.add_mul(bf1, b1, 0.25 / tau)
-
-
-#     # D_x A_y 
-#     bf2 = su.zero()
-#     b1 = l.transport(a[:, 1], u0, xs, 0, +1, n)
-#     b2 = l.transport(a[:, 1], u0, xs, 0, -1, n)
-#     b1 = l.add_mul(b1, b2, -1.0)
-#     dxay = l.add_mul(bf2, b1, 0.5)
-
-#     fy = su.add(py, dxay)
-#     # su.store(f[xi, 1], su.mul_s(fy, -1.0))
-#     su.store(f[xi, 1], fy)
-
-#     # - A_eta / tau^2
-#     aetatau = su.mul_s(aeta0[xs],  - 1.0 / (tau * tau))
-
-#     # P^eta = E_z
-#     bf2 = su.zero()
-#     bf2 = l.add_mul(bf2, peta1[xs], 0.5)
-#     peta = l.add_mul(bf2, peta0[xs], 0.5)
-
-#     # D_x A_eta / tau
-#     b1 = l.transport(aeta0, u0, xs, 0, +1, n)
-#     b2 = l.transport(aeta0, u0, xs, 0, -1, n)
-#     b1 = l.add_mul(b1, b2, -1.0)
-#     dxaetatau = l.add_mul(bf2, b1, 0.5 / tau)
-
-#     fz = su.add(su.add(peta, dxaetatau), aetatau)
-
-#     # su.store(f[xi, 2], su.mul_s(fz, -1.0))
-#     su.store(f[xi, 2], fz)
-
-def compute_fa(fp, fpi, fa, t, n, stream):
-    my_parallel_loop(compute_fa_kernel, n * n, fp, fpi, fa, t, n, stream=stream)
+def compute_fa(fcan, fkin, fa, t, n):
+    my_parallel_loop(compute_fa_kernel, n * n, fcan, fkin, fa, t, n)
 
 @myjit
-def compute_fa_kernel(xi, fp, fpi, fa, t, n):
-
+def compute_fa_kernel(xi, fcan, fkin, fa, t, n):
     xs = l.shift(xi, 0, t, n)
 
     for i in range(3):
-        # delta A = fpi - fp convention Alatt = -igaA
-        buf = l.add_mul(fpi[xs, i], fp[xs, i], -1)
-        # buf = l.add_mul(fp[xs, i], fpi[xs, i], -1)
-        su.store(fa[xs, i], buf)
+        # d A = fkin - fcan convention Alatt = -igaA
+        buf = l.add_mul(fkin[xs, i], fcan[xs, i], -1)
+        # buf = l.add_mul(fcan[xs, i], fkin[xs, i], -1)
+        su.store(fa[xi, i], buf)
 
 
 """
@@ -845,12 +399,12 @@ def compute_fa_kernel(xi, fp, fpi, fa, t, n):
 """
 
 
-def apply_v(f, v, n, stream):
-    my_parallel_loop(apply_v_kernel, n * n, f, v, n, stream=stream)
+def apply_v(f, v, n):
+    my_parallel_loop(apply_v_kernel, n * n, f, v)
 
 
 @myjit
-def apply_v_kernel(xi, f, v, n):
+def apply_v_kernel(xi, f, v):
     for d in range(3):
         b1 = l.act(v[xi], f[xi, d])
         b1 = su.ah(b1)
@@ -862,8 +416,8 @@ def apply_v_kernel(xi, f, v, n):
 """
 
 
-def integrate_f(f, fi, n, dt, stream):
-    kappa.integrate_f(f, fi, n, dt, stream)
+def integrate_f(f, fi, n, dt):
+    kappa.integrate_f(f, fi, n, dt, stream=None)
 
 
 """
@@ -873,35 +427,25 @@ def integrate_f(f, fi, n, dt, stream):
 """
 
 
-def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream):
-    kappa.compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream)
+def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n):
+    kappa.compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream=None)
 
-def compute_p_perp_A(fi, delta_ai, p_perp_A, n, stream):
-    my_parallel_loop(compute_p_perp_A_kernel, n * n, fi, delta_ai, p_perp_A, n, stream=stream)
+def compute_p_perp_A(fi, d_ai, p_perp_A, n):
+    my_parallel_loop(compute_p_perp_A_kernel, n * n, fi, d_ai, p_perp_A, n)
 
 @myjit
-def compute_p_perp_A_kernel(xi, fi, delta_ai, p_perp_A, n):
+def compute_p_perp_A_kernel(xi, fi, d_ai, p_perp_A, n):
     for i in range(3):
-        p_perp_A[xi, i] = su.tr(su.mul(fi[xi, i], su.dagger(delta_ai[xi, i]))).real
+        p_perp_A[xi, i] = su.tr(su.mul(fi[xi, i], su.dagger(d_ai[xi, i]))).real
 
 
-def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream):
-    kappa.compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream)
+def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean):
+    kappa.compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream=None)
 
-@myjit
-def transport_act(f, u, x, i, o):
-    if o > 0:
-        u1 = u[x, i]  
-        result = l.act(u1, f[x])
-    else:
-        u2 = su.dagger(u[x, i])  
-        result = l.act(u2, f[x])
-    return result
-
-def compute_asq(delta_ai, ai_sq, n, stream):
-    my_parallel_loop(compute_asq_kernel, n * n, delta_ai, ai_sq, stream=stream)
+def compute_asq(d_ai, ai_sq, n):
+    my_parallel_loop(compute_asq_kernel, n * n, d_ai, ai_sq)
 
 @myjit
-def compute_asq_kernel(xi, delta_ai, ai_sq):
+def compute_asq_kernel(xi, d_ai, ai_sq):
     for i in range(3):
-        ai_sq[xi, i]= su.sq(delta_ai[xi, i])
+        ai_sq[xi, i]= su.sq(d_ai[xi, i])
