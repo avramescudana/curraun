@@ -114,3 +114,10 @@ venv.bak/
 
 # VSCode
 .vscode/
+
+# Results, plots
+*.png
+*.pickle
+results/
+plots/
+files/
