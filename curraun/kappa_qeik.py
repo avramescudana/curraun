@@ -147,18 +147,18 @@ class KineticCanonicCheck:
         a = self.d_a
 
         if tint == tstart:
-        # if tint == 1:
             compute_ai(self.s, a0, t)
 
-        # if tint % self.dtstep == 0 and tint >= 1:
-        if tint % self.dtstep == 0 and tint >= tstart:
+        if tint % self.dtstep == 0 and tint > tstart:
             compute_fcan(self.s, fcan)
             compute_fkin(self.s, fkin)
 
             # compute gauge field, d gauge field
             compute_ai(self.s, a, t)
-            # compute_dai(a0, a, self.d_da, n)
             compute_dai(self.s, a0, self.d_da, t, n)
+
+            compute_p_perp(self.d_da, self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], n)
+            compute_mean(self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], self.d_da_transp_sq_mean)
 
             compute_fa(fcan, fkin, fa, n)
 
@@ -174,20 +174,12 @@ class KineticCanonicCheck:
             compute_p_perp_A(self.d_intfcan, self.d_da, self.d_dpcanda_transp, n)
             compute_p_perp_A(self.d_intfcan, self.d_intfa, self.d_dpcanda, n)
 
-            compute_p_perp(self.d_da, self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], n)
-
             # calculate mean
             compute_mean(self.d_dpcan_sq[:, 0], self.d_dpcan_sq[:, 1], self.d_dpcan_sq[:, 2], self.d_dpcan_sq_mean)
             compute_mean(self.d_dpkin_sq[:, 0], self.d_dpkin_sq[:, 1], self.d_dpkin_sq[:, 2], self.d_dpkin_sq_mean)
             compute_mean(self.d_da_sq[:, 0], self.d_da_sq[:, 1], self.d_da_sq[:, 2], self.d_da_sq_mean)
             compute_mean(self.d_dpcanda[:, 0], self.d_dpcanda[:, 1], self.d_dpcanda[:, 2], self.d_dpcanda_mean)
             compute_mean(self.d_dpcanda_transp[:, 0], self.d_dpcanda_transp[:, 1], self.d_dpcanda_transp[:, 2], self.d_dpcanda_transp_mean)
-
-            # compute asq
-            # print("compute_asq types:", type(self.d_da), type(self.d_da_transp_sq))
-            # compute_asq(self.d_da, self.d_da_transp_sq, n)
-            compute_mean(self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], self.d_da_transp_sq_mean)
-
 
 
 def compute_ai(s, ai, t):
@@ -202,22 +194,11 @@ def compute_ai(s, ai, t):
 def compute_ai_kernel(xi, u0, aeta0, t, ai):
     ax = su.mlog(u0[xi, 0])
     ay = su.mlog(u0[xi, 1])
-    # ax = su.mul_s(su.mlog(u0[xi, 0]), -1)
-    # ay = su.mul_s(su.mlog(u0[xi, 1]), -1)
     az = su.mul_s(aeta0[xi], 1.0 / t)
 
     su.store(ai[xi, 0], ax)
     su.store(ai[xi, 1], ay)
     su.store(ai[xi, 2], az)
-
-# def compute_dai(a0, a, dai, n):
-#     my_parallel_loop(compute_dai_kernel, n * n, a0, a, dai)  
-
-# @myjit
-# def compute_dai_kernel(xi, a0, a, dai):
-#     for i in range(3):
-#         bufi = l.add_mul(a[xi, i], a0[xi, i], -1)
-#         su.store(dai[xi, i], bufi)
 
 def compute_dai(s, a0, dai, t, n):
     u0 = s.d_u0
@@ -308,10 +289,7 @@ def compute_fcan(s, f):
 def compute_fcan_kernel(xi, aeta0, f, tau):
     bf0 = su.zero()
     su.store(f[xi, 1], bf0)
-    # su.store(f[xi, 1], dyax)
 
-    # f_1 = E_z = 1/\tau^2 A_\eta in canonical momentum
-    # bf1 = su.mul_s(aeta0[xi], - 1.0 / (tau * tau))
     bf1 = su.mul_s(aeta0[xi], 1.0 / (tau * tau))
     su.store(f[xi, 2], bf1)
 
@@ -323,7 +301,6 @@ def compute_fa_kernel(xi, fcan, fkin, fa):
     for i in range(3):
         # d A = fkin - fcan convention Alatt = -igaA
         buf = l.add_mul(fkin[xi, i], fcan[xi, i], -1)
-        # buf = l.add_mul(fcan[xi, i], fkin[xi, i], -1)
         su.store(fa[xi, i], buf)
 
 """
@@ -355,15 +332,3 @@ def compute_p_perp_A_kernel(xi, fi, d_ai, p_perp_A, n):
 
 def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean):
     kappa.compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream=None)
-
-# def compute_asq(d_ai, ai_sq, n):
-#     my_parallel_loop(compute_asq_kernel, n * n, d_ai, ai_sq)
-
-# @myjit
-# def compute_asq_kernel(xi, d_ai, ai_sq):
-#     for i in range(3):
-#         # ai_sq[xi, i]= su.sq(d_ai[xi, i])
-#         buf1 = su.mul(d_ai[xi, i], su.dagger(d_ai[xi, i]))
-#         ai_sq[xi, i] = su.tr(buf1).real
-#         if xi==10 and i==1: #TODO: remove after debug
-#             print('ai_sq_kernel=', su.tr(buf1).real)
