@@ -35,23 +35,23 @@ class Lyapunov():
 
 
         """ Start: For E_eta"""
-        self.tr_sq_EL = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
-        self.tr_sq_EL_dif = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)        
-        self.d_tr_sq_EL = self.tr_sq_EL
-        self.d_tr_sq_EL_dif = self.tr_sq_EL_dif
+        self.Trace_EL2 = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
+        self.Trace_ELdiff2 = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)        
+        self.d_Trace_EL2 = self.Trace_EL2
+        self.d_Trace_ELdiff2 = self.Trace_ELdiff2
 
-        self.ratio_EL_dif = 0.0
+        self.Ratio_Trace_ELdiff2_Trace_EL2 = 0.0
         """ End: For E_eta"""
 
 
 
         """ Start: For B_eta"""
-        self.tr_sq_BL = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
-        self.tr_sq_BL_dif = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
-        self.d_tr_sq_BL = self.tr_sq_BL
-        self.d_tr_sq_BL_dif = self.tr_sq_BL_dif
+        self.Trace_BL2 = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
+        self.Trace_BLdiff2 = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
+        self.d_Trace_BL2 = self.Trace_BL2
+        self.d_Trace_BLdiff2 = self.Trace_BLdiff2
 
-        self.ratio_BL_dif = 0.0
+        self.Ratio_Trace_BLdiff2_Trace_BL2 = 0.0
         """ End: For B_eta"""
 
 
@@ -106,12 +106,13 @@ class Lyapunov():
 
         n = self.s.n
 
-        my_parallel_loop(compute_change_EL_kernel, n ** 2, peta1s, peta1sprime, self.d_tr_sq_EL, self.d_tr_sq_EL_dif)
+        my_parallel_loop(compute_change_EL_kernel, n ** 2, peta1s, peta1sprime, self.d_Trace_EL2, self.d_Trace_ELdiff2)
 
-        dif_avg = np.mean(self.d_tr_sq_EL_dif)
-        EL_avg = np.mean(self.d_tr_sq_EL)
+        dif_avg = np.mean(self.d_Trace_ELdiff2)
+        EL_avg = np.mean(self.d_Trace_EL2)
 
-        self.ratio_EL_dif = dif_avg
+        #self.Ratio_Trace_ELdiff2_Trace_EL2 = dif_avg
+        self.Ratio_Trace_ELdiff2_Trace_EL2 = dif_avg / EL_avg      
     """ End: For E_eta"""
 
 
@@ -150,12 +151,12 @@ class Lyapunov():
 
         n = self.s.n
 
-        my_parallel_loop(compute_change_BL_kernel, n ** 2, n, u1_s, u1_sprime, self.d_tr_sq_BL, self.d_tr_sq_BL_dif)
+        my_parallel_loop(compute_change_BL_kernel, n ** 2, n, u1_s, u1_sprime, self.d_Trace_BL2, self.d_Trace_BLdiff2)
 
-        dif_BL_avg = np.mean(self.d_tr_sq_BL_dif)
-        BL_avg = np.mean(self.d_tr_sq_BL)
+        dif_BL_avg = np.mean(self.d_Trace_BLdiff2)
+        BL_avg = np.mean(self.d_Trace_BL2)
 
-        self.ratio_BL_dif = dif_BL_avg
+        self.Ratio_Trace_BLdiff2_Trace_BL2 = dif_BL_avg
 
     """ End: For B_eta"""
 
@@ -170,12 +171,12 @@ def change_EL_kernel(xi, peta1, eta):
 
 
 @mynonparjit
-def compute_change_EL_kernel(xi, peta1s, peta1sprime, tr_sq_EL, tr_sq_EL_dif):
+def compute_change_EL_kernel(xi, peta1s, peta1sprime, Trace_EL2, Trace_ELdiff2):
     buf1 = l.add_mul(peta1sprime[xi], peta1s[xi], -1)
-    tr_sq_EL_dif[xi] = su.sq(buf1)
+    Trace_ELdiff2[xi] = su.sq(buf1)
 
     buf2 = peta1s[xi]
-    tr_sq_EL[xi] = su.sq(buf2)
+    Trace_EL2[xi] = su.sq(buf2)
 
 
 
@@ -223,7 +224,7 @@ def change_Ui_kernel(xi, u1, eta):
 
 
 @mynonparjit
-def compute_change_BL_kernel(xi, n, u1_s, u1_sprime, tr_sq_BL, tr_sq_BL_dif):
+def compute_change_BL_kernel(xi, n, u1_s, u1_sprime, Trace_BL2, Trace_BLdiff2):
     BL       = su.ah( l.plaq_pos(u1_s,      xi, 0, 1, n) )
     BL_prime = su.ah( l.plaq_pos(u1_sprime, xi, 0, 1, n) )
 
@@ -249,23 +250,23 @@ def compute_change_BL_kernel(xi, n, u1_s, u1_sprime, tr_sq_BL, tr_sq_BL_dif):
 
 
     #buf1 = BL[xi]
-    tr_sq_BL[xi] = su.sq(BL)
+    Trace_BL2[xi] = su.sq(BL)
 
     buf2 = l.add_mul(BL_prime, BL, -1)
-    tr_sq_BL_dif[xi] = su.sq(buf2)
+    Trace_BLdiff2[xi] = su.sq(buf2)
 
 
 
 
 # @mynonparjit
-# def compute_change_EL_kernel(xi, peta1s, peta1sprime, tr_sq_EL, tr_sq_EL_dif):
+# def compute_change_EL_kernel(xi, peta1s, peta1sprime, Trace_EL2, Trace_ELdiff2):
 
 #     buf1 = l.add_mul(peta1sprime[xi], peta1s[xi], -1)
 
-#     tr_sq_EL_dif[xi] = su.sq(buf1)
+#     Trace_ELdiff2[xi] = su.sq(buf1)
 
 #     buf2 = peta1s[xi]
-#     tr_sq_EL[xi] = su.sq(buf2)
+#     Trace_EL2[xi] = su.sq(buf2)
 
 
 

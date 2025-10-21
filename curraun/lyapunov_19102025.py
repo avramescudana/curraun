@@ -34,25 +34,22 @@ class Lyapunov():
         N2 = n * n
 
 
-        """ Start: For E_eta"""
-        self.tr_sq_EL = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
-        self.tr_sq_EL_dif = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)        
-        self.d_tr_sq_EL = self.tr_sq_EL
-        self.d_tr_sq_EL_dif = self.tr_sq_EL_dif
-
-        self.ratio_EL_dif = 0.0
-        """ End: For E_eta"""
+        self.Trace_EL2 = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
+        self.Trace_ELdif2 = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)        
+        self.d_Trace_EL2 = self.Trace_EL2
+        self.d_Trace_ELdif2 = self.Trace_ELdif2
 
 
+        self.Trace_BL2 = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
+        self.Trace_BLdif2 = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
+        self.d_Trace_BL2 = self.Trace_BL2
+        self.d_Trace_BLdif2 = self.Trace_BLdif2
 
-        """ Start: For B_eta"""
-        self.tr_sq_BL = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
-        self.tr_sq_BL_dif = np.zeros(n*n, dtype=su.GROUP_TYPE_REAL)
-        self.d_tr_sq_BL = self.tr_sq_BL
-        self.d_tr_sq_BL_dif = self.tr_sq_BL_dif
 
-        self.ratio_BL_dif = 0.0
-        """ End: For B_eta"""
+        self.Trace_ELdiff2                  =  0.0
+        self.Ratio_Trace_ELdiff2_Trace_EL2  =  0.0
+        self.Trace_BLdiff2                  =  0.0
+        self.Ratio_Trace_BLdiff2_Trace_BL2  =  0.0
 
 
 
@@ -73,15 +70,17 @@ class Lyapunov():
         peta1 = self.sprime.d_peta1
         n = self.sprime.n
 
-        # Add Gaussian noise with parameter alpha
-        eta = random_np.normal(loc=0.0, scale=alpha, size=(n ** 2 * su.GROUP_ELEMENTS))  
-        eta = eta.reshape((n * n, su.GROUP_ELEMENTS))
-        
-        noise_n = (n // 2 + 1) if n % 2 == 0 else (n + 1) // 2             
-        noise_kernel = np.zeros((n, noise_n), dtype = su.GROUP_TYPE_REAL)  
-        
+        N  = n
+        N2 = N * N
 
-        my_parallel_loop(compute_noise_kernel, n, Option_noise_type, n, noise_n, noise_kernel, m_noise, K, dk)      # Just for reference: def compute_noise_kernel(x, Option_noise_type, n, new_n, kernel, m_noise, K, dk): # Added 11.09.2025
+        # Add Gaussian noise with parameter alpha
+        eta = random_np.normal(loc=0.0, scale=alpha, size=(N2 * su.GROUP_ELEMENTS))  
+        eta = eta.reshape((N2, su.GROUP_ELEMENTS))
+
+        noise_n = (N // 2 + 1) if N % 2 == 0 else (N + 1) // 2             
+        noise_kernel = np.zeros((N, noise_n), dtype = su.GROUP_TYPE_REAL)  
+
+        my_parallel_loop(compute_noise_kernel, N, Option_noise_type, N, noise_n, noise_kernel, m_noise, K, dk)      # Just for reference: def compute_noise_kernel(x, Option_noise_type, n, new_n, kernel, m_noise, K, dk): # Added 11.09.2025
         #my_parallel_loop(compute_noise_kernel, n, m_noise, n, noise_n, noise_kernel)                               # Just for reference: def compute_noise_kernel(x, m_noise, n, new_n, kernel):                           # Commented 10.09.2025
 
         """
@@ -92,27 +91,12 @@ class Lyapunov():
            xi is the loop index (0, 1, 2, ... N-1)
            *args are the extra arguments you pass in my_parallel_loop(kernel, N, arg1, arg2, ...)
         """
-        
-        eta = irfft2(  rfft2( eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1) ) * noise_kernel[:, :, na],  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))
+
+        eta = irfft2(  rfft2( eta.reshape((N, N, su.GROUP_ELEMENTS)), s=(N, N), axes=(0, 1) ) * noise_kernel[:, :, na],  s=(N, N),  axes=(0, 1)  ).reshape((N2, su.GROUP_ELEMENTS))
         #eta = irfft2(  rfft2(eta.reshape((n, n, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1)) ,  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, su.GROUP_ELEMENTS))  # Eliminating the noise kernel for now
 
-        my_parallel_loop(change_EL_kernel, n ** 2, peta1, eta)
+        my_parallel_loop(change_EL_kernel, N2, peta1, eta)
 
-
-
-    def compute_change_EL(self):
-        peta1s = self.s.d_peta1
-        peta1sprime = self.sprime.d_peta1
-
-        n = self.s.n
-
-        my_parallel_loop(compute_change_EL_kernel, n ** 2, peta1s, peta1sprime, self.d_tr_sq_EL, self.d_tr_sq_EL_dif)
-
-        dif_avg = np.mean(self.d_tr_sq_EL_dif)
-        EL_avg = np.mean(self.d_tr_sq_EL)
-
-        self.ratio_EL_dif = dif_avg
-    """ End: For E_eta"""
 
 
 
@@ -126,9 +110,6 @@ class Lyapunov():
         N  = n
         N2 = N * N
 
-        # Add Gaussian noise with parameter alpha
-        # eta = random_np.normal(loc=0.0, scale=alpha_lattice, size=(n ** 2 * su.GROUP_ELEMENTS))  
-        # eta = eta.reshape((n * n, su.GROUP_ELEMENTS))
 
         eta = random_np.normal(loc=0.0, scale=alpha_lattice, size=(N2 * 2 * su.GROUP_ELEMENTS))  
         eta = eta.reshape((N2, 2, su.GROUP_ELEMENTS))
@@ -138,26 +119,49 @@ class Lyapunov():
         noise_kernel = np.zeros((N, noise_n), dtype = su.GROUP_TYPE_REAL)  
 	
         my_parallel_loop(compute_noise_kernel, N, Option_noise_type, N, noise_n, noise_kernel, m_noise, K, dk)     
-        
-        eta = irfft2(  rfft2( eta.reshape((n, n, 2, su.GROUP_ELEMENTS)), s=(n, n), axes=(0, 1) ) * noise_kernel[:, :, na, na],  s=(n, n),  axes=(0, 1)  ).reshape((n ** 2, 2, su.GROUP_ELEMENTS))
-        
+
+        eta = irfft2(  rfft2( eta.reshape((N, N, 2, su.GROUP_ELEMENTS)), s=(N, N), axes=(0, 1) ) * noise_kernel[:, :, na, na],  s=(N, N),  axes=(0, 1)  ).reshape((N2, 2, su.GROUP_ELEMENTS))
+
         my_parallel_loop(change_Ui_kernel, N2,  u1, eta)
 
 
-    def compute_change_BL(self):
+
+    def Measure_EL(self):
+        peta1_s = self.s.d_peta1
+        peta1_sprime = self.sprime.d_peta1
+
+        n = self.s.n
+
+        N  = n
+        N2 = N * N
+
+        my_parallel_loop(Measure_EL_kernel, N2, peta1_s, peta1_sprime, self.d_Trace_EL2, self.d_Trace_ELdif2)
+
+        EL2_avg = np.mean(self.d_Trace_EL2)
+        ELdif2_avg = np.mean(self.d_Trace_ELdif2)
+
+        self.Trace_ELdiff2                  =  ELdif2_avg
+        self.Ratio_Trace_ELdiff2_Trace_EL2  =  ELdif2_avg / EL2_avg                     # = ELdif2_avg
+
+
+
+    def Measure_BL(self):
         u1_s = self.s.d_u1
         u1_sprime = self.sprime.d_u1
 
         n = self.s.n
 
-        my_parallel_loop(compute_change_BL_kernel, n ** 2, n, u1_s, u1_sprime, self.d_tr_sq_BL, self.d_tr_sq_BL_dif)
+        N  = n
+        N2 = N * N
 
-        dif_BL_avg = np.mean(self.d_tr_sq_BL_dif)
-        BL_avg = np.mean(self.d_tr_sq_BL)
+        my_parallel_loop(Measure_BL_kernel, N2, n, u1_s, u1_sprime, self.d_Trace_BL2, self.d_Trace_BLdif2)
 
-        self.ratio_BL_dif = dif_BL_avg
+        BL2_avg = np.mean(self.d_Trace_BL2)
+        BLdif2_avg = np.mean(self.d_Trace_BLdif2)
 
-    """ End: For B_eta"""
+        self.Trace_BLdiff2                  =  BLdif2_avg
+        self.Ratio_Trace_BLdiff2_Trace_BL2  =  BLdif2_avg / BL2_avg                     # = BLdif2_avg
+
 
 
 
@@ -170,12 +174,12 @@ def change_EL_kernel(xi, peta1, eta):
 
 
 @mynonparjit
-def compute_change_EL_kernel(xi, peta1s, peta1sprime, tr_sq_EL, tr_sq_EL_dif):
-    buf1 = l.add_mul(peta1sprime[xi], peta1s[xi], -1)
-    tr_sq_EL_dif[xi] = su.sq(buf1)
+def Measure_EL_kernel(xi, peta1_s, peta1_sprime, Trace_EL2, Trace_ELdif2):
+    buf1 = peta1_s[xi]
+    buf2 = l.add_mul(peta1_sprime[xi], peta1_s[xi], -1)
 
-    buf2 = peta1s[xi]
-    tr_sq_EL[xi] = su.sq(buf2)
+    Trace_EL2[xi] = su.sq(buf1)
+    Trace_ELdif2[xi] = su.sq(buf2)
 
 
 
@@ -223,7 +227,7 @@ def change_Ui_kernel(xi, u1, eta):
 
 
 @mynonparjit
-def compute_change_BL_kernel(xi, n, u1_s, u1_sprime, tr_sq_BL, tr_sq_BL_dif):
+def Measure_BL_kernel(xi, n, u1_s, u1_sprime, Trace_BL2, Trace_BLdif2):
     BL       = su.ah( l.plaq_pos(u1_s,      xi, 0, 1, n) )
     BL_prime = su.ah( l.plaq_pos(u1_sprime, xi, 0, 1, n) )
 
@@ -249,23 +253,29 @@ def compute_change_BL_kernel(xi, n, u1_s, u1_sprime, tr_sq_BL, tr_sq_BL_dif):
 
 
     #buf1 = BL[xi]
-    tr_sq_BL[xi] = su.sq(BL)
+    Trace_BL2[xi] = su.sq(BL)
 
     buf2 = l.add_mul(BL_prime, BL, -1)
-    tr_sq_BL_dif[xi] = su.sq(buf2)
+    Trace_BLdif2[xi] = su.sq(buf2)
 
 
 
 
 # @mynonparjit
-# def compute_change_EL_kernel(xi, peta1s, peta1sprime, tr_sq_EL, tr_sq_EL_dif):
+# def Measure_EL_kernel(xi, peta1_s, peta1_sprime, Trace_EL2, Trace_ELdif2):
 
-#     buf1 = l.add_mul(peta1sprime[xi], peta1s[xi], -1)
+#     buf1 = l.add_mul(peta1_sprime[xi], peta1_s[xi], -1)
 
-#     tr_sq_EL_dif[xi] = su.sq(buf1)
+#     Trace_ELdif2[xi] = su.sq(buf1)
 
-#     buf2 = peta1s[xi]
-#     tr_sq_EL[xi] = su.sq(buf2)
+#     buf2 = peta1_s[xi]
+#     Trace_EL2[xi] = su.sq(buf2)
+
+
+
+
+
+
 
 
 
