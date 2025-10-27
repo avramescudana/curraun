@@ -21,7 +21,7 @@ class KineticCanonicCheck:
         # gauge field
         self.a = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
-        # force
+        # transported force
         self.fcan = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.fkin = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.fa = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
@@ -143,6 +143,8 @@ class KineticCanonicCheck:
     def compute(self):
         tint = round(self.s.t / self.s.dt)
         tstart = round(1 / self.s.dt)
+        # tstart = 0
+
         t = round(self.s.t)
         n = self.s.n
 
@@ -157,23 +159,22 @@ class KineticCanonicCheck:
         if tint == tstart:
             compute_ai(self.s, a0, t)
 
-        if tint % self.dtstep == 0 and tint > tstart:
-            compute_fcan(self.s, fcan)
-            compute_fkin(self.s, fkin)
+        if tint % self.dtstep == 0 and tint >= tstart:
+            # compute un-transported f and ftilde
+            compute_fcan(self.s, fcan, t)
+            compute_fkin(self.s, fkin, t)
 
             # compute gauge field, d gauge field
             compute_ai(self.s, a, t)
-            compute_dai(self.s, a0, v, self.d_da, t, n)
+            compute_dai(a0, v, a, t, self.d_da, n)
 
-            compute_p_perp(self.d_da, self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], n)
-            compute_mean(self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], self.d_da_transp_sq_mean)
-
+            # compute un-transported fa
             compute_fa(fcan, fkin, fa, t, n)
 
             # apply parallel transport
-            # apply_v(fcan, v, n)
-            # apply_v(fkin, v, n)
-            # apply_v(fa, v, n)
+            apply_v(fcan, v, n)
+            apply_v(fkin, v, n)
+            apply_v(fa, v, n)
 
             # integrate f
             integrate_f(fcan, self.d_intfcan, n, 1.0)
@@ -194,13 +195,25 @@ class KineticCanonicCheck:
             compute_mean(self.d_dpcanda[:, 0], self.d_dpcanda[:, 1], self.d_dpcanda[:, 2], self.d_dpcanda_mean)
             compute_mean(self.d_dpcanda_transp[:, 0], self.d_dpcanda_transp[:, 1], self.d_dpcanda_transp[:, 2], self.d_dpcanda_transp_mean)
 
+            # compute asq
+            compute_asq(self.d_da, self.d_da_transp_sq, n)
+            compute_mean(self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], self.d_da_transp_sq_mean)
+
         if tint % self.dtstep == self.dtstep / 2:
+            # update v
             update_v(self.s, v, t)
+
 
 
 @myjit
 def reset_wilsonfield(x, wilsonfield):
     su.store(wilsonfield[x], su.unit())
+
+"""
+    "Update" the light-like Wilson line.
+    Adds a single link to the Wilson line.
+"""
+
 
 def update_v(s, v, t):
     u = s.d_u0
@@ -224,55 +237,53 @@ def compute_ai(s, ai, t):
     my_parallel_loop(compute_ai_kernel, n * n, u0, aeta0, t, ai)
 
 @myjit
-def compute_ai_kernel(xi, u0, aeta0, t, ai): 
+def compute_ai_kernel(xi, u0, aeta0, t, ai):
     ax = su.mlog(u0[xi, 0])
     ay = su.mlog(u0[xi, 1])
+    # ax = su.mul_s(su.mlog(u0[xi, 0]), -1)
+    # ay = su.mul_s(su.mlog(u0[xi, 1]), -1)
     az = su.mul_s(aeta0[xi], 1.0 / t)
 
     su.store(ai[xi, 0], ax)
     su.store(ai[xi, 1], ay)
     su.store(ai[xi, 2], az)
 
-def compute_dai(s, a0, v, dai, t, n):
-    u0 = s.d_u0
-    aeta0 = s.d_aeta0
+def compute_dai(a0, v, a, t, dai, n):
 
-    my_parallel_loop(compute_dai_kernel, n * n, n, a0, v, u0, aeta0, dai, t)  
+    my_parallel_loop(compute_dai_kernel, n * n, a0, v, a, t, dai, n)  
 
 @myjit
-def compute_dai_kernel(xi, n, a0, v, u0, aeta0, dai, t):
+def compute_dai_kernel(xi, a0, v, a, t, dai, n):
     xs = l.shift(xi, 0, t, n)
 
-    ax = su.mlog(u0[xs, 0])
-    ay = su.mlog(u0[xs, 1])
-    az = su.mul_s(aeta0[xs], 1.0 / t)
+    for i in range(3):
+        aitransp = l.act(v[xs], a[xs, i])
+        bufi = l.add_mul(aitransp, a0[xi, i], -1)
+        # bufi = l.add_mul(a0[xi, i], aitransp, -1)
 
-    # axtransp = l.act(v[xs], ax)
-    # aytransp = l.act(v[xs], ay)
-    # aztransp = l.act(v[xs], az)
-    axtransp = ax
-    aytransp = ay
-    aztransp = az
+        su.store(dai[xi, i], bufi)
 
-    su.store(dai[xi, 0], l.add_mul(axtransp, a0[xi, 0], -1))
-    su.store(dai[xi, 1], l.add_mul(aytransp, a0[xi, 1], -1))
-    su.store(dai[xi, 2], l.add_mul(aztransp, a0[xi, 2], -1))
 
-def compute_fkin(s, f):
+"""
+    Computes the correctly aligned (in the sense of lattice
+    sites) force acting on a light-like trajectory particle.
+"""
+
+def compute_fkin(s, f, t):
     u0 = s.d_u0
     pt1 = s.d_pt1
+    aeta0 = s.d_aeta0
     peta1 = s.d_peta1
     pt0 = s.d_pt0
     peta0 = s.d_peta0
-    aeta0 = s.d_aeta0
 
     n = s.n
-    t = s.t 
+    tau = s.t 
 
-    my_parallel_loop(compute_fkin_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t)
+    my_parallel_loop(compute_fkin_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, tau)
 
 @myjit
-def compute_fkin_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t):
+def compute_fkin_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, tau):
     xs = l.shift(xi, 0, t, n)
 
     # f_1 = E_1 (index 0)
@@ -286,22 +297,22 @@ def compute_fkin_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t):
     bf0 = su.add(bf0, b1)
     b1 = l.act(su.dagger(u0[xs2, 0]), pt0[xs2, 0])
     bf0 = su.add(bf0, b1)
-    bf0 = su.mul_s(bf0, 0.25 / t)
+    bf0 = su.mul_s(bf0, 0.25 / tau)
     su.store(f[xi, 0], bf0)
 
-    # f_2 = E_2 (index 1)
+    # f_2 = E_2 - B_3 (index 1)
     xs2 = l.shift(xs, 1, -1, n)
 
     bf1 = su.zero()
 
     # quadratically accurate +Ey
-    bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / t)
-    bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / t)
+    bf1 = l.add_mul(bf1, pt1[xs, 1], 0.25 / tau)
+    bf1 = l.add_mul(bf1, pt0[xs, 1], 0.25 / tau)
     xs3 = l.shift(xs, 1, -1, n)
     b1 = l.act(su.dagger(u0[xs3, 1]), pt1[xs2, 1])
-    bf1 = l.add_mul(bf1, b1, 0.25 / t)
+    bf1 = l.add_mul(bf1, b1, 0.25 / tau)
     b1 = l.act(su.dagger(u0[xs3, 1]), pt0[xs2, 1])
-    bf1 = l.add_mul(bf1, b1, 0.25 / t)
+    bf1 = l.add_mul(bf1, b1, 0.25 / tau)
 
     # quadratically accurate -Bz
     b1 = l.plaq(u0, xs, 0, 1, 1, 1, n)
@@ -322,7 +333,7 @@ def compute_fkin_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t):
 
     su.store(f[xi, 1], bf1)
 
-    # f_3 = E_3 (index 2)
+    # f_3 = E_3 + B_2 (index 2)
     bf2 = su.zero()
 
     # Accurate +E_z
@@ -333,21 +344,21 @@ def compute_fkin_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t):
     b1 = l.transport(aeta0, u0, xs, 0, +1, n)
     b2 = l.transport(aeta0, u0, xs, 0, -1, n)
     b1 = l.add_mul(b1, b2, -1.0)
-    bf2 = l.add_mul(bf2, b1, 0.5 / t)
+    bf2 = l.add_mul(bf2, b1, 0.5 / tau)
 
     su.store(f[xi, 2], bf2)
 
-def compute_fcan(s, f):
-    aeta0 = s.d_aeta0
+def compute_fcan(s, f, t):
     u0 = s.d_u0
+    aeta0 = s.d_aeta0
 
     n = s.n
-    t = s.t 
+    tau = s.t 
 
-    my_parallel_loop(compute_fcan_kernel, n * n, n, aeta0, u0, f, t)
+    my_parallel_loop(compute_fcan_kernel, n * n, n, u0, aeta0, f, t, tau)
 
 @myjit
-def compute_fcan_kernel(xi, n, aeta0, u0, f, t):
+def compute_fcan_kernel(xi, n, u0, aeta0, f, t, tau):
     xs = l.shift(xi, 0, t, n)
 
     # Naive symmetric partial derivative
@@ -362,8 +373,10 @@ def compute_fcan_kernel(xi, n, aeta0, u0, f, t):
 
     bf0 = su.mul_s(dyax, -1.0)
     su.store(f[xi, 1], bf0)
+    # su.store(f[xi, 1], dyax)
 
-    bf1 = su.mul_s(aeta0[xs], 1.0 / (t * t))
+    # f_1 = E_z = 1/\tau^2 A_\eta in canonical momentum
+    bf1 = su.mul_s(aeta0[xs], - 1.0 / (tau * tau))
     su.store(f[xi, 2], bf1)
 
 def compute_fa(fcan, fkin, fa, t, n):
@@ -376,20 +389,43 @@ def compute_fa_kernel(xi, fcan, fkin, fa, t, n):
     for i in range(3):
         # d A = fkin - fcan convention Alatt = -igaA
         buf = l.add_mul(fkin[xs, i], fcan[xs, i], -1)
+        # buf = l.add_mul(fcan[xs, i], fkin[xs, i], -1)
         su.store(fa[xi, i], buf)
+
+
+"""
+    Applies the Wilson line to the untransported force.
+    This is important for gauge covariance.
+"""
+
 
 def apply_v(f, v, n):
     my_parallel_loop(apply_v_kernel, n * n, f, v)
+
 
 @myjit
 def apply_v_kernel(xi, f, v):
     for d in range(3):
         b1 = l.act(v[xi], f[xi, d])
-        # b1 = su.ah(b1)
+        b1 = su.ah(b1)
         su.store(f[xi, d], b1)
+
+
+"""
+    Simple integration of forces to obtain 'color momenta'.
+"""
+
 
 def integrate_f(f, fi, n, dt):
     kappa.integrate_f(f, fi, n, dt, stream=None)
+
+
+"""
+    Computes perpendicular momentum broadening as the trace
+    of the square of the integrated color force (i.e. color
+    momenta).
+"""
+
 
 def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n):
     kappa.compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream=None)
@@ -402,5 +438,14 @@ def compute_p_perp_A_kernel(xi, fi, d_ai, p_perp_A, n):
     for i in range(3):
         p_perp_A[xi, i] = su.tr(su.mul(fi[xi, i], su.dagger(d_ai[xi, i]))).real
 
+
 def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean):
     kappa.compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream=None)
+
+def compute_asq(d_ai, ai_sq, n):
+    my_parallel_loop(compute_asq_kernel, n * n, d_ai, ai_sq)
+
+@myjit
+def compute_asq_kernel(xi, d_ai, ai_sq):
+    for i in range(3):
+        ai_sq[xi, i]= su.sq(d_ai[xi, i])

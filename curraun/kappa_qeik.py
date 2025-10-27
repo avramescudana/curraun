@@ -191,7 +191,7 @@ def compute_ai(s, ai, t):
     my_parallel_loop(compute_ai_kernel, n * n, u0, aeta0, t, ai)
 
 @myjit
-def compute_ai_kernel(xi, u0, aeta0, t, ai):
+def compute_ai_kernel(xi, u0, aeta0, t, ai): 
     ax = su.mlog(u0[xi, 0])
     ay = su.mlog(u0[xi, 1])
     az = su.mul_s(aeta0[xi], 1.0 / t)
@@ -208,6 +208,9 @@ def compute_dai(s, a0, dai, t, n):
 
 @myjit
 def compute_dai_kernel(xi, a0, u0, aeta0, dai, t):
+    # xip1 = l.shift(xi, 1, 1, n)
+    # xim1 = l.shift(xi, 1, -1, n)
+
     ax = su.mlog(u0[xi, 0])
     ay = su.mlog(u0[xi, 1])
     az = su.mul_s(aeta0[xi], 1.0 / t)
@@ -298,6 +301,7 @@ def compute_fa(fcan, fkin, fa, n):
 
 @myjit
 def compute_fa_kernel(xi, fcan, fkin, fa):
+    
     for i in range(3):
         # d A = fkin - fcan convention Alatt = -igaA
         buf = l.add_mul(fkin[xi, i], fcan[xi, i], -1)
