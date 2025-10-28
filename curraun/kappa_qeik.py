@@ -149,13 +149,13 @@ class KineticCanonicCheck:
         if tint == tstart:
             compute_ai(self.s, a0, t)
 
-        if tint % self.dtstep == 0 and tint > tstart:
+        if tint % self.dtstep == 0 and tint >= tstart:
             compute_fcan(self.s, fcan)
             compute_fkin(self.s, fkin)
 
             # compute gauge field, d gauge field
             compute_ai(self.s, a, t)
-            compute_dai(self.s, a0, self.d_da, t, n)
+            compute_dai(a, a0, self.d_da, n)
 
             compute_p_perp(self.d_da, self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], n)
             compute_mean(self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], self.d_da_transp_sq_mean)
@@ -200,24 +200,13 @@ def compute_ai_kernel(xi, u0, aeta0, t, ai):
     su.store(ai[xi, 1], ay)
     su.store(ai[xi, 2], az)
 
-def compute_dai(s, a0, dai, t, n):
-    u0 = s.d_u0
-    aeta0 = s.d_aeta0
-
-    my_parallel_loop(compute_dai_kernel, n * n, a0, u0, aeta0, dai, t)  
+def compute_dai(a, a0, dai, n):
+    my_parallel_loop(compute_dai_kernel, n * n, a, a0, dai)  
 
 @myjit
-def compute_dai_kernel(xi, a0, u0, aeta0, dai, t):
-    # xip1 = l.shift(xi, 1, 1, n)
-    # xim1 = l.shift(xi, 1, -1, n)
-
-    ax = su.mlog(u0[xi, 0])
-    ay = su.mlog(u0[xi, 1])
-    az = su.mul_s(aeta0[xi], 1.0 / t)
-
-    su.store(dai[xi, 0], l.add_mul(ax, a0[xi, 0], -1))
-    su.store(dai[xi, 1], l.add_mul(ay, a0[xi, 1], -1))
-    su.store(dai[xi, 2], l.add_mul(az, a0[xi, 2], -1))
+def compute_dai_kernel(xi, a, a0, dai):
+    for i in range(3):
+        su.store(dai[xi, i], l.add_mul(a[xi, i], a0[xi, i], -1))
 
 
 
