@@ -143,7 +143,7 @@ class KineticCanonicCheck:
     def compute(self):
         tint = round(self.s.t / self.s.dt)
         tstart = round(1 / self.s.dt)
-        t = round(self.s.t)
+        t = round(self.s.t - 10E-8)
         n = self.s.n
 
         v = self.d_v
@@ -158,24 +158,24 @@ class KineticCanonicCheck:
             compute_ai(self.s, a0, t)
 
         if tint % self.dtstep == 0 and tint > tstart:
-            # print("Computing kinetic vs canonic at t =", t)
-            # print('tint=', tint)
+            
             compute_fcan(self.s, fcan)
             compute_fkin(self.s, fkin)
 
-            # compute gauge field, d gauge field
             compute_ai(self.s, a, t)
-            compute_dai(a, a0, self.d_da, v, t, n)
+
+            apply_v(a, v, n)
+            compute_dai(a, a0, self.d_da, t, n)
 
             compute_p_perp(self.d_da, self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], n)
             compute_mean(self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], self.d_da_transp_sq_mean)
 
-            compute_fa(fcan, fkin, fa, t, n)
-
             # apply parallel transport
             apply_v(fcan, v, n)
             apply_v(fkin, v, n)
-            apply_v(fa, v, n)
+            # apply_v(fa, v, n)
+
+            compute_fa(fcan, fkin, fa, t, n)
 
             # integrate f
             integrate_f(fcan, self.d_intfcan, n, 1.0)
@@ -197,8 +197,6 @@ class KineticCanonicCheck:
             compute_mean(self.d_dpcanda_transp[:, 0], self.d_dpcanda_transp[:, 1], self.d_dpcanda_transp[:, 2], self.d_dpcanda_transp_mean)
 
         if tint % self.dtstep == self.dtstep / 2:
-            # print("Updating Wilson lines at t =", t)
-            # print('tint=', tint)
             update_v(self.s, v, t)
 
 
@@ -217,7 +215,6 @@ def update_v_kernel(xi, u, v, t, n):
     xs = l.shift(xi, 0, t, n)
 
     b1 = su.mul(v[xi], u[xs, 0])
-    # b1 = su.mul(v[xi], su.dagger(u[xs, 0]))
     su.store(v[xi], b1)
 
 def compute_ai(s, ai, t):
@@ -238,18 +235,15 @@ def compute_ai_kernel(xi, u0, aeta0, t, ai):
     su.store(ai[xi, 1], ay)
     su.store(ai[xi, 2], az)
 
-
-def compute_dai(a, a0, dai, v, t, n):
-    my_parallel_loop(compute_dai_kernel, n * n, a, a0, dai, v, t, n)  
+def compute_dai(a, a0, dai, t, n):
+    my_parallel_loop(compute_dai_kernel, n * n, a, a0, dai, t, n)  
 
 @myjit
-def compute_dai_kernel(xi, a, a0, dai, v, t, n):
+def compute_dai_kernel(xi, a, a0, dai, t, n):
     xs = l.shift(xi, 0, t, n)
 
     for i in range(3):
-        atransp = l.act(v[xs], a[xs, i])
-        # atransp = a[xs, i]
-        su.store(dai[xi, i], l.add_mul(atransp, a0[xi, i], -1))
+        su.store(dai[xi, i], l.add_mul(a[xs, i], a0[xi, i], -1))
 
 
 def compute_fkin(s, f):
@@ -370,7 +364,8 @@ def compute_fa_kernel(xi, fcan, fkin, fa, t, n):
 
     for i in range(3):
         # d A = fkin - fcan convention Alatt = -igaA
-        buf = l.add_mul(fkin[xs, i], fcan[xs, i], -1)
+        # buf = l.add_mul(fkin[xs, i], fcan[xs, i], -1)
+        buf = l.add_mul(fkin[xi, i], fcan[xi, i], -1)
         su.store(fa[xi, i], buf)
 
 def apply_v(f, v, n):
@@ -380,7 +375,7 @@ def apply_v(f, v, n):
 def apply_v_kernel(xi, f, v):
     for d in range(3):
         b1 = l.act(v[xi], f[xi, d])
-        b1 = su.ah(b1)
+        # b1 = su.ah(b1)
         su.store(f[xi, d], b1)
 
 def integrate_f(f, fi, n, dt):
