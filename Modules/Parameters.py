@@ -4,7 +4,7 @@ from numba import set_num_threads, get_num_threads
 
 def Environment_Setup(environment_vars):
 
-    # Access all parameters from the Environment_variables=environment_vars dictionary
+    # Access all parameters from the Environment_variables = environment_vars dictionary
     Computation_device   =  environment_vars["Computation_device"]
     GPU_ID               =  environment_vars["GPU_ID"]
     CPU_NumberofThreads  =  environment_vars["CPU_NumberofThreads"]
@@ -20,16 +20,30 @@ def Environment_Setup(environment_vars):
             import numba.cuda
             if numba.cuda.is_available():
                 os.environ["MY_NUMBA_TARGET"] = "cuda"                                                          # Run on GPU with Numba                   
-                os.environ["CUDA_VISIBLE_DEVICES"] = GPU_ID
-                print(f"Computation device set to: {os.environ['MY_NUMBA_TARGET']} (GPU parallelization)")
-                print(f"Using anyone of GPUs: {GPU_ID} for computations.")
+                #os.environ["CUDA_VISIBLE_DEVICES"] = GPU_ID                                                    # ⚠️ Cannot be set here, it is set earlier in the main script now.
+                cuda_visible_devices = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+                device_count = numba.cuda.list_devices()                                                        # Check if we can access multiple devices
+
+                print(f"Computation device set to:        {os.environ['MY_NUMBA_TARGET']} (GPU parallelization)")
+                print(f"Using anyone of GPUs:             {GPU_ID} for computations.")
+
+                print(f"\nNumber of CUDA devices visible:   {len(device_count)}")
+                print(f"CUDA visible devices:             {os.environ.get('CUDA_VISIBLE_DEVICES', 'Not set')}")
+                print(f"Current CUDA device:              {numba.cuda.get_current_device()}")
+                print(f"Device name:                      {numba.cuda.get_current_device().name}")                
+                print(f"\n✅ Successfully using any one of the physical GPU with ID(s):   {cuda_visible_devices}")
+                
+                
+            
+
             else:
                 print("CUDA (GPU) is not available. Falling back to CPU.")                
                 os.environ["MY_NUMBA_TARGET"] = "numba"
-                print(f"Computation device set to: {os.environ['MY_NUMBA_TARGET']} (CPU parallelization)")
+                print(f"\nComputation device set to:            {os.environ['MY_NUMBA_TARGET']} (CPU parallelization)")            
 
                 set_num_threads(int(CPU_NumberofThreads))    
-                print("No. of NUMBA threads used by CPU:", get_num_threads())  
+                print("No. of NUMBA threads used by CPU:    ", get_num_threads())  
+                print(f"\n✅ Successfully using CPU parallelization with {CPU_NumberofThreads} threads.")
 
 
         except ImportError:
@@ -39,11 +53,11 @@ def Environment_Setup(environment_vars):
 
     elif Computation_device == 2:
         os.environ["MY_NUMBA_TARGET"] = "numba"                                                                 # Run on CPU with Numba
-        print(f"Computation device set to: {os.environ['MY_NUMBA_TARGET']} (CPU parallelization)")            
+        print(f"Computation device set to:            {os.environ['MY_NUMBA_TARGET']} (CPU parallelization)")            
         
         set_num_threads(int(CPU_NumberofThreads))
-        print("No. of NUMBA threads used by CPU:", get_num_threads())  
-
+        print("No. of NUMBA threads used by CPU:    ", get_num_threads())  
+        print(f"\n✅ Successfully using CPU parallelization with {CPU_NumberofThreads} threads.")
 
         # Uncomment these lines to limit number of threads
         #os.environ["OMP_NUM_THREADS"] = "4"         # OpenMP        # OpenMP: Used by NumPy, SciPy, and some C extensions
@@ -76,7 +90,7 @@ def Environment_Setup(environment_vars):
 
     elif Computation_device == 3:
         os.environ["MY_NUMBA_TARGET"] = "python"
-        print(f"Computation device set to: {os.environ['MY_NUMBA_TARGET']} (Python)")
+        print(f"Computation device set to:   {os.environ['MY_NUMBA_TARGET']} (Python)")
 
     else:
         raise ValueError("Invalid device selection: Use 1 (Numba), 2 (CUDA), or 3 (Python)")
@@ -91,18 +105,18 @@ def Environment_Setup(environment_vars):
     if Gauge_group == 1:
         os.environ["GAUGE_GROUP"]  = "su2_complex"
         Gauge_Group_String         = "SU2_Complex"
-        print("\nGauge group set to:",  Gauge_Group_String)
+        print("\n\nGauge group set to:",  Gauge_Group_String)
 
 
     if Gauge_group == 2:
         os.environ["GAUGE_GROUP"]  = "su2"
         Gauge_Group_String         = "SU2"
-        print("\nGauge group set to:  ",  Gauge_Group_String)
+        print("\n\nGauge group set to:  ",  Gauge_Group_String)
         
     elif Gauge_group == 3:
         os.environ["GAUGE_GROUP"]  = "su3"
         Gauge_Group_String         = "SU3"
-        print("\nGauge group set to:",  Gauge_Group_String)
+        print("\n\nGauge group set to:",  Gauge_Group_String)
     
     else:
         raise ValueError("\nInvalid gauge group selection: Use 1 (SU(2) Complex),   2 (SU(2)),   3 (SU(3))")
@@ -116,16 +130,17 @@ def Environment_Setup(environment_vars):
     if Precision_mode == 1:
         os.environ["PRECISION"]  =  "single"                                                     # Single precision        
         Precision_Mode_String    =  "Single"
-        print("Precision set to:    ", Precision_Mode_String, "(float32) \n")
+        print("Precision set to:    ", Precision_Mode_String, "(float32) \n\n")
 
     elif Precision_mode == 2:
         os.environ["PRECISION"]  =  "double"                                                    # Double precision      
         Precision_Mode_String    =  "Double"
 
-        print("Precision set to:    ", Precision_Mode_String, "(float64) \n")                                                   
+        print("Precision set to:    ", Precision_Mode_String, "(float64) \n\n")
 
     else:
-        raise ValueError("\nInvalid precision selection: Use 1 (Single) or 2 (Double) \n")
+        raise ValueError("\nInvalid precision selection: Use 1 (Single) or 2 (Double) \n\n")
 
     return environment_vars, Gauge_Group_String
+
 
