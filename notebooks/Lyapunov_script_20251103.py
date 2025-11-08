@@ -37,7 +37,7 @@ sys.path.append('..')
 # =========================================================================================================== 
 # ======================================== Environment Configuration ========================================
 Option_Computation_device   =   1     
-Option_GPU_ID               =  "3"  
+Option_GPU_ID               =  "3,6,7"  
 Option_CPU_NumberofThreads  =   6
 
 os.environ["CUDA_VISIBLE_DEVICES"] = Option_GPU_ID                          # 🚨 CRITICAL:  Set CUDA_VISIBLE_DEVICES immediately! It will not work if set later.
