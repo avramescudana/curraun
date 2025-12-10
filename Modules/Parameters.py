@@ -33,7 +33,8 @@ def Environment_Setup(environment_vars):
                 print(f"Device name:                      {numba.cuda.get_current_device().name}")                
                 print(f"\n✅ Successfully using any one of the physical GPU with ID(s):   {cuda_visible_devices}")
                 
-                           
+                
+            
 
             else:
                 print("CUDA (GPU) is not available. Falling back to CPU.")                
