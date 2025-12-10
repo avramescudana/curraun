@@ -322,10 +322,10 @@ class Lyapunov():
 
 
 
-
 @mynonparjit
 def change_EL_kernel(xi, peta1, eta):
     #buf1  =  su.add(peta1[xi], eta[xi])					# Commented on 7 December 2025
+
 
     #eta_algebra_element[xi] = su.get_algebra_element(eta[xi])			# To check if eta[xi] is a valid algebra element    # 7 December 2025
     #buf1 = su.add(peta1[xi], eta_algebra_element[xi])
@@ -334,6 +334,14 @@ def change_EL_kernel(xi, peta1, eta):
     
     #peta1[xi] = buf1								# Works in CPU only
     su.store(peta1[xi], buf1)    
+
+
+
+
+
+
+
+
 
 
 

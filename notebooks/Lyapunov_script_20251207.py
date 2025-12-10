@@ -37,8 +37,8 @@ sys.path.append('..')
 # =========================================================================================================== 
 # ======================================== Environment Configuration ========================================
 Option_Computation_device   =   1     
-Option_GPU_ID               =  "3,6,7"  
-Option_CPU_NumberofThreads  =   6
+Option_GPU_ID               =  "1"  
+Option_CPU_NumberofThreads  =   8
 
 os.environ["CUDA_VISIBLE_DEVICES"] = Option_GPU_ID                          # 🚨 CRITICAL:  Set CUDA_VISIBLE_DEVICES immediately! It will not work if set later.
                                                                             # ⚠️  It will not work if set after importing any CUDA-related packages
@@ -96,7 +96,7 @@ import curraun.core as core
 import curraun.mv as mv
 from curraun.energy import Energy
 #from curraun.lyapunov_19102025 import Lyapunov					# Edited 19.10.2025
-from curraun.lyapunov_20251103_CPU_GPU import Lyapunov				# Edited 02.11.2025
+from curraun.lyapunov import Lyapunov				# Edited 02.11.2025
 
 import curraun.initial as initial
 initial.DEBUG = False
@@ -115,7 +115,7 @@ Option_Print_Parameters = 1                                     # 0 : Do not pri
                                                                 # 1 : Print parameters
 
 
-N_Events  =  1						# Number of events [Dimensionless]    
+N_Events  =  2						# Number of events [Dimensionless]    
 N_Sheets  =  1                                                  # Number of color sheets
 
 
@@ -1547,7 +1547,7 @@ for data_key, color,  label in Plot_Configurations_2:
 # Customize the plot
 plt.title(title)
 plt.xlabel(r"$(g^2 \mu \tau)^{Latt}$")
-plt.ylabel("Field Difference Squared")
+plt.ylabel("Trace (Field Difference Squared)")
 #plt.yscale('log')  
 
 plt.legend(loc="upper left", fontsize=10)
