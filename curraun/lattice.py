@@ -31,6 +31,12 @@ def act(u, a):
     result =  su.mul(buffer1, su.dagger(u))
     return result
 
+# adjoint action a -> u a v^t
+@myjit
+def dact(u, v, a):
+    buffer1 = su.mul(u, a)
+    result =  su.mul(buffer1, su.dagger(v))
+    return result
 
 # commutator of two su(2) elements
 @myjit

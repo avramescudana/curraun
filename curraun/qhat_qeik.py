@@ -157,14 +157,15 @@ class KineticCanonicCheck:
         if tint == tstart:
             compute_ai(self.s, a0, t)
 
-        if tint % self.dtstep == 0 and tint > tstart:
+        # if tint % self.dtstep == 0 and tint > tstart:
+        if tint % self.dtstep == 0 and tint >= 1:
 
             compute_fcan(self.s, fcan)
             compute_fkin(self.s, fkin)
 
             compute_ai(self.s, a, t)
 
-            # apply_v(a, v, n)
+            apply_v(a, v, n)
             compute_dai(a, a0, self.d_da, t, n)
 
             compute_p_perp(self.d_da, self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], n)
@@ -173,7 +174,7 @@ class KineticCanonicCheck:
             # apply parallel transport
             apply_v(fcan, v, n)
             apply_v(fkin, v, n)
-            # apply_v(fa, v, n)
+            apply_v(fa, v, n)
 
             compute_fa(fcan, fkin, fa, t, n)
 
@@ -243,7 +244,8 @@ def compute_dai_kernel(xi, a, a0, dai, t, n):
     xs = l.shift(xi, 0, t, n)
 
     for i in range(3):
-        su.store(dai[xi, i], l.add_mul(a[xs, i], a0[xi, i], -1))
+        # su.store(dai[xi, i], l.add_mul(a[xs, i], a0[xi, i], -1))
+        su.store(dai[xi, i], l.add_mul(a[xi, i], a0[xi, i], -1))
 
 
 def compute_fkin(s, f):
