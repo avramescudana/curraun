@@ -31,7 +31,7 @@ class KineticCanonicCheck:
         self.intfkin = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
         self.intfa = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
-        # paralel transported gauge field - initial gage field
+        # parallel transported gauge field - initial gage field
         self.da = np.zeros((self.n ** 2, 3, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         self.dpcan_sq = np.zeros((self.n ** 2, 3), dtype=np.double)
@@ -143,7 +143,7 @@ class KineticCanonicCheck:
     def compute(self):
         tint = round(self.s.t / self.s.dt)
         tstart = round(1 / self.s.dt)
-        t = round(self.s.t - 10E-8)
+        t = round(self.s.t - 1E-8)
         n = self.s.n
 
         v = self.d_v
@@ -198,7 +198,7 @@ class KineticCanonicCheck:
             compute_mean(self.d_dpcanda[:, 0], self.d_dpcanda[:, 1], self.d_dpcanda[:, 2], self.d_dpcanda_mean)
             compute_mean(self.d_dpcanda_transp[:, 0], self.d_dpcanda_transp[:, 1], self.d_dpcanda_transp[:, 2], self.d_dpcanda_transp_mean)
 
-        if tint % self.dtstep == self.dtstep / 2:
+        if tint % self.dtstep == self.dtstep // 2:
             update_v(self.s, v, t)
 
 
@@ -235,6 +235,9 @@ def compute_ai_kernel(xi, u0, aeta0, t, ai):
 
     su.store(ai[xi, 0], ax)
     su.store(ai[xi, 1], ay)
+    # su.store(ai[xi, 0], su.mul_s(ax, -1))
+    # su.store(ai[xi, 1], su.mul_s(ay, -1))
+
     su.store(ai[xi, 2], az)
 
 def compute_dai(a, a0, dai, t, n):
@@ -245,8 +248,7 @@ def compute_dai_kernel(xi, a, a0, dai, t, n):
     xs = l.shift(xi, 0, t, n)
 
     for i in range(3):
-        # su.store(dai[xi, i], l.add_mul(a[xs, i], a0[xi, i], -1))
-        su.store(dai[xi, i], l.add_mul(a[xi, i], a0[xi, i], -1))
+        su.store(dai[xi, i], l.add_mul(a[xs, i], a0[xi, i], -1))
 
 
 def compute_fkin(s, f):
@@ -368,7 +370,6 @@ def compute_fa_kernel(xi, fcan, fkin, fa, t, n):
     for i in range(3):
         # d A = fkin - fcan convention Alatt = -igaA
         buf = l.add_mul(fkin[xi, i], fcan[xi, i], -1)
-        # buf = l.add_mul(fkin[xs, i], fcan[xs, i], -1)
         su.store(fa[xi, i], buf)
 
 def apply_v(f, v, n):
