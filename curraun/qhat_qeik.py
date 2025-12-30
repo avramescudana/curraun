@@ -155,6 +155,7 @@ class KineticCanonicCheck:
         a = self.d_a
 
         if tint == tstart:
+        # if tint == 1:
             compute_ai(self.s, a0, t)
 
         # if tint % self.dtstep == 0 and tint > tstart:
@@ -367,6 +368,7 @@ def compute_fa_kernel(xi, fcan, fkin, fa, t, n):
     for i in range(3):
         # d A = fkin - fcan convention Alatt = -igaA
         buf = l.add_mul(fkin[xi, i], fcan[xi, i], -1)
+        # buf = l.add_mul(fkin[xs, i], fcan[xs, i], -1)
         su.store(fa[xi, i], buf)
 
 def apply_v(f, v, n):
@@ -376,7 +378,7 @@ def apply_v(f, v, n):
 def apply_v_kernel(xi, f, v):
     for d in range(3):
         b1 = l.act(v[xi], f[xi, d])
-        # b1 = su.ah(b1)
+        b1 = su.ah(b1)
         su.store(f[xi, d], b1)
 
 def integrate_f(f, fi, n, dt):
