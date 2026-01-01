@@ -6,7 +6,7 @@ import os
 # from curraun import su as su
 from curraun.numba_target import myjit
 
-import math
+import math, cmath
 import numpy as np
 
 # Definition of constants
@@ -15,6 +15,7 @@ N_C = 3  # Number of colors
 ALGEBRA_ELEMENTS = 8
 GROUP_ELEMENTS = 9
 
+SQRT3 = math.sqrt(3)  # Square root of 3 for Cayley-Hamilton method
 
 zero_algebra = (0,0,0,0,0,0,0,0)
 
@@ -203,6 +204,65 @@ def mexp(a):
         # else:
         # print("Exponential did not reach desired accuracy: {}".format(a))   # TODO: remove debugging code
         # print("Exponential did not reach desired accuracy")  # TODO: remove debugging code
+    return res
+
+@myjit
+def mexp_cayham(g):
+    # ONLY WORKS FOR ANTI-HERMITIAN, TRACE-ZERO MATRICES!
+    # -> g = ah(g)
+    # this function implements the matrix exponential
+    # according to: https://arxiv.org/abs/2207.02167
+
+    # function assumes input exp(i t^a v^a)
+    # and computes exp(i t^a v^a) = exp(0.5 i l^a v^a)
+
+    # calc |v|
+    abs_v = math.sqrt(-0.5 * tr(mul(g, g)).real)
+
+    # calc sigma = t^a v^a / |v|
+    sigma = mul_s(g, -1.0j / abs_v)
+
+    # calc sigma^2
+    sigma_sqr = mul(sigma, sigma)
+
+    # calc eta = det(sigma), sigma is hermitian!
+    eta = det(sigma).real
+
+    # calc roots of z^3 - z - eta = 0
+    phi = math.acos(1.5 * SQRT3 * eta) / 3.0
+    sin_phi = math.sin(phi)
+    cos_phi_over_sqrt3 = math.cos(phi) / SQRT3
+    z1 = 2.0 * cos_phi_over_sqrt3
+    z2 = -sin_phi - cos_phi_over_sqrt3
+    z3 = sin_phi - cos_phi_over_sqrt3
+
+    res = zero()
+    tmp = zero()
+
+    # z_1 term
+    tmp = mul_s(unit(), z1 * z1 - 1.0)
+    tmp = add(tmp, mul_s(sigma, z1))
+    tmp = add(tmp, sigma_sqr)
+
+    tmp = mul_s(tmp, cmath.exp(1.0j * z1 * abs_v) / (3.0 * z1 * z1 - 1.0))
+    res = add(res, tmp)
+
+    # z_2 term
+    tmp = mul_s(unit(), z2 * z2 - 1.0)
+    tmp = add(tmp, mul_s(sigma, z2))
+    tmp = add(tmp, sigma_sqr)
+
+    tmp = mul_s(tmp, cmath.exp(1.0j * z2 * abs_v) / (3.0 * z2 * z2 - 1.0))
+    res = add(res, tmp)
+
+    # z_3 term
+    tmp = mul_s(unit(), z3 * z3 - 1.0)
+    tmp = add(tmp, mul_s(sigma, z3))
+    tmp = add(tmp, sigma_sqr)
+
+    tmp = mul_s(tmp, cmath.exp(1.0j * z3 * abs_v) / (3.0 * z3 * z3 - 1.0))
+    res = add(res, tmp)
+
     return res
 
 LOG_MIN_TERMS = -1 # minimum number of terms in Taylor series
@@ -558,6 +618,103 @@ def proj(g, i, j):
     b = mul(slist[i], mul(g, slist[j]))
     return GROUP_TYPE_REAL(0.5 * tr(b).real)
 
+@myjit
+def reunitarize(a):
+    """
+    Reunitarize SU(3) matrix using Gram-Schmidt orthogonalization.
+
+    This function takes the columns of the matrix and orthonormalizes them
+    using the Gram-Schmidt process, ensuring the result is a unitary matrix.
+
+    Inspired by the C++ implementation in ipglasma/src/Matrix.h (reu() method).
+
+    :param a: SU(3) matrix as a tuple of 9 complex numbers (row-major order)
+    :return: Reunitarized SU(3) matrix
+    """
+    # Extract columns as 3-vectors
+    # Column 0: a[0], a[3], a[6]
+    # Column 1: a[1], a[4], a[7]
+    # Column 2: a[2], a[5], a[8]
+
+    # First column vector
+    e1_0 = a[0]
+    e1_1 = a[3]
+    e1_2 = a[6]
+
+    # Normalize first column
+    norm1 = math.sqrt((e1_0 * e1_0.conjugate() + e1_1 * e1_1.conjugate() + e1_2 * e1_2.conjugate()).real)
+    if norm1 > 1e-15:
+        e1_0 = e1_0 / norm1
+        e1_1 = e1_1 / norm1
+        e1_2 = e1_2 / norm1
+    else:
+        # Fallback to unit vector if norm is too small
+        e1_0 = GROUP_TYPE(1.0)
+        e1_1 = GROUP_TYPE(0.0)
+        e1_2 = GROUP_TYPE(0.0)
+
+    # Second column vector
+    a2_0 = a[1]
+    a2_1 = a[4]
+    a2_2 = a[7]
+
+    # Gram-Schmidt: subtract projection onto e1
+    proj_e1 = e1_0.conjugate() * a2_0 + e1_1.conjugate() * a2_1 + e1_2.conjugate() * a2_2
+    e2_0 = a2_0 - proj_e1 * e1_0
+    e2_1 = a2_1 - proj_e1 * e1_1
+    e2_2 = a2_2 - proj_e1 * e1_2
+
+    # Normalize second column
+    norm2 = math.sqrt((e2_0 * e2_0.conjugate() + e2_1 * e2_1.conjugate() + e2_2 * e2_2.conjugate()).real)
+    if norm2 > 1e-15:
+        e2_0 = e2_0 / norm2
+        e2_1 = e2_1 / norm2
+        e2_2 = e2_2 / norm2
+    else:
+        # Fallback: make orthogonal to e1
+        if abs(e1_0) < 0.9:
+            e2_0 = GROUP_TYPE(1.0)
+            e2_1 = GROUP_TYPE(0.0)
+            e2_2 = GROUP_TYPE(0.0)
+        else:
+            e2_0 = GROUP_TYPE(0.0)
+            e2_1 = GROUP_TYPE(1.0)
+            e2_2 = GROUP_TYPE(0.0)
+        # Re-orthogonalize
+        proj_e1 = e1_0.conjugate() * e2_0 + e1_1.conjugate() * e2_1 + e1_2.conjugate() * e2_2
+        e2_0 = e2_0 - proj_e1 * e1_0
+        e2_1 = e2_1 - proj_e1 * e1_1
+        e2_2 = e2_2 - proj_e1 * e1_2
+        norm2 = math.sqrt((e2_0 * e2_0.conjugate() + e2_1 * e2_1.conjugate() + e2_2 * e2_2.conjugate()).real)
+        e2_0 = e2_0 / norm2
+        e2_1 = e2_1 / norm2
+        e2_2 = e2_2 / norm2
+
+    # Third column: cross product of first two (ensuring right-handedness)
+    # e3 = e1 × e2 (conjugate)
+    e3_0 = e1_1.conjugate() * e2_2.conjugate() - e1_2.conjugate() * e2_1.conjugate()
+    e3_1 = e1_2.conjugate() * e2_0.conjugate() - e1_0.conjugate() * e2_2.conjugate()
+    e3_2 = e1_0.conjugate() * e2_1.conjugate() - e1_1.conjugate() * e2_0.conjugate()
+
+    # Normalize third column (should already be normalized, but do it for safety)
+    norm3 = math.sqrt((e3_0 * e3_0.conjugate() + e3_1 * e3_1.conjugate() + e3_2 * e3_2.conjugate()).real)
+    if norm3 > 1e-15:
+        e3_0 = e3_0 / norm3
+        e3_1 = e3_1 / norm3
+        e3_2 = e3_2 / norm3
+
+    # Construct reunitarized matrix (columns are e1, e2, e3)
+    r0 = e1_0  # (0,0)
+    r1 = e2_0  # (0,1)
+    r2 = e3_0  # (0,2)
+    r3 = e1_1  # (1,0)
+    r4 = e2_1  # (1,1)
+    r5 = e3_1  # (1,2)
+    r6 = e1_2  # (2,0)
+    r7 = e2_2  # (2,1)
+    r8 = e3_2  # (2,2)
+
+    return r0, r1, r2, r3, r4, r5, r6, r7, r8
 
 """
     DocTest

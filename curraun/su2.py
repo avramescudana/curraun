@@ -168,3 +168,45 @@ def normalize(u):
     norm = math.sqrt(norm)
     for i in range(4):
         u[i] = u[i] / norm
+
+@myjit
+def get_algebra_factors_from_array(arr, xi):
+    """
+    Extract algebra factors from a 2D array at index xi.
+    Converts complex values to real by taking the real part.
+    """
+    r1 = GROUP_TYPE_REAL(arr[xi, 0].real)
+    r2 = GROUP_TYPE_REAL(arr[xi, 1].real)
+    r3 = GROUP_TYPE_REAL(arr[xi, 2].real)
+    return r1, r2, r3
+
+@myjit
+def reunitarize(a):
+    """
+    Reunitarize SU(2) matrix by normalizing the quaternion representation.
+
+    SU(2) matrices are represented as quaternions (a0, a1, a2, a3) where
+    the matrix should satisfy a0^2 + a1^2 + a2^2 + a3^2 = 1.
+
+    Inspired by the C++ implementation in ipglasma/src/Matrix.h (reu() method).
+
+    :param a: SU(2) matrix as a tuple of 4 real numbers (quaternion)
+    :return: Reunitarized SU(2) matrix
+    """
+    # Calculate norm
+    norm = math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2] + a[3] * a[3])
+
+    # Normalize
+    if norm > 1e-15:
+        r0 = a[0] / norm
+        r1 = a[1] / norm
+        r2 = a[2] / norm
+        r3 = a[3] / norm
+    else:
+        # Fallback to unit element if norm is too small
+        r0 = GROUP_TYPE(1.0)
+        r1 = GROUP_TYPE(0.0)
+        r2 = GROUP_TYPE(0.0)
+        r3 = GROUP_TYPE(0.0)
+
+    return r0, r1, r2, r3
