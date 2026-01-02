@@ -122,6 +122,7 @@ files/
 *.jld
 *.jld2
 *.csv
+notebooks/debug/
 
 # VSCode
 .vscode

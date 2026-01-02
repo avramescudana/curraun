@@ -199,7 +199,7 @@ def init_glasma_fields_kernel(xi, u0, u0_glasma, u1, u1_glasma, aeta0, aeta0_gla
     Perform the Coulomb gauge transformation iteratively until convergence is reached
 """
 
-def gauge_fix(c, auto_extend=True):
+def gauge_fix(c, auto_extend=True, qeik_tforce=None):
     """
     Convenience function to perform complete Coulomb gauge transformation.
 
@@ -208,6 +208,7 @@ def gauge_fix(c, auto_extend=True):
     Args:
         c: CoulombGaugeTransf object
         auto_extend: If True, automatically extend max_iters if convergence not reached
+        qeik_tforce: Optional KineticCanonicCheck object to initialize a0 after gauge transformation
 
     Example:
         c = coulomb.CoulombGaugeTransf(s, alpha=0.08, accuracy=1e-10)
@@ -222,6 +223,21 @@ def gauge_fix(c, auto_extend=True):
 
     if use_cuda:
         c.copy_to_host()
+
+    # Initialize a0 if qeik_tforce is provided
+    if qeik_tforce is not None:
+        import curraun.qhat_qeik as qeik
+        t = round(c.s.t - 1E-8)
+        if use_cuda:
+            c.s.copy_to_device()
+            qeik_tforce.copy_to_device()
+
+        qeik.compute_ai(c.s, qeik_tforce.d_a0, t)
+        qeik_tforce.a0_initialized = True
+
+        if use_cuda:
+            qeik_tforce.copy_to_host()
+            c.s.copy_to_host()
 
 def iter_gauge_transf(self, auto_extend=True):
     """
@@ -272,6 +288,9 @@ def iter_gauge_transf(self, auto_extend=True):
 
     # Apply the final accumulated gauge transformation to the glasma fields
     apply_gauge_transf(self)
+    # BUGFIX: Copy the iterated gauge links ug0 to u0 before copying to simulation
+    # The iteration operates on ug0, so ug0 contains the final Coulomb gauge links
+    copy_ug_to_u(self)
     copy_to_simulation(self)
 
 
@@ -500,6 +519,22 @@ def apply_gauge_transf_kernel(xi, n, g1, u0, u1, aeta0, aeta1, peta0, peta1, pt0
 
     peta0[xi] = l.act(g1[xi], peta0_prev)
     peta1[xi] = l.act(g1[xi], peta1_prev)
+
+"""
+    Copy iterated gauge links back to internal arrays
+"""
+
+def copy_ug_to_u(self):
+    """Copy the iterated gauge links ug0 to u0"""
+    n = self.n
+    nn = n ** 2
+
+    my_parallel_loop(copy_ug_to_u_kernel, nn, self.d_ug0, self.d_u0)
+
+@myjit
+def copy_ug_to_u_kernel(xi, ug0, u0):
+    for d in range(2):
+        su.store(u0[xi, d], ug0[xi, d])
 
 """
     Copy transformed glasma fields back to simulation object

@@ -67,6 +67,9 @@ class KineticCanonicCheck:
         # time counter
         self.t = 0
 
+        # Flag to track if a0 has been manually set (e.g., after Coulomb gauge transformation)
+        self.a0_initialized = False
+
         # Memory on the CUDA device:
         self.d_a = self.a
         self.d_v = self.v
@@ -154,12 +157,14 @@ class KineticCanonicCheck:
         a0 = self.d_a0
         a = self.d_a
 
-        if tint == tstart:
+        if tint == tstart and not self.a0_initialized:
         # if tint == 1:
             compute_ai(self.s, a0, t)
+            self.a0_initialized = True
 
         # if tint % self.dtstep == 0 and tint > tstart:
-        if tint % self.dtstep == 0 and tint >= 1:
+        # Compute whenever it's a multiple of dtstep AND t > 0 (to avoid division by zero in fcan)
+        if tint % self.dtstep == 0 and tint >= 1 and t > 0:
 
             compute_fcan(self.s, fcan)
             compute_fkin(self.s, fkin)
