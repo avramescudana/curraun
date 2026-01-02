@@ -65,36 +65,36 @@ def compute_up(u1, aeta1, up, n, xplus):
 
 @myjit
 def compute_up_kernel(yi, u1, aeta1, up, xplus, n):
-
+    
+    # We get the transverse indices 
+    yz = l.get_point(yi, n)
+    y, z = yz[0], yz[1]
+        
+    # Rearrange the indices
+    if z>= n/2:
+        z = z - n
+    
+    # Construct the (x, y) index
+    xy = l.get_index(xplus, y, n)
+    
+    # Compute the corresponding U_x link
+    ux_latt = u1[xy, 0, :]
+    ux = su.dagger(ux_latt)
+    
+    # We compute the A_t contribution
     if xplus == 0:
-        su.store(up[yi], su.unit())
+        ut = su.unit()
     
     else:
-        # We get the transverse indices 
-        yz = l.get_point(yi, n)
-        y, z = yz[0], yz[1]
-        
-        # Rearrange the indices
-        if z>= n/2:
-            z = z - n
-    
-        # Construct the (x, y) index
-        xy = l.get_index(xplus, y, n)
-    
-        # Compute the corresponding U_x link
-        ux_latt = u1[xy, 0, :]
-        ux = su.dagger(ux_latt)
-        
-        # We get the U_t link
         aeta_latt = aeta1[xy, :]
-        at = su.mul_s(aeta_latt, -z**2/xplus**2)
+        at = su.mul_s(aeta_latt, -z/xplus**2)
         ut = su.mexp(at)
     
-        # We take complex conjugation
-        res = su.mul(ut, ux)
+    # We compute the U_+ link
+    res = su.mul(ut, ux)
 
-        # We store the result
-        su.store(up[yi], res)
+    # We store the result
+    su.store(up[yi], res)
     
 
 """
@@ -119,8 +119,8 @@ def compute_ay_kernel(yi, u1, ay, xplus, n, ap):
     # Take the logarithm
     luy = su.mlog(uy)
     
-    # We extract the field
-    res  = su.mul_s(luy, 1/(ap*1j))
+    # We extract the field (extra -1 because we are really computing -gA_y)
+    res  = su.mul_s(luy, -1/(ap*1j))
     
     su.store(ay[yi], res)
 
@@ -138,7 +138,6 @@ def compute_az_kernel(yi, aeta1, az, xplus, n, ap):
         return
     
     else:
-    
         # We get the transverse indices
         yz = l.get_point(yi, n)
         y, z = yz[0], yz[1]
@@ -149,9 +148,8 @@ def compute_az_kernel(yi, aeta1, az, xplus, n, ap):
         # Compute the corresponding A_eta field
         aeta_latt = aeta1[xy, :]
     
-        # We get the Az field
-        res  = su.mul_s(aeta_latt, 1j/(xplus*ap))
+        # We get the Az field (extra -1 because we are really computing -gA_z)
+        res  = su.mul_s(aeta_latt, 1/(1j*xplus*ap))
     
         su.store(az[yi], res)
-
 
