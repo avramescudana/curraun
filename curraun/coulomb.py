@@ -224,20 +224,22 @@ def gauge_fix(c, auto_extend=True, qeik_tforce=None):
     if use_cuda:
         c.copy_to_host()
 
-    # Initialize a0 if qeik_tforce is provided
+    # Initialize a0 if qeik_tforce is provided and t > 0
+    # (at t=0, compute_ai would divide by zero for the z-component)
     if qeik_tforce is not None:
         import curraun.qhat_qeik as qeik
         t = round(c.s.t - 1E-8)
-        if use_cuda:
-            c.s.copy_to_device()
-            qeik_tforce.copy_to_device()
+        if t > 0:
+            if use_cuda:
+                c.s.copy_to_device()
+                qeik_tforce.copy_to_device()
 
-        qeik.compute_ai(c.s, qeik_tforce.d_a0, t)
-        qeik_tforce.a0_initialized = True
+            qeik.compute_ai(c.s, qeik_tforce.d_a0, t)
+            qeik_tforce.a0_initialized = True
 
-        if use_cuda:
-            qeik_tforce.copy_to_host()
-            c.s.copy_to_host()
+            if use_cuda:
+                qeik_tforce.copy_to_host()
+                c.s.copy_to_host()
 
 def iter_gauge_transf(self, auto_extend=True):
     """
