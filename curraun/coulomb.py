@@ -224,22 +224,20 @@ def gauge_fix(c, auto_extend=True, qeik_tforce=None):
     if use_cuda:
         c.copy_to_host()
 
-    # Initialize a0 if qeik_tforce is provided and t > 0
-    # (at t=0, compute_ai would divide by zero for the z-component)
+    # Initialize a0 if qeik_tforce is provided
     if qeik_tforce is not None:
         import curraun.qhat_qeik as qeik
         t = round(c.s.t - 1E-8)
-        if t > 0:
-            if use_cuda:
-                c.s.copy_to_device()
-                qeik_tforce.copy_to_device()
+        if use_cuda:
+            c.s.copy_to_device()
+            qeik_tforce.copy_to_device()
 
-            qeik.compute_ai(c.s, qeik_tforce.d_a0, t)
-            qeik_tforce.a0_initialized = True
+        qeik.compute_ai(c.s, qeik_tforce.d_a0, t)
+        qeik_tforce.a0_initialized = True
 
-            if use_cuda:
-                qeik_tforce.copy_to_host()
-                c.s.copy_to_host()
+        if use_cuda:
+            qeik_tforce.copy_to_host()
+            c.s.copy_to_host()
 
 def iter_gauge_transf(self, auto_extend=True):
     """
@@ -288,10 +286,10 @@ def iter_gauge_transf(self, auto_extend=True):
         # Break out of while loop if we broke out of for loop (converged or stalled)
         break
 
-    # Apply the final accumulated gauge transformation to the glasma fields
-    apply_gauge_transf(self)
-    # BUGFIX: Copy the iterated gauge links ug0 to u0 before copying to simulation
+    # Copy the iterated gauge links ug0 to u0 before copying to simulation
     # The iteration operates on ug0, so ug0 contains the final Coulomb gauge links
+    # Note: aeta0, peta0, pt0, etc. are now transformed iteratively in gauge_transform()
+    # so they are consistent with ug0. No need to call apply_gauge_transf().
     copy_ug_to_u(self)
     copy_to_simulation(self)
 
@@ -323,6 +321,11 @@ def gauge_transform(self):
     # apply the incremental gauge transformation to the gauge links
     gauge_transf_links(self.s, self.d_g1, self.d_ug0, self.d_ug1)
 
+    # apply the incremental gauge transformation to all other fields
+    # This ensures aeta0, peta0, pt0, etc. are transformed consistently with ug0
+    gauge_transf_fields(self.s, self.d_g1, self.d_aeta0, self.d_aeta1,
+                        self.d_peta0, self.d_peta1, self.d_pt0, self.d_pt1)
+
     # accumulate the gauge transformation
     accumulate_gauge_transf(self.s, self.d_g1, self.d_g0)
 
@@ -343,6 +346,26 @@ def gauge_transf_links_kernel(xi, n, g1, ug0, ug1):
     for d in range(2):
         xiplus = l.shift(xi, d, +1, n)
         ug1[xi, d] = l.dact(g1[xi], g1[xiplus], ug0[xi, d])
+
+def gauge_transf_fields(s, g1, aeta0, aeta1, peta0, peta1, pt0, pt1):
+    """Apply incremental gauge transformation to all fields (except links)."""
+    n = s.n
+    nn = n ** 2
+
+    my_parallel_loop(gauge_transf_fields_kernel, nn, g1, aeta0, aeta1, peta0, peta1, pt0, pt1)
+
+@myjit
+def gauge_transf_fields_kernel(xi, g1, aeta0, aeta1, peta0, peta1, pt0, pt1):
+    # Transform aeta and peta with adjoint action
+    aeta0[xi] = l.act(g1[xi], aeta0[xi])
+    aeta1[xi] = l.act(g1[xi], aeta1[xi])
+    peta0[xi] = l.act(g1[xi], peta0[xi])
+    peta1[xi] = l.act(g1[xi], peta1[xi])
+
+    # Transform pt with adjoint action
+    for d in range(2):
+        pt0[xi, d] = l.act(g1[xi], pt0[xi, d])
+        pt1[xi, d] = l.act(g1[xi], pt1[xi, d])
 
 def compute_delta(s, ug0, delta):
     n = s.n
@@ -527,16 +550,17 @@ def apply_gauge_transf_kernel(xi, n, g1, u0, u1, aeta0, aeta1, peta0, peta1, pt0
 """
 
 def copy_ug_to_u(self):
-    """Copy the iterated gauge links ug0 to u0"""
+    """Copy the iterated gauge links ug0 to u0 and ug1 to u1"""
     n = self.n
     nn = n ** 2
 
-    my_parallel_loop(copy_ug_to_u_kernel, nn, self.d_ug0, self.d_u0)
+    my_parallel_loop(copy_ug_to_u_kernel, nn, self.d_ug0, self.d_u0, self.d_ug1, self.d_u1)
 
 @myjit
-def copy_ug_to_u_kernel(xi, ug0, u0):
+def copy_ug_to_u_kernel(xi, ug0, u0, ug1, u1):
     for d in range(2):
         su.store(u0[xi, d], ug0[xi, d])
+        su.store(u1[xi, d], ug1[xi, d])
 
 """
     Copy transformed glasma fields back to simulation object
@@ -590,7 +614,28 @@ def check_gunit(s, gunit, g):
 
     my_parallel_loop(check_gunit_kernel, nn, gunit, g)
 
-@myjit  
+@myjit
 def check_gunit_kernel(xi, gunit, g):
     buf = su.mul(su.dagger(g[xi]), g[xi])
     gunit[xi] = (su.sq(l.add_mul(su.unit(), buf, -1)))
+
+
+"""
+    Compute the gauge potential A_i from the gauge links U_i and A_eta
+"""
+
+def compute_ai(s, u0, aeta0, t, ai):
+    n = s.n
+    nn = n ** 2
+
+    my_parallel_loop(compute_ai_kernel, nn, u0, aeta0, t, ai)
+
+@myjit
+def compute_ai_kernel(xi, u0, aeta0, t, ai):
+    ax = su.mlog(u0[xi, 0])
+    ay = su.mlog(u0[xi, 1])
+    az = su.mul_s(aeta0[xi], 1.0 / t)
+
+    su.store(ai[xi, 0], ax)
+    su.store(ai[xi, 1], ay)
+    su.store(ai[xi, 2], az)
