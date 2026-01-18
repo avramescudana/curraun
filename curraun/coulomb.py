@@ -71,7 +71,7 @@ class CoulombGaugeTransf:
         self.c = np.zeros((nn, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
 
         # convergence criterion
-        self.thetax = np.zeros(nn, dtype=su.GROUP_TYPE)
+        self.thetax = np.zeros(nn, dtype=su.GROUP_TYPE_REAL)
         self.theta = 0.0
 
         # fields (times after evolve())
@@ -174,7 +174,7 @@ def init_gauge_transf(self):
 
 @myjit
 def init_transf_kernel(xi, g0):
-    g0[xi] = su.unit()
+    su.store(g0[xi], su.unit())
 
 @myjit
 def init_gauge_links_kernel(xi, u0, ug0):
@@ -299,11 +299,10 @@ def gauge_transform(self):
     compute_delta(self.s, self.d_ug0, self.d_delta)
 
     compute_thetax(self.s, self.d_delta, self.d_thetax)
-    #TODO: mean using cupy
-    # if use_cupy:
-    #     self.theta = cupy.mean(cupy.array(self.d_thetax))
-    # else:
-    #     self.theta = np.mean(self.d_thetax)
+
+    # Synchronize before reading theta on host (needed when use_cuda=True)
+    if use_cuda:
+        cuda.synchronize()
 
     self.theta = np.mean(self.d_thetax).real
     self.theta /= su.NC
@@ -345,7 +344,7 @@ def gauge_transf_links(s, g1, ug0, ug1):
 def gauge_transf_links_kernel(xi, n, g1, ug0, ug1):
     for d in range(2):
         xiplus = l.shift(xi, d, +1, n)
-        ug1[xi, d] = l.dact(g1[xi], g1[xiplus], ug0[xi, d])
+        su.store(ug1[xi, d], l.dact(g1[xi], g1[xiplus], ug0[xi, d]))
 
 def gauge_transf_fields(s, g1, aeta0, aeta1, peta0, peta1, pt0, pt1):
     """Apply incremental gauge transformation to all fields (except links)."""
@@ -357,15 +356,16 @@ def gauge_transf_fields(s, g1, aeta0, aeta1, peta0, peta1, pt0, pt1):
 @myjit
 def gauge_transf_fields_kernel(xi, g1, aeta0, aeta1, peta0, peta1, pt0, pt1):
     # Transform aeta and peta with adjoint action
-    aeta0[xi] = l.act(g1[xi], aeta0[xi])
-    aeta1[xi] = l.act(g1[xi], aeta1[xi])
-    peta0[xi] = l.act(g1[xi], peta0[xi])
-    peta1[xi] = l.act(g1[xi], peta1[xi])
+    # Use su.store to ensure proper in-place update on GPU
+    su.store(aeta0[xi], l.act(g1[xi], aeta0[xi]))
+    su.store(aeta1[xi], l.act(g1[xi], aeta1[xi]))
+    su.store(peta0[xi], l.act(g1[xi], peta0[xi]))
+    su.store(peta1[xi], l.act(g1[xi], peta1[xi]))
 
     # Transform pt with adjoint action
     for d in range(2):
-        pt0[xi, d] = l.act(g1[xi], pt0[xi, d])
-        pt1[xi, d] = l.act(g1[xi], pt1[xi, d])
+        su.store(pt0[xi, d], l.act(g1[xi], pt0[xi, d]))
+        su.store(pt1[xi, d], l.act(g1[xi], pt1[xi, d]))
 
 def compute_delta(s, ug0, delta):
     n = s.n
@@ -396,32 +396,41 @@ def compute_thetax(s, delta, thetax):
 
 @myjit
 def compute_thetax_kernel(xi, delta, thetax):
-    thetax[xi] = su.tr(su.mul(delta[xi], su.dagger(delta[xi])))
+    # Take real part explicitly - trace of delta*delta^dagger is real but may have small imaginary noise
+    thetax[xi] = su.tr(su.mul(delta[xi], su.dagger(delta[xi]))).real
 
 def fourier_acceleration(s, delta, c):
     n = s.n
 
     if use_cupy:
-        # Convert numba CUDA array to numpy, then to cupy
-        delta_host = np.empty((n*n, su.GROUP_ELEMENTS), dtype=su.GROUP_TYPE)
-        delta.copy_to_host(delta_host)
+        # Copy numba CUDA array to cupy via host (needed for older cupy versions)
+        delta_host = delta.copy_to_host()
         delta_cupy = cupy.array(delta_host)
 
-        # fourier transform to momentum space
+        # fourier transform to momentum space (on GPU)
         delta_reshape = cupy.reshape(delta_cupy, (n, n, su.GROUP_ELEMENTS))
         delta_fft = cupy.fft.fft2(delta_reshape, axes=(0, 1))
+        delta_fft = cupy.reshape(delta_fft, (n*n, su.GROUP_ELEMENTS))
 
-        # fourier accelerate with alpha
-        delta_fft_reshape = cupy.reshape(delta_fft, (n*n, su.GROUP_ELEMENTS))
+        # fourier accelerate with alpha (on GPU)
+        # Convert cupy array to numba device array for the kernel
+        delta_fft_host = cupy.asnumpy(delta_fft)
+        delta_fft_numba = cuda.to_device(delta_fft_host)
+        my_parallel_loop(complex_fourier_acceleration_kernel, n*n, n, delta_fft_numba)
+        # Convert back to cupy for inverse FFT
+        delta_fft_host = delta_fft_numba.copy_to_host()
+        delta_fft = cupy.array(delta_fft_host)
 
-        my_parallel_loop(complex_fourier_acceleration_kernel, n*n , n, cupy.asnumpy(delta_fft_reshape))
+        # inverse fourier transform to position space (on GPU)
+        delta_fft = cupy.reshape(delta_fft, (n, n, su.GROUP_ELEMENTS))
+        delta_accfft = cupy.fft.ifft2(delta_fft, axes=(0, 1), s=(n, n))
+        c_fft = cupy.reshape(delta_accfft, (n * n, su.GROUP_ELEMENTS))
 
-        # inverse fourier transform to position space
-        delta_accfft_reshape = cupy.reshape(cupy.array(delta_fft_reshape), (n, n, su.GROUP_ELEMENTS))
-
-        delta_accfft = cupy.fft.ifft2(delta_accfft_reshape, axes=(0, 1), s=(n, n))
-        c_fft = cupy.asnumpy(cupy.reshape(delta_accfft, (n * n, su.GROUP_ELEMENTS)))
-        my_parallel_loop(store_c_fft_kernel, n*n , c_fft, c)
+        # copy result back to numba array c via host
+        c_host = c_fft.get()
+        c_host_view = c.copy_to_host()
+        c_host_view[:] = c_host
+        cuda.to_device(c_host_view, to=c)
     else:
         # fourier transform to momentum space
         delta_reshape = np.reshape(delta, (n, n, su.GROUP_ELEMENTS))
@@ -531,19 +540,19 @@ def apply_gauge_transf_kernel(xi, n, g1, u0, u1, aeta0, aeta1, peta0, peta1, pt0
 
         xiplus = l.shift(xi, d, +1, n)
         su.store(u0[xi, d], l.dact(g1[xi], g1[xiplus], u0_prev))
-        u1[xi, d] = l.dact(g1[xi], g1[xiplus], u1_prev)
+        su.store(u1[xi, d], l.dact(g1[xi], g1[xiplus], u1_prev))
 
-        pt0[xi, d] = l.act(g1[xi], pt0_prev)
-        pt1[xi, d] = l.act(g1[xi], pt1_prev)
+        su.store(pt0[xi, d], l.act(g1[xi], pt0_prev))
+        su.store(pt1[xi, d], l.act(g1[xi], pt1_prev))
 
     aeta0_prev, aeta1_prev = aeta0[xi], aeta1[xi]
     peta0_prev, peta1_prev = peta0[xi], peta1[xi]
 
-    aeta0[xi] = l.act(g1[xi], aeta0_prev)
-    aeta1[xi] = l.act(g1[xi], aeta1_prev)
+    su.store(aeta0[xi], l.act(g1[xi], aeta0_prev))
+    su.store(aeta1[xi], l.act(g1[xi], aeta1_prev))
 
-    peta0[xi] = l.act(g1[xi], peta0_prev)
-    peta1[xi] = l.act(g1[xi], peta1_prev)
+    su.store(peta0[xi], l.act(g1[xi], peta0_prev))
+    su.store(peta1[xi], l.act(g1[xi], peta1_prev))
 
 """
     Copy iterated gauge links back to internal arrays
