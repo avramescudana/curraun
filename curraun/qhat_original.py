@@ -75,7 +75,7 @@ class TransportedForce:
     def copy_mean_to_host(self, stream=None):
         self.d_p_perp_mean.copy_to_host(self.p_perp_mean, stream)
 
-    def compute(self,stream=None):
+    def compute(self, stream=None):
         tint = round(self.s.t / self.s.dt)
         if tint % self.dtstep == 0 and tint >= 1:
             # compute un-transported f
@@ -93,7 +93,7 @@ class TransportedForce:
             # calculate mean
             compute_mean(self.d_p_perp_x, self.d_p_perp_y, self.d_p_perp_z, self.d_p_perp_mean, stream)
 
-        if tint % self.dtstep == self.dtstep / 2:
+        if tint % self.dtstep == self.dtstep // 2:
             # update v
             update_v(self.s, self.d_v, round(self.s.t - 10E-8), stream)
 

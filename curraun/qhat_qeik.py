@@ -143,7 +143,23 @@ class KineticCanonicCheck:
         self.d_dpcanda_mean.copy_to_host(self.dpcanda_mean)
         self.d_dpcanda_transp_mean.copy_to_host(self.dpcanda_transp_mean)
 
-    def compute(self):
+    def copy_mean_to_device(self, stream=None):
+        self.d_dpcan_sq_mean = cuda.to_device(self.dpcan_sq_mean, stream)
+        self.d_dpkin_sq_mean = cuda.to_device(self.dpkin_sq_mean, stream)
+        self.d_da_sq_mean = cuda.to_device(self.da_sq_mean, stream)
+        self.d_da_transp_sq_mean = cuda.to_device(self.da_transp_sq_mean, stream)
+        self.d_dpcanda_mean = cuda.to_device(self.dpcanda_mean, stream)
+        self.d_dpcanda_transp_mean = cuda.to_device(self.dpcanda_transp_mean, stream)
+
+    def copy_mean_to_host(self, stream=None):
+        self.d_dpcan_sq_mean.copy_to_host(self.dpcan_sq_mean, stream)
+        self.d_dpkin_sq_mean.copy_to_host(self.dpkin_sq_mean, stream)
+        self.d_da_sq_mean.copy_to_host(self.da_sq_mean, stream)
+        self.d_da_transp_sq_mean.copy_to_host(self.da_transp_sq_mean, stream)
+        self.d_dpcanda_mean.copy_to_host(self.dpcanda_mean, stream)
+        self.d_dpcanda_transp_mean.copy_to_host(self.dpcanda_transp_mean, stream)
+
+    def compute(self, stream=None):
         tint = round(self.s.t / self.s.dt)
         tstart = round(1 / self.s.dt)
         t = round(self.s.t - 1E-8)
@@ -159,63 +175,63 @@ class KineticCanonicCheck:
 
         if tint == tstart and not self.a0_initialized:
         # if tint == 1:
-            compute_ai(self.s, a0, t)
+            compute_ai(self.s, a0, t, stream)
             self.a0_initialized = True
 
         # if tint % self.dtstep == 0 and tint > tstart:
         # Compute whenever it's a multiple of dtstep AND t > 0 (to avoid division by zero in fcan)
         if tint % self.dtstep == 0 and tint >= 1 and t > 0:
 
-            compute_fcan(self.s, fcan)
-            compute_fkin(self.s, fkin)
+            compute_fcan(self.s, fcan, stream)
+            compute_fkin(self.s, fkin, stream)
 
-            compute_ai(self.s, a, t)
+            compute_ai(self.s, a, t, stream)
 
-            apply_v(a, v, n)
-            compute_dai(a, a0, self.d_da, t, n)
+            apply_v(a, v, n, stream)
+            compute_dai(a, a0, self.d_da, t, n, stream)
 
-            compute_p_perp(self.d_da, self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], n)
-            compute_mean(self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], self.d_da_transp_sq_mean)
+            compute_p_perp(self.d_da, self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], n, stream)
+            compute_mean(self.d_da_transp_sq[:, 0], self.d_da_transp_sq[:, 1], self.d_da_transp_sq[:, 2], self.d_da_transp_sq_mean, stream)
 
             # apply parallel transport
-            apply_v(fcan, v, n)
-            apply_v(fkin, v, n)
-            apply_v(fa, v, n)
+            apply_v(fcan, v, n, stream)
+            apply_v(fkin, v, n, stream)
+            apply_v(fa, v, n, stream)
 
-            compute_fa(fcan, fkin, fa, t, n)
+            compute_fa(fcan, fkin, fa, t, n, stream)
 
             # integrate f
-            integrate_f(fcan, self.d_intfcan, n, 1.0)
-            integrate_f(fkin, self.d_intfkin, n, 1.0)
-            integrate_f(fa, self.d_intfa, n, 1.0)
+            integrate_f(fcan, self.d_intfcan, n, 1.0, stream)
+            integrate_f(fkin, self.d_intfkin, n, 1.0, stream)
+            integrate_f(fa, self.d_intfa, n, 1.0, stream)
 
             # integrate perpendicular momentum
-            compute_p_perp(self.d_intfcan, self.d_dpcan_sq[:, 0], self.d_dpcan_sq[:, 1], self.d_dpcan_sq[:, 2], n)
-            compute_p_perp(self.d_intfkin, self.d_dpkin_sq[:, 0], self.d_dpkin_sq[:, 1], self.d_dpkin_sq[:, 2], n)
-            compute_p_perp(self.d_intfa, self.d_da_sq[:, 0], self.d_da_sq[:, 1], self.d_da_sq[:, 2], n)
-            compute_p_perp_A(self.d_intfcan, self.d_da, self.d_dpcanda_transp, n)
-            compute_p_perp_A(self.d_intfcan, self.d_intfa, self.d_dpcanda, n)
+            compute_p_perp(self.d_intfcan, self.d_dpcan_sq[:, 0], self.d_dpcan_sq[:, 1], self.d_dpcan_sq[:, 2], n, stream)
+            compute_p_perp(self.d_intfkin, self.d_dpkin_sq[:, 0], self.d_dpkin_sq[:, 1], self.d_dpkin_sq[:, 2], n, stream)
+            compute_p_perp(self.d_intfa, self.d_da_sq[:, 0], self.d_da_sq[:, 1], self.d_da_sq[:, 2], n, stream)
+            compute_p_perp_A(self.d_intfcan, self.d_da, self.d_dpcanda_transp, n, stream)
+            compute_p_perp_A(self.d_intfcan, self.d_intfa, self.d_dpcanda, n, stream)
 
             # calculate mean
-            compute_mean(self.d_dpcan_sq[:, 0], self.d_dpcan_sq[:, 1], self.d_dpcan_sq[:, 2], self.d_dpcan_sq_mean)
-            compute_mean(self.d_dpkin_sq[:, 0], self.d_dpkin_sq[:, 1], self.d_dpkin_sq[:, 2], self.d_dpkin_sq_mean)
-            compute_mean(self.d_da_sq[:, 0], self.d_da_sq[:, 1], self.d_da_sq[:, 2], self.d_da_sq_mean)
-            compute_mean(self.d_dpcanda[:, 0], self.d_dpcanda[:, 1], self.d_dpcanda[:, 2], self.d_dpcanda_mean)
-            compute_mean(self.d_dpcanda_transp[:, 0], self.d_dpcanda_transp[:, 1], self.d_dpcanda_transp[:, 2], self.d_dpcanda_transp_mean)
+            compute_mean(self.d_dpcan_sq[:, 0], self.d_dpcan_sq[:, 1], self.d_dpcan_sq[:, 2], self.d_dpcan_sq_mean, stream)
+            compute_mean(self.d_dpkin_sq[:, 0], self.d_dpkin_sq[:, 1], self.d_dpkin_sq[:, 2], self.d_dpkin_sq_mean, stream)
+            compute_mean(self.d_da_sq[:, 0], self.d_da_sq[:, 1], self.d_da_sq[:, 2], self.d_da_sq_mean, stream)
+            compute_mean(self.d_dpcanda[:, 0], self.d_dpcanda[:, 1], self.d_dpcanda[:, 2], self.d_dpcanda_mean, stream)
+            compute_mean(self.d_dpcanda_transp[:, 0], self.d_dpcanda_transp[:, 1], self.d_dpcanda_transp[:, 2], self.d_dpcanda_transp_mean, stream)
 
         if tint % self.dtstep == self.dtstep // 2:
-            update_v(self.s, v, t)
+            update_v(self.s, v, t, stream)
 
 
 @myjit
 def reset_wilsonfield(x, wilsonfield):
     su.store(wilsonfield[x], su.unit())
 
-def update_v(s, v, t):
+def update_v(s, v, t, stream=None):
     u = s.d_u0
     n = s.n
 
-    my_parallel_loop(update_v_kernel, n * n, u, v, t, n)
+    my_parallel_loop(update_v_kernel, n * n, u, v, t, n, stream=stream)
 
 @myjit
 def update_v_kernel(xi, u, v, t, n):
@@ -224,13 +240,13 @@ def update_v_kernel(xi, u, v, t, n):
     b1 = su.mul(v[xi], u[xs, 0])
     su.store(v[xi], b1)
 
-def compute_ai(s, ai, t):
+def compute_ai(s, ai, t, stream=None):
     u0 = s.d_u0
     aeta0 = s.d_aeta0
 
     n = s.n
 
-    my_parallel_loop(compute_ai_kernel, n * n, u0, aeta0, t, ai)
+    my_parallel_loop(compute_ai_kernel, n * n, u0, aeta0, t, ai, stream=stream)
 
 @myjit
 def compute_ai_kernel(xi, u0, aeta0, t, ai): 
@@ -245,8 +261,8 @@ def compute_ai_kernel(xi, u0, aeta0, t, ai):
 
     su.store(ai[xi, 2], az)
 
-def compute_dai(a, a0, dai, t, n):
-    my_parallel_loop(compute_dai_kernel, n * n, a, a0, dai, t, n)  
+def compute_dai(a, a0, dai, t, n, stream=None):
+    my_parallel_loop(compute_dai_kernel, n * n, a, a0, dai, t, n, stream=stream)  
 
 @myjit
 def compute_dai_kernel(xi, a, a0, dai, t, n):
@@ -256,7 +272,7 @@ def compute_dai_kernel(xi, a, a0, dai, t, n):
         su.store(dai[xi, i], l.add_mul(a[xs, i], a0[xi, i], -1))
 
 
-def compute_fkin(s, f):
+def compute_fkin(s, f, stream=None):
     u0 = s.d_u0
     pt1 = s.d_pt1
     peta1 = s.d_peta1
@@ -267,7 +283,7 @@ def compute_fkin(s, f):
     n = s.n
     t = round(s.t)
 
-    my_parallel_loop(compute_fkin_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t)
+    my_parallel_loop(compute_fkin_kernel, n * n, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t, stream=stream)
 
 @myjit
 def compute_fkin_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t):
@@ -335,14 +351,14 @@ def compute_fkin_kernel(xi, n, u0, aeta0, peta1, peta0, pt1, pt0, f, t):
 
     su.store(f[xi, 2], bf2)
 
-def compute_fcan(s, f):
+def compute_fcan(s, f, stream=None):
     aeta0 = s.d_aeta0
     u0 = s.d_u0
 
     n = s.n
     t = round(s.t)
 
-    my_parallel_loop(compute_fcan_kernel, n * n, n, aeta0, u0, f, t)
+    my_parallel_loop(compute_fcan_kernel, n * n, n, aeta0, u0, f, t, stream=stream)
 
 @myjit
 def compute_fcan_kernel(xi, n, aeta0, u0, f, t):
@@ -365,8 +381,8 @@ def compute_fcan_kernel(xi, n, aeta0, u0, f, t):
     bf1 = su.mul_s(aeta0[xs], 1.0 / (t * t))
     su.store(f[xi, 2], bf1)
 
-def compute_fa(fcan, fkin, fa, t, n):
-    my_parallel_loop(compute_fa_kernel, n * n, fcan, fkin, fa, t, n)
+def compute_fa(fcan, fkin, fa, t, n, stream=None):
+    my_parallel_loop(compute_fa_kernel, n * n, fcan, fkin, fa, t, n, stream=stream)
 
 @myjit
 def compute_fa_kernel(xi, fcan, fkin, fa, t, n):
@@ -377,8 +393,8 @@ def compute_fa_kernel(xi, fcan, fkin, fa, t, n):
         buf = l.add_mul(fkin[xi, i], fcan[xi, i], -1)
         su.store(fa[xi, i], buf)
 
-def apply_v(f, v, n):
-    my_parallel_loop(apply_v_kernel, n * n, f, v)
+def apply_v(f, v, n, stream=None):
+    my_parallel_loop(apply_v_kernel, n * n, f, v, stream=stream)
 
 @myjit
 def apply_v_kernel(xi, f, v):
@@ -387,19 +403,19 @@ def apply_v_kernel(xi, f, v):
         b1 = su.ah(b1)
         su.store(f[xi, d], b1)
 
-def integrate_f(f, fi, n, dt):
-    kappa.integrate_f(f, fi, n, dt, stream=None)
+def integrate_f(f, fi, n, dt, stream=None):
+    kappa.integrate_f(f, fi, n, dt, stream=stream)
 
-def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n):
-    kappa.compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream=None)
+def compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream=None):
+    kappa.compute_p_perp(fi, p_perp_x, p_perp_y, p_perp_z, n, stream=stream)
 
-def compute_p_perp_A(fi, d_ai, p_perp_A, n):
-    my_parallel_loop(compute_p_perp_A_kernel, n * n, fi, d_ai, p_perp_A, n)
+def compute_p_perp_A(fi, d_ai, p_perp_A, n, stream=None):
+    my_parallel_loop(compute_p_perp_A_kernel, n * n, fi, d_ai, p_perp_A, n, stream=stream)
 
 @myjit
 def compute_p_perp_A_kernel(xi, fi, d_ai, p_perp_A, n):
     for i in range(3):
         p_perp_A[xi, i] = su.tr(su.mul(fi[xi, i], su.dagger(d_ai[xi, i]))).real
 
-def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean):
-    kappa.compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream=None)
+def compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream=None):
+    kappa.compute_mean(p_perp_x, p_perp_y, p_perp_z, p_perp_mean, stream=stream)

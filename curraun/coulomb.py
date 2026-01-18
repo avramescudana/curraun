@@ -89,6 +89,20 @@ class CoulombGaugeTransf:
         self.t = s.t
         self.g = s.g
 
+        # Precompute Fourier acceleration ratio (p^2_max / p^2) for GPU
+        # This is the same for every iteration, so we cache it
+        if use_cuda:
+            x = cupy.arange(self.n)
+            y = cupy.arange(self.n)
+            xx, yy = cupy.meshgrid(x, y, indexing='xy')
+            psq = 4.0 * (cupy.sin(cupy.pi * xx / self.n) ** 2 + cupy.sin(cupy.pi * yy / self.n) ** 2)
+            psqmax = 4.0 * (cupy.sin(cupy.pi * (self.n-1) / self.n) ** 2 + cupy.sin(cupy.pi * (self.n-1) / self.n) ** 2)
+            psq[0, 0] = 1.0  # Avoid division by zero
+            self.d_fourier_ratio = psqmax / psq
+            self.d_fourier_ratio[0, 0] = 1.0  # Don't modify zero mode
+        else:
+            self.d_fourier_ratio = None
+
         # Memory on the CUDA device:
         self.d_g0 = self.g0
         self.d_g1 = self.g1
@@ -229,7 +243,10 @@ def gauge_fix(c, auto_extend=True, qeik_tforce=None):
         import curraun.qhat_qeik as qeik
         t = round(c.s.t - 1E-8)
         if use_cuda:
-            c.s.copy_to_device()
+            # NOTE: Do NOT call c.s.copy_to_device() here!
+            # The simulation's device arrays (s.d_aeta0, etc.) already contain
+            # the gauge-transformed fields from copy_to_simulation().
+            # Calling copy_to_device() would overwrite them with the old host data.
             qeik_tforce.copy_to_device()
 
         qeik.compute_ai(c.s, qeik_tforce.d_a0, t)
@@ -237,6 +254,7 @@ def gauge_fix(c, auto_extend=True, qeik_tforce=None):
 
         if use_cuda:
             qeik_tforce.copy_to_host()
+            # Copy the transformed fields from device back to host
             c.s.copy_to_host()
 
 def iter_gauge_transf(self, auto_extend=True):
@@ -300,15 +318,16 @@ def gauge_transform(self):
 
     compute_thetax(self.s, self.d_delta, self.d_thetax)
 
-    # Synchronize before reading theta on host (needed when use_cuda=True)
+    # Compute mean - for CUDA, copy to host first then use numpy
+    # (cupy.asarray doesn't work reliably with numba device arrays in older versions)
     if use_cuda:
-        cuda.synchronize()
-
-    self.theta = np.mean(self.d_thetax).real
-    self.theta /= su.NC
+        thetax_host = self.d_thetax.copy_to_host()
+        self.theta = np.mean(thetax_host).real / su.NC
+    else:
+        self.theta = np.mean(self.d_thetax).real / su.NC
 
     # apply fourier acceleration
-    fourier_acceleration(self.s, self.d_delta, self.d_c)
+    fourier_acceleration(self.s, self.d_delta, self.d_c, self.d_fourier_ratio)
 
     # compute the incremental gauge transformation (not accumulated)
     update_gauge_transf_incremental(self.s, self.d_c, self.d_g1, self.alpha)
@@ -356,16 +375,24 @@ def gauge_transf_fields(s, g1, aeta0, aeta1, peta0, peta1, pt0, pt1):
 @myjit
 def gauge_transf_fields_kernel(xi, g1, aeta0, aeta1, peta0, peta1, pt0, pt1):
     # Transform aeta and peta with adjoint action
-    # Use su.store to ensure proper in-place update on GPU
-    su.store(aeta0[xi], l.act(g1[xi], aeta0[xi]))
-    su.store(aeta1[xi], l.act(g1[xi], aeta1[xi]))
-    su.store(peta0[xi], l.act(g1[xi], peta0[xi]))
-    su.store(peta1[xi], l.act(g1[xi], peta1[xi]))
+    # IMPORTANT: Copy to local variables first to avoid read-write aliasing issues on GPU
+    # (same pattern as apply_gauge_transf_kernel)
+    aeta0_prev = aeta0[xi]
+    aeta1_prev = aeta1[xi]
+    peta0_prev = peta0[xi]
+    peta1_prev = peta1[xi]
+
+    su.store(aeta0[xi], l.act(g1[xi], aeta0_prev))
+    su.store(aeta1[xi], l.act(g1[xi], aeta1_prev))
+    su.store(peta0[xi], l.act(g1[xi], peta0_prev))
+    su.store(peta1[xi], l.act(g1[xi], peta1_prev))
 
     # Transform pt with adjoint action
     for d in range(2):
-        su.store(pt0[xi, d], l.act(g1[xi], pt0[xi, d]))
-        su.store(pt1[xi, d], l.act(g1[xi], pt1[xi, d]))
+        pt0_prev = pt0[xi, d]
+        pt1_prev = pt1[xi, d]
+        su.store(pt0[xi, d], l.act(g1[xi], pt0_prev))
+        su.store(pt1[xi, d], l.act(g1[xi], pt1_prev))
 
 def compute_delta(s, ug0, delta):
     n = s.n
@@ -399,38 +426,29 @@ def compute_thetax_kernel(xi, delta, thetax):
     # Take real part explicitly - trace of delta*delta^dagger is real but may have small imaginary noise
     thetax[xi] = su.tr(su.mul(delta[xi], su.dagger(delta[xi]))).real
 
-def fourier_acceleration(s, delta, c):
+def fourier_acceleration(s, delta, c, fourier_ratio=None):
     n = s.n
 
     if use_cupy:
-        # Copy numba CUDA array to cupy via host (needed for older cupy versions)
+        # Copy numba CUDA array to host, then to cupy
+        # (cupy.asarray doesn't work reliably with numba device arrays in older versions)
         delta_host = delta.copy_to_host()
         delta_cupy = cupy.array(delta_host)
 
         # fourier transform to momentum space (on GPU)
         delta_reshape = cupy.reshape(delta_cupy, (n, n, su.GROUP_ELEMENTS))
         delta_fft = cupy.fft.fft2(delta_reshape, axes=(0, 1))
-        delta_fft = cupy.reshape(delta_fft, (n*n, su.GROUP_ELEMENTS))
 
-        # fourier accelerate with alpha (on GPU)
-        # Convert cupy array to numba device array for the kernel
-        delta_fft_host = cupy.asnumpy(delta_fft)
-        delta_fft_numba = cuda.to_device(delta_fft_host)
-        my_parallel_loop(complex_fourier_acceleration_kernel, n*n, n, delta_fft_numba)
-        # Convert back to cupy for inverse FFT
-        delta_fft_host = delta_fft_numba.copy_to_host()
-        delta_fft = cupy.array(delta_fft_host)
+        # Apply cached Fourier acceleration ratio (p^2_max / p^2)
+        delta_fft *= fourier_ratio[:, :, cupy.newaxis]
 
         # inverse fourier transform to position space (on GPU)
-        delta_fft = cupy.reshape(delta_fft, (n, n, su.GROUP_ELEMENTS))
         delta_accfft = cupy.fft.ifft2(delta_fft, axes=(0, 1), s=(n, n))
-        c_fft = cupy.reshape(delta_accfft, (n * n, su.GROUP_ELEMENTS))
+        c_cupy = cupy.reshape(delta_accfft, (n * n, su.GROUP_ELEMENTS))
 
-        # copy result back to numba array c via host
-        c_host = c_fft.get()
-        c_host_view = c.copy_to_host()
-        c_host_view[:] = c_host
-        cuda.to_device(c_host_view, to=c)
+        # Copy result back to numba device array via host
+        c_host = cupy.asnumpy(c_cupy)
+        cuda.to_device(c_host, to=c)
     else:
         # fourier transform to momentum space
         delta_reshape = np.reshape(delta, (n, n, su.GROUP_ELEMENTS))
