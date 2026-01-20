@@ -90,6 +90,8 @@ def compute_up_kernel(yi, u1, aeta1, up, xplus, n):
         at = su.mul_s(aeta_latt, -z/xplus**2)
         ut = su.mexp(at)
     
+    # ut = su.unit()
+    
     # We compute the U_+ link
     res = su.mul(ut, ux)
 
