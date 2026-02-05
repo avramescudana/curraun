@@ -129,5 +129,6 @@ notebooks/debug/
 
 # Plots
 *.png
+*.pdf
 'Jets in Glasma Results'/up_temp
 'Jets in Glasma Results'/mid_rapidity
