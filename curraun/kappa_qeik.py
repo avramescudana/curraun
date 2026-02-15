@@ -133,7 +133,7 @@ class KineticCanonicCheck:
         self.d_dpcanda_mean.copy_to_host(self.dpcanda_mean)
         self.d_dpcanda_transp_mean.copy_to_host(self.dpcanda_transp_mean)
 
-    def compute(self):
+    def compute(self, stream=None):
         tint = round(self.s.t / self.s.dt)
         tstart = round(1 / self.s.dt)
         t = round(self.s.t)
