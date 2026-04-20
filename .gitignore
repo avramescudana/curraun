@@ -147,3 +147,6 @@ Trial*.ipynb
 # *.def
 *.sif
 *.json
+
+# Claude
+.claude/

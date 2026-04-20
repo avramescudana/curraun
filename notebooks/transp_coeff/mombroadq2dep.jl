@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.27
+# v0.19.42
 
 using Markdown
 using InteractiveUtils
@@ -20,10 +20,13 @@ end
 # ╔═╡ 27ad3673-7376-4db1-8a04-296d6e01c7ca
 begin
 	# results = Pickle.npyload("results/mom_broad_q2_dep_more_events.pickle")
-	results = Pickle.npyload("results/jet_mom_broad_q2_dep.pickle")
+	results = Pickle.npyload("/n/work00/davrames/curraun/notebooks/results/jet_mom_broad_q2_dep.pickle")
 	q2s = results["q2s"]
 	quarks = results["quarks"]
 end
+
+# ╔═╡ 470b0f74-0ccc-4d91-ac3c-670ea41fe2f4
+Qs = 2.0
 
 # ╔═╡ 18644342-68e0-4a6b-930b-48ac7050dde0
 begin
@@ -112,7 +115,7 @@ begin
 	# axislegend(axes[1, 3], elements, labels_legend, position = :lt, labelsize=16, titlesize=20, orientation = :horizontal)
 
 	# save("plots/mom_broad_q2_dep_more_events_v2.png", fig, px_per_unit = 5.0)
-	save("plots/trento_jets_mom_broad_q2_dep.png", fig, px_per_unit = 5.0)
+	# save("plots/trento_jets_mom_broad_q2_dep.png", fig, px_per_unit = 5.0)
 	fig
 end
 
@@ -189,7 +192,7 @@ begin
 	# axislegend(axes_scaled[1, 3], elements, labels_legend, position = :lt, labelsize=16, titlesize=20, orientation = :horizontal)
 
 	# save("plots/mom_broad_div_q2_q2_dep_more_events_v2.png", fig_scaled, px_per_unit = 5.0)
-	save("plots/trento_jets_mom_broad_div_q2_q2_dep.png", fig_scaled, px_per_unit = 5.0)
+	# save("plots/trento_jets_mom_broad_div_q2_q2_dep.png", fig_scaled, px_per_unit = 5.0)
 	fig_scaled
 end
 
@@ -199,7 +202,7 @@ Casimir scaling"
 
 # ╔═╡ 88330b49-fc34-4ef8-8bc6-a7d18e3bd76d
 begin
-	results_cs = Pickle.npyload("results/jet_mom_broad_casimir_scaling_finer_lattice.pickle")
+	results_cs = Pickle.npyload("/n/work00/davrames/curraun/notebooks/results/jet_mom_broad_casimir_scaling_finer_lattice.pickle")
 	q2s_cs = results_cs["q2s"]
 end
 
@@ -252,7 +255,7 @@ begin
 	axislegend(axes_cs[2], elements_cs, labels_legend_cs, position = :lt, labelsize=20, titlesize=20, orientation = :horizontal, framevisible=false)
 
 	# save("plots/mom_broad_casimir_scaling_v2.png", fig_cs, px_per_unit = 5.0)
-	save("plots/trento_jets_mom_broad_casimir_scaling.png", fig_cs, px_per_unit = 5.0)
+	# save("plots/trento_jets_mom_broad_casimir_scaling.png", fig_cs, px_per_unit = 5.0)
 	fig_cs
 end
 
@@ -353,9 +356,9 @@ version = "1.4.0"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
+git-tree-sha1 = "8873e196c2eb87962a2048b3b8e08946535864a1"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+1"
+version = "1.0.8+4"
 
 [[deps.CEnum]]
 git-tree-sha1 = "389ad5c84de1ae7cf0e28e381131c98ea87d54fc"
@@ -606,9 +609,9 @@ version = "1.8.0"
 
 [[deps.FFTW_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "c6033cc3892d0ef5bb9cd29b7f2f0331ea5184ea"
+git-tree-sha1 = "4d81ed14783ec49ce9f2e168208a12ce1815aa25"
 uuid = "f5851436-0d7a-5f13-b9de-f02708fd171a"
-version = "3.3.10+0"
+version = "3.3.10+3"
 
 [[deps.FastRounding]]
 deps = ["ErrorfreeArithmetic", "LinearAlgebra"]
@@ -739,9 +742,9 @@ version = "1.1.2"
 
 [[deps.Graphite2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "344bf40dcab1073aca04aa0df4fb092f920e4011"
+git-tree-sha1 = "01979f9b37367603e2848ea225918a3b3861b606"
 uuid = "3b182d85-2403-5c21-9c21-1e1f0cc25472"
-version = "1.3.14+0"
+version = "1.3.14+1"
 
 [[deps.GridLayoutBase]]
 deps = ["GeometryBasics", "InteractiveUtils", "Observables"]
@@ -964,9 +967,9 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
 [[deps.Libffi_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "0b4a5d71f3e5200a7dff793393e09dfc2d874290"
+git-tree-sha1 = "27ecae93dd25ee0909666e6835051dd684cc035e"
 uuid = "e9f186c6-92d2-5b65-8a66-fee21dc1b490"
-version = "3.2.2+1"
+version = "3.2.2+2"
 
 [[deps.Libgcrypt_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgpg_error_jll", "Pkg"]
@@ -982,9 +985,9 @@ version = "1.42.0+0"
 
 [[deps.Libiconv_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "f9557a255370125b405568f9767d6d195822a175"
+git-tree-sha1 = "61dfdba58e585066d8bce214c5a51eaa0539f269"
 uuid = "94ce4f54-9a6c-5748-9c1c-f9c7231a4531"
-version = "1.17.0+0"
+version = "1.17.0+1"
 
 [[deps.Libmount_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1177,15 +1180,15 @@ version = "0.8.1+0"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "60e3045590bd104a16fefb12836c00c0ef8c7f8c"
+git-tree-sha1 = "3da7367955dcc5c54c1ba4d402ccdc09a1a3e046"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.0.13+0"
+version = "3.0.13+1"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
 uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
-version = "0.5.5+0"
+version = "0.5.5+2"
 
 [[deps.Optim]]
 deps = ["Compat", "FillArrays", "ForwardDiff", "LineSearches", "LinearAlgebra", "MathOptInterface", "NLSolversBase", "NaNMath", "Parameters", "PositiveFactorizations", "Printf", "SparseArrays", "StatsBase"]
@@ -1678,21 +1681,21 @@ version = "1.1.34+0"
 
 [[deps.Xorg_libX11_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Xorg_libxcb_jll", "Xorg_xtrans_jll"]
-git-tree-sha1 = "afead5aba5aa507ad5a3bf01f58f82c8d1403495"
+git-tree-sha1 = "9dafcee1d24c4f024e7edc92603cedba72118283"
 uuid = "4f6342f7-b3d2-589e-9d20-edeb45f2b2bc"
-version = "1.8.6+0"
+version = "1.8.6+3"
 
 [[deps.Xorg_libXau_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "6035850dcc70518ca32f012e46015b9beeda49d8"
+git-tree-sha1 = "2b0e27d52ec9d8d483e2ca0b72b3cb1a8df5c27a"
 uuid = "0c0b7dd1-d40b-584c-a123-a41640f87eec"
-version = "1.0.11+0"
+version = "1.0.11+3"
 
 [[deps.Xorg_libXdmcp_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "34d526d318358a859d7de23da945578e8e8727b7"
+git-tree-sha1 = "02054ee01980c90297412e4c809c8694d7323af3"
 uuid = "a3789734-cfe1-5b06-b2d0-1dd0d9d62d05"
-version = "1.1.4+0"
+version = "1.1.4+3"
 
 [[deps.Xorg_libXext_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Xorg_libX11_jll"]
@@ -1708,9 +1711,9 @@ version = "0.9.10+4"
 
 [[deps.Xorg_libpthread_stubs_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "8fdda4c692503d44d04a0603d9ac0982054635f9"
+git-tree-sha1 = "fee57a273563e273f0f53275101cd41a8153517a"
 uuid = "14d82f49-176c-5ed1-bb49-ad3f5cbd8c74"
-version = "0.1.1+0"
+version = "0.1.1+3"
 
 [[deps.Xorg_libxcb_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "XSLT_jll", "Xorg_libXau_jll", "Xorg_libXdmcp_jll", "Xorg_libpthread_stubs_jll"]
@@ -1720,9 +1723,9 @@ version = "1.15.0+0"
 
 [[deps.Xorg_xtrans_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "e92a1a012a10506618f10b7047e478403a046c77"
+git-tree-sha1 = "b9ead2d2bdb27330545eb14234a2e300da61232e"
 uuid = "c5fb5394-a638-5e4d-96e5-b29de1b5cf10"
-version = "1.5.0+0"
+version = "1.5.0+3"
 
 [[deps.ZipFile]]
 deps = ["Libdl", "Printf", "Zlib_jll"]
@@ -1772,15 +1775,15 @@ version = "1.6.40+0"
 
 [[deps.libsixel_jll]]
 deps = ["Artifacts", "JLLWrappers", "JpegTurbo_jll", "Libdl", "Pkg", "libpng_jll"]
-git-tree-sha1 = "d4f63314c8aa1e48cd22aa0c17ed76cd1ae48c3c"
+git-tree-sha1 = "7dfa0fd9c783d3d0cc43ea1af53d69ba45c447df"
 uuid = "075b6546-f08a-558a-be8f-8157d0f608a5"
-version = "1.10.3+0"
+version = "1.10.3+3"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
-git-tree-sha1 = "b910cb81ef3fe6e78bf6acee440bda86fd6ae00c"
+git-tree-sha1 = "490376214c4721cdaca654041f635213c6165cb3"
 uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
-version = "1.3.7+1"
+version = "1.3.7+2"
 
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -1809,6 +1812,7 @@ version = "3.5.0+0"
 # ╠═79fb48c0-e377-11ed-31c1-45a5ae0977dc
 # ╠═922896f4-1be4-4046-945c-51d3f39f30dd
 # ╠═27ad3673-7376-4db1-8a04-296d6e01c7ca
+# ╠═470b0f74-0ccc-4d91-ac3c-670ea41fe2f4
 # ╠═18644342-68e0-4a6b-930b-48ac7050dde0
 # ╠═8ebf423b-0882-4555-ac10-f83a60eed7db
 # ╠═825d42aa-3df3-4f49-ab7f-7d9be1e51f3c
