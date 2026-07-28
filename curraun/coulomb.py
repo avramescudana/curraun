@@ -20,16 +20,18 @@ else:
 
 DEBUG = True
 
-max_iters = 500
+max_iters = 50000
 if su.su_precision == 'single':
     coulomb_accuracy = 1e-6
 elif su.su_precision == 'double':
-    coulomb_accuracy = 1e-12
+    # coulomb_accuracy = 1e-12
+    # to slow, let us use double precison but with 1e-6 in the coulomb transformation
+    coulomb_accuracy = 1e-6
 else:
     print("Unsupported precision: " + su.su_precision)
 
 class CoulombGaugeTransf:
-    def __init__(self, s, alpha=0.08, max_iters=max_iters, accuracy=None):
+    def __init__(self, s, alpha=100, max_iters=max_iters, accuracy=None):
         self.s = s
         self.n = s.n
         nn = self.n ** 2
