@@ -6,7 +6,7 @@ import curraun.kappa as kappa
 if use_cuda:
     import numba.cuda as cuda
 
-"""
+r"""
     A module for various calculations related to momentum broadening and the \hat{q} parameter.
 """
 
